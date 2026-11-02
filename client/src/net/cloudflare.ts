@@ -182,6 +182,13 @@ export class CloudflareNet extends NetBase {
     }
   }
 
+  async api(path: string, body: Record<string, unknown> = {}) {
+    const r = await fetch(`${this.server}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...body, session: this.sess.session }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d?.error ?? `Lỗi ${r.status}`);
+    return d;
+  }
+
   bossWorld(s: PlayerState): BossWorld {
     return this.bossW ?? super.bossWorld(s);
   }

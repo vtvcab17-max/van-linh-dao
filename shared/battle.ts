@@ -1,5 +1,6 @@
 // Mô phỏng trận đánh tự động theo lượt. Thuần logic, có hạt giống → server tính lại được y hệt.
 import { COMPANIONS, EFFECTS, LINH_VAT, MONSTERS, type CompKey, type MonsterKey, type SkillKey, type UnitBase } from './data';
+import { GENERALS, generalUnit, type GenId, type LegWeaponId } from './gacha';
 import type { Rng } from './rng';
 
 export interface BUnit {
@@ -110,6 +111,8 @@ export interface TeamSpec {
   gear?: { atk: number; def: number; hp: number };
   /** thành trì khi giữ đảo: cấp các tháp canh, đồn binh, máu tường thêm */
   fort?: { thap: number[]; don: number[]; tuongHp: number };
+  /** chủ tướng ra trận cùng đội */
+  gen?: { id: GenId; star: number; w: LegWeaponId | null };
 }
 
 const THAP: UnitBase = { name: 'Xạ Thủ Tháp Canh', hp: 70, atk: 15, def: 6, spd: 9, skill: 'samset', row: 'back' };
@@ -130,6 +133,7 @@ export function teamFromSpec(spec: TeamSpec, side: 0 | 1): BUnit[] {
     const base = c.k === 'an' && spec.hero ? { ...COMPANIONS.an, name: spec.hero } : COMPANIONS[c.k];
     out.push(applyGear(makeUnit(base, c.k, c.lv, side, i, bonus), spec.gear));
   });
+  if (spec.gen && GENERALS[spec.gen.id]) out.push(applyGear(makeUnit(generalUnit(spec.gen.id, spec.gen.star, spec.gen.w), spec.gen.id, 1, side, out.length), spec.gear));
   if (spec.fort) {
     for (const lv of spec.fort.don.slice(0, 2)) out.push(makeUnit(DON, 'don', 1 + (lv - 1) * 6, side, out.length));
     for (const lv of spec.fort.thap.slice(0, 4)) out.push(makeUnit(THAP, 'thap', 1 + (lv - 1) * 6, side, out.length));

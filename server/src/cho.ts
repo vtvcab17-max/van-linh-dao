@@ -84,6 +84,12 @@ export class Cho extends DurableObject<Env> {
     if (!(await this.ctx.storage.getAlarm())) await this.ctx.storage.setAlarm(Date.now() + SWEEP_MS);
   }
 
+  /** Nạp Linh Thạch thành công (hoặc quản trị cộng tay): gửi vào hộp thư người chơi. */
+  async credit(player: string, khu: string, good: string, n: number, note: string) {
+    this.mail(player, khu, good, n, note);
+    return true;
+  }
+
   /** Gửi vào hộp thư rồi báo Hải Khu của người nhận để giao ngay nếu họ đang online. */
   private mail(player: string, khu: string, good: string, n: number, note: string) {
     if (!player || player.startsWith('npc:') || n <= 0) return;

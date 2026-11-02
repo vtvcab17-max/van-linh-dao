@@ -338,6 +338,37 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 .mk-search, .mk-form { display: flex; gap: 6px; flex-wrap: wrap; } .mk-search input[name=q] { flex: 1; min-width: 140px; } .mk-form select { width: auto; flex: 1; }
 .stack select { background: var(--ink); border: 2px solid var(--gold-dim); border-radius: 5px; padding: 8px; color: var(--paper); }
 .gear.special { background: linear-gradient(90deg, rgba(232,184,79,.18), transparent); border-radius: 5px; } .tag { color: var(--gold); font: 14px var(--font-pixel); }
+/* vòng quay, tướng, gói quay */
+#tools .gold { background: linear-gradient(180deg, #ffd955, #e3a52e); color: #3d2b2b; border-color: #fff0b0; }
+.wallet { display: flex; gap: 14px; justify-content: center; font-size: 15px; margin-bottom: 6px; }
+.wallet img { width: 18px; height: 16px; image-rendering: pixelated; vertical-align: -2px; }
+.wheel-box { position: relative; width: 300px; max-width: 80vw; margin: 4px auto 8px; aspect-ratio: 1; }
+.wheel-box canvas { width: 100%; height: 100%; border-radius: 50%; box-shadow: 0 0 0 5px #3d2b2b, 0 0 0 9px #e8b84f, 0 6px 24px rgba(0,0,0,.5); }
+.wheel-pin { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); width: 0; height: 0; border: 12px solid transparent; border-top: 22px solid #ff4a3a; z-index: 2; filter: drop-shadow(0 2px 0 #3d2b2b); }
+.pity { margin: 4px 0 8px; font-size: 13px; }
+.pity .bar { height: 10px; border-radius: 5px; background: rgba(0,0,0,.4); overflow: hidden; margin: 4px 0; }
+.pity .bar i { display: block; height: 100%; background: linear-gradient(90deg, #ffd955, #ff8a3a); }
+.spin-res { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; margin: 8px 0; }
+.spin-res .sr { background: rgba(0,0,0,.25); border-radius: 6px; padding: 6px 8px; border: 1px solid rgba(255,255,255,.12); animation: pop .35s ease; }
+.spin-res .sr.leg { background: linear-gradient(135deg, #ffd955, #e8862e); color: #3d2b2b; border-color: #fff0b0; box-shadow: 0 0 12px #ffcf4d; }
+.spin-res .sr b { display: block; font-size: 13px; } .spin-res .sr small { font-size: 12px; opacity: .85; }
+.odds ul { list-style: none; padding: 0; margin: 6px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 12px; font-size: 13px; }
+.odds li { display: flex; justify-content: space-between; } .odds li.leg { color: var(--gold); font-weight: 700; }
+.gen-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.gen { position: relative; display: flex; flex-direction: column; align-items: center; padding: 6px 4px; border: 2px solid var(--rc); border-radius: 8px; background: rgba(0,0,0,.25); }
+.gen.on { box-shadow: 0 0 0 2px #fff, 0 0 12px var(--rc); }
+.gen.locked img { filter: grayscale(1) brightness(.6); }
+.gen img { width: 60px; image-rendering: pixelated; } .gen b { font-size: 12px; text-align: center; line-height: 1.2; } .gen small { color: var(--gold); font-size: 11px; }
+.gen i { position: absolute; top: 2px; right: 2px; font: normal 10px/1 inherit; background: var(--rc); color: #3d2b2b; padding: 2px 4px; border-radius: 4px; }
+.gen-detail { border: 1px solid var(--rc); } .gen-detail .rar { color: var(--rc); font-size: 12px; } .stars { color: #ffd955; letter-spacing: 1px; }
+.wpn { display: flex; gap: 8px; align-items: center; width: 100%; text-align: left; margin: 4px 0; padding: 6px; }
+.wpn.on { outline: 2px solid var(--gold); } .wpn img { width: 36px; image-rendering: pixelated; } .wpn small { display: block; font-size: 12px; opacity: .85; }
+.packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 8px 0; }
+.pack { display: flex; flex-direction: column; gap: 2px; padding: 10px; border: 2px solid var(--gold); border-radius: 8px; }
+.pack b { font-size: 14px; } .pack i { font-style: normal; color: var(--gold); font-size: 16px; font-weight: 800; }
+.pay .qr { display: block; width: 220px; max-width: 70vw; margin: 8px auto; background: #fff; border-radius: 6px; }
+.pay .code { font-family: monospace; font-size: 16px; color: var(--gold); letter-spacing: 1px; }
+.orders { list-style: none; padding: 0; } .orders li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.1); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -357,6 +388,8 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
     <div id="tools" class="tools">
       <button id="btnExpand" type="button">Khai hoang</button>
       <button id="btnBuild" type="button">Xây dựng</button>
+      <button id="btnWheel" type="button" class="gold">Vòng Quay</button>
+      <button id="btnTuong" type="button">Tướng</button>
       <button id="btnSpeed" type="button">Tốc độ x1</button>
     </div>
   </div>

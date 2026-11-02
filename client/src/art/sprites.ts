@@ -325,6 +325,7 @@ export function drawEmote(kind: 'vui' | 'doi' | 'doi_bung' | 'nghe'): Canvas {
 
 // ---------------- biểu tượng tài nguyên (cho HUD) ----------------
 const ICONS: Record<string, string[]> = {
+  lt: ['...kkk....', '..kxxXk...', '.kxcxxXk..', 'kxcxxxxXk.', '.kxxxxXk..', '..kxxXk...', '...kXk....', '....k.....'],
   tien: ['..kkkkk...', '.kllllLk..', 'kllkkklLk.', 'klkLLLklk.', 'klkLLLklk.', 'kllkkklLk.', '.kLlllLk..', '..kkkkk...'],
   co: ['...g.g....', '..gG.Gg...', '.gyGgGyg..', '..GgGgG...', '.kYYYYYk..', '..kYYYk...', '..kyyyk...', '...kkk....'],
   la: ['......Gk..', '....GgGk..', '...GgGgk..', '..GgGgk...', '.GgGgk....', 'GgGgk.....', 'Gt.k......', '.t........'],

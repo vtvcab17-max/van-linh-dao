@@ -39,6 +39,10 @@ import { teamFromBoss } from './battle';
 import { islandCell } from './map';
 import { cleanDef } from './economy';
 import {
+  DUP_FRAGS, FRAG_PER_GENERAL, GEN_IDS, GENERALS, LEG_IDS, LEG_WEAPONS, LT_BUY_DAILY, LT_BUY_PRICE, LT_SELL_PRICE, MAX_STAR, PITY, rollWheel, SPIN10_COST, SPIN_COST, starMult, ltDrop,
+  type GenId, type LegWeaponId, type Rarity,
+} from './gacha';
+import {
   B_KEYS, BUILDINGS, bLevel, bSum, dayOf, defSpecOf, fortLevel, FORT_NAMES, ITEMS, MAX_VASSALS, PORT_MULT, routePeriod, SHOP_BASE, shopSpecial, tollPerHour, tributePerHour, VASSAL_MS, VASSAL_TOLL_SHARE,
   type BKey, type DefSpec, type Dinh, type GoodKey, type ItemKey, type Lord, type Vassal,
 } from './economy';
@@ -132,6 +136,22 @@ export interface PlayerState {
   slotsBonus: number;
   /** Thương hội (server ghi). */
   guild: { id: string; name: string; tag: string; lv: number } | null;
+  /** Tướng đang có: số sao (1..5). */
+  tuong: Partial<Record<GenId, number>>;
+  /** Tướng ra trận cùng đội. */
+  chuTuong: GenId | null;
+  /** Vũ khí truyền thuyết trong kho (số lượng). */
+  vuKhi: Partial<Record<LegWeaponId, number>>;
+  /** Vũ khí đang đeo cho chủ tướng. */
+  deo: LegWeaponId | null;
+  /** Mảnh tướng truyền thuyết. */
+  manh: number;
+  /** Vòng quay: số lần liền chưa ra đồ truyền thuyết (bảo hiểm), tổng lượt quay. */
+  gacha: { pity: number; spins: number };
+  /** Lượt quay đã mua (không đổi, không bán, không cho được). */
+  luot: number;
+  /** Đã đổi đồng vàng lấy Linh Thạch hôm nay. */
+  ltDay: { day: number; n: number };
 }
 
 export interface Build {
@@ -226,7 +246,7 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     lastReal: now,
     gt: 0,
     speed: 1,
-    res: { co: 10, la: 0, tre: 6, go: 0, cui: 0, da: 6, sat: 0, so: 20, ngoc: 0, tien: 50 },
+    res: { co: 10, la: 0, tre: 6, go: 0, cui: 0, da: 6, sat: 0, so: 20, ngoc: 0, tien: 50, lt: 0 },
     land,
     nodes: [],
     lv: {
@@ -258,6 +278,14 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     kho: noGear(),
     boss: { week: weekOf(now), best: 0, tries: 0, won: false, total: 0 },
     bossOut: [],
+    tuong: {},
+    chuTuong: null,
+    vuKhi: {},
+    deo: null,
+    manh: 0,
+    gacha: { pity: 0, spins: 0 },
+    ltDay: { day: 0, n: 0 },
+    luot: 0,
     thienMon: { week: weekOf(now), done: false },
     asc: 0,
     thuongGioi: {},
@@ -386,7 +414,7 @@ export function powerFrom(tiers: Partial<Record<LvKey, number>>, team: { lv: num
 }
 export function power(s: PlayerState): number {
   const team = COMP_KEYS.filter((k) => s.comps[k].unlocked).map((k) => s.comps[k]);
-  return powerFrom({ leu: s.lv.leu.tier, cuoc: s.lv.cuoc.tier, rao: s.lv.rao.tier, thuyen: s.lv.thuyen.tier }, team, landCount(s), s.kho, s.asc);
+  return powerFrom({ leu: s.lv.leu.tier, cuoc: s.lv.cuoc.tier, rao: s.lv.rao.tier, thuyen: s.lv.thuyen.tier }, team, landCount(s), s.kho, s.asc) + genPower(s);
 }
 /** Danh hiệu: đã phi thăng thì là Tiên Nhân. */
 export function titleFor(s: PlayerState): string {
@@ -414,6 +442,7 @@ export function teamSpec(s: PlayerState, defending: boolean): TeamSpec {
       return g;
     })(),
     fort: defending ? defSpecOf(s.dinh) : undefined,
+    gen: s.chuTuong && s.tuong[s.chuTuong] ? { id: s.chuTuong, star: s.tuong[s.chuTuong]!, w: s.deo && (s.vuKhi[s.deo] ?? 0) > 0 ? s.deo : null } : undefined,
   };
 }
 
@@ -626,6 +655,7 @@ export function ascend(s: PlayerState, rank: number): string {
   const relic: ItemKey = s.bag.trongdong ? 'vayrong' : 'trongdong';
   s.bag[relic] = (s.bag[relic] ?? 0) + 1;
   addRes(s, ASCEND_REWARD);
+  s.res.lt += 100;
   const text = `PHI THĂNG! Thiên Môn mở cho bạn (hạng ${rank} góp sát thương). Bạn trở thành Tiên Nhân.`;
   log(s, text);
   return text;
@@ -713,7 +743,12 @@ export type Action =
   | { t: 'craft'; g: GearKey }
   | { t: 'rename'; name: string; island: string }
   | { t: 'avatar'; av: Avatar }
-  | { t: 'speed'; speed: number };
+  | { t: 'speed'; speed: number }
+  | { t: 'quay'; n: 1 | 10 }
+  | { t: 'chuTuong'; id: GenId | null }
+  | { t: 'deo'; id: LegWeaponId | null }
+  | { t: 'ghep'; id: GenId }
+  | { t: 'doiLT'; dir: 'mua' | 'ban'; n: number };
 
 export interface Outcome {
   ok: boolean;
@@ -728,6 +763,8 @@ export interface Outcome {
   levelUps?: CompKey[];
   event?: RaidEvent;
   boss?: { dmg: number; win: boolean; wiped?: boolean; form: string };
+  /** kết quả vòng quay */
+  spin?: SpinResult[];
   item?: ItemKey;
 }
 
@@ -869,7 +906,8 @@ export function apply(s: PlayerState, a: Action): Outcome {
       const q = doneQuest(s, 'q_chest');
       const drop = rareDrop(r, c.ci);
       if (drop) s.bag[drop] = (s.bag[drop] ?? 0) + 1;
-      return { ok: true, msg: `Mở ${CHESTS[c.ci].name}${drop ? `. Có ${ITEMS[drop].name}!` : ''}`, gained: got, chest: c.ci, quest: q ?? undefined, item: drop ?? undefined };
+      const lt = c.ci >= 4 ? dropLT(s, 'chest') : 0;
+      return { ok: true, msg: `Mở ${CHESTS[c.ci].name}${drop ? `. Có ${ITEMS[drop].name}!` : ''}${lt ? ` Có ${lt} Linh Thạch!` : ''}`, gained: got, chest: c.ci, quest: q ?? undefined, item: drop ?? undefined };
     }
     case 'sail': {
       if (s.voyage) return fail(s.voyage.phase === 'di' ? 'Thuyền đang trên đường đi.' : 'Thuyền đang trên đường về bến.');
@@ -963,7 +1001,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
       if (!o) return fail('Món này hết bán rồi.');
       if (o.daily && (s.shop.bought[o.id] ?? 0) >= o.daily) return fail('Hôm nay đã mua đủ món này.');
       const price = shopPrice(s, o.price);
-      if (s.res.tien < price) return fail('Không đủ tiền đồng.');
+      if (s.res.tien < price) return fail('Không đủ đồng vàng.');
       s.res.tien -= price;
       s.shop.bought[o.id] = (s.shop.bought[o.id] ?? 0) + 1;
       giveGood(s, o.good, o.n);
@@ -1018,6 +1056,66 @@ export function apply(s: PlayerState, a: Action): Outcome {
       s.avatarSet = true;
       return { ok: true, msg: 'Đã lưu dáng vẻ nhân vật.' };
     }
+    case 'quay': {
+      const n = a.n === 10 ? 10 : 1;
+      // dùng lượt quay đã mua trước, thiếu thì trả bằng Linh Thạch
+      const fromTickets = Math.min(n, s.luot);
+      const rest = n - fromTickets;
+      const cost = rest === 10 ? SPIN10_COST : rest * SPIN_COST;
+      if (s.res.lt < cost) return fail(fromTickets ? `Còn ${fromTickets} lượt quay, cần thêm ${cost} Linh Thạch.` : `Cần ${cost} Linh Thạch để quay ${n} lần.`);
+      s.luot -= fromTickets;
+      s.res.lt -= cost;
+      const r = rngOf(s);
+      const out: SpinResult[] = [];
+      for (let i = 0; i < n; i++) out.push(spinOnce(s, r));
+      const legs = out.filter((x) => x.leg).length;
+      log(s, `Quay Vòng Vạn Linh ${n} lần${legs ? `: ra ${legs} đồ truyền thuyết!` : '.'}`);
+      return { ok: true, msg: legs ? `Ra ${out.filter((x) => x.leg).map((x) => x.detail).join(', ')}!` : `Quay ${n} lần xong.`, spin: out };
+    }
+    case 'chuTuong': {
+      if (a.id === null) {
+        s.chuTuong = null;
+        return { ok: true, msg: 'Đội ra trận không có chủ tướng.' };
+      }
+      if (!GENERALS[a.id] || !s.tuong[a.id]) return fail('Chưa có tướng này.');
+      s.chuTuong = a.id;
+      return { ok: true, msg: `${GENERALS[a.id].name} làm chủ tướng.` };
+    }
+    case 'deo': {
+      if (a.id === null) {
+        s.deo = null;
+        return { ok: true, msg: 'Đã tháo vũ khí.' };
+      }
+      if (!LEG_WEAPONS[a.id] || !(s.vuKhi[a.id] ?? 0)) return fail('Chưa có vũ khí này.');
+      s.deo = a.id;
+      return { ok: true, msg: `Chủ tướng đeo ${LEG_WEAPONS[a.id].name}.` };
+    }
+    case 'ghep': {
+      const g = GENERALS[a.id];
+      if (!g || g.rarity !== 'Truyền Thuyết') return fail('Chỉ ghép được tướng truyền thuyết.');
+      if (s.manh < FRAG_PER_GENERAL) return fail(`Cần ${FRAG_PER_GENERAL} mảnh tướng truyền thuyết.`);
+      s.manh -= FRAG_PER_GENERAL;
+      return { ok: true, msg: addGeneral(s, a.id) };
+    }
+    case 'doiLT': {
+      const n = Math.floor(a.n);
+      if (!(n >= 1 && n <= 10_000)) return fail('Số lượng không hợp lệ.');
+      if (a.dir === 'mua') {
+        const day = dayOf(s.lastReal);
+        if (s.ltDay.day !== day) s.ltDay = { day, n: 0 };
+        if (s.ltDay.n + n > LT_BUY_DAILY) return fail(`Mỗi ngày chỉ đổi được ${LT_BUY_DAILY} Linh Thạch (còn ${LT_BUY_DAILY - s.ltDay.n}).`);
+        const price = n * LT_BUY_PRICE;
+        if (s.res.tien < price) return fail(`Cần ${price} đồng vàng.`);
+        s.res.tien -= price;
+        s.res.lt += n;
+        s.ltDay.n += n;
+        return { ok: true, msg: `Đổi ${price} đồng vàng lấy ${n} Linh Thạch.` };
+      }
+      if (s.res.lt < n) return fail('Không đủ Linh Thạch.');
+      s.res.lt -= n;
+      s.res.tien += n * LT_SELL_PRICE;
+      return { ok: true, msg: `Bán ${n} Linh Thạch được ${n * LT_SELL_PRICE} đồng vàng.` };
+    }
     case 'speed': {
       s.speed = Math.max(1, Math.min(20, a.speed));
       return { ok: true, msg: s.speed > 1 ? `Tốc độ test x${s.speed}` : 'Tốc độ thường' };
@@ -1050,7 +1148,8 @@ export function fightWild(s: PlayerState, w: (typeof WILDS)[number], holdLoot = 
     const ups = rewardComps(s, spec, Math.round(8 + 3 * avgLv));
     const q = w.id === 'baicua' ? doneQuest(s, 'q_fight') : null;
     log(s, `Thắng ${w.name}.`);
-    return { ok: true, msg: `Thắng ${w.name}!${dropChest ? ' Có rơi hòm.' : ''}`, battle, gained: got, levelUps: ups, chest: dropChest ? w.chest : undefined, quest: q ?? undefined };
+    const lt = dropLT(s, 'wild');
+    return { ok: true, msg: `Thắng ${w.name}!${dropChest ? ' Có rơi hòm.' : ''}${lt ? ` Nhặt ${lt} Linh Thạch.` : ''}`, battle, gained: got, levelUps: ups, chest: dropChest ? w.chest : undefined, quest: q ?? undefined };
   }
   st.readyAt = s.gt + 20_000;
   s.wilds[w.id] = st;
@@ -1089,6 +1188,8 @@ export interface IslandPub {
   /** số chư hầu */
   vassals?: number;
   guild?: string;
+  /** chủ tướng giữ đảo */
+  gen?: { id: GenId; star: number; w: LegWeaponId | null };
 }
 
 export function publicOf(s: PlayerState): IslandPub {
@@ -1120,6 +1221,7 @@ export function publicOf(s: PlayerState): IslandPub {
     lord: s.chuQuan && s.chuQuan.until > s.lastReal ? { id: s.chuQuan.id, name: s.chuQuan.name } : null,
     vassals: s.chuHau.length,
     guild: s.guild?.tag,
+    gen: teamSpec(s, true).gen,
   };
 }
 
@@ -1148,7 +1250,7 @@ export function raidSeed(attackerId: string, targetId: string, n: number) {
 /** Tính trận đột kích từ hai bản công khai — server dùng đúng hàm này để kiểm lại. */
 export function resolveRaid(att: TeamSpec, target: IslandPub, seed: number): { battle: BattleResult; loot: Partial<Record<ResKey, number>> } {
   const r = mulberry32(seed);
-  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear), fort: target.bot ? undefined : cleanDef(target.def) };
+  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear), fort: target.bot ? undefined : cleanDef(target.def), gen: cleanGen(target.gen) };
   const battle = simulate(teamFromSpec(att, 0), teamFromSpec(defSpec, 1), r);
   const loot: Partial<Record<ResKey, number>> = {};
   if (battle.winner === 0) {
@@ -1217,6 +1319,8 @@ export function raid(s: PlayerState, target: IslandPub, holdLoot = false, conque
     s.chuHau = s.chuHau.filter((v) => v.id !== target.id);
     s.chuHau.push({ id: target.id, name: target.name, islandName: target.islandName, cell: islandCell(target.id), power: target.power, port: target.port ?? 0, until: s.lastReal + VASSAL_MS, bot: !!target.bot });
     log(s, `Thôn tính ${target.islandName}: thành chư hầu 72 giờ.`);
+    const lt = dropLT(s, 'conquer');
+    if (lt) log(s, `Nhặt được ${lt} Linh Thạch trên đảo vừa chiếm.`);
   }
   return {
     ok: true,
@@ -1265,7 +1369,7 @@ export function applyRaidAgainstMe(s: PlayerState, ev: RaidEvent): string | null
 
 /** Dấu vân tay ngắn của trạng thái: client và server so nhau để phát hiện lệch. */
 export function digest(s: PlayerState): string {
-  const parts = [s.rngN, s.seq, landCount(s), ...RES_KEYS.filter((k) => k !== 'tien').map((k) => s.res[k]), ...LV_KEYS.map((k) => `${s.lv[k].tier}:${s.lv[k].xp}`), s.builds.length, s.voyage?.id ?? '-', s.chests.length];
+  const parts = [s.rngN, s.seq, landCount(s), ...RES_KEYS.filter((k) => k !== 'tien' && k !== 'lt').map((k) => s.res[k]), ...LV_KEYS.map((k) => `${s.lv[k].tier}:${s.lv[k].xp}`), s.builds.length, s.voyage?.id ?? '-', s.chests.length];
   return hashStr(parts.join('|')).toString(36);
 }
 
@@ -1282,6 +1386,8 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   merged.lv = { ...fresh.lv, ...s.lv };
   merged.boss = { ...fresh.boss, ...s.boss };
   if (!Array.isArray(merged.bossOut)) merged.bossOut = [];
+  merged.gacha = { ...fresh.gacha, ...s.gacha };
+  merged.ltDay = { ...fresh.ltDay, ...s.ltDay };
   return merged;
 }
 
@@ -1319,7 +1425,8 @@ export function giveGood(s: PlayerState, g: string, n: number) {
     const k = g.slice(2) as GearKey;
     const room = Math.max(0, GEAR[k].max - s.kho[k]);
     s.kho[k] += Math.min(room, n);
-  } else if (g in ITEMS) s.bag[g as ItemKey] = (s.bag[g as ItemKey] ?? 0) + n;
+  } else if (g === 'luot') s.luot = (s.luot ?? 0) + n;
+  else if (g in ITEMS) s.bag[g as ItemKey] = (s.bag[g as ItemKey] ?? 0) + n;
   else s.res[g as ResKey] = (s.res[g as ResKey] ?? 0) + n; // hàng mua về không bị giới hạn kho
 }
 
@@ -1336,3 +1443,85 @@ export function rareDrop(r: Rng, ci: number): ItemKey | null {
 
 export const fortName = (s: PlayerState) => FORT_NAMES[fortLevel(s.dinh)];
 export { B_KEYS, BUILDINGS, PORT_MULT };
+
+
+// ---------- tướng, vòng quay, Linh Thạch ----------
+export interface SpinResult {
+  slot: string;
+  label: string;
+  detail: string;
+  leg: boolean;
+}
+
+/** Nhận một tướng: chưa có thì 1 sao, có rồi thì lên sao, đủ 5 sao thì đổi ra mảnh. */
+export function addGeneral(s: PlayerState, id: GenId): string {
+  const g = GENERALS[id];
+  const cur = s.tuong[id] ?? 0;
+  if (!cur) {
+    s.tuong[id] = 1;
+    if (!s.chuTuong) s.chuTuong = id;
+    return `${g.name} (${g.rarity}) gia nhập!`;
+  }
+  if (cur < MAX_STAR) {
+    s.tuong[id] = cur + 1;
+    return `${g.name} lên ${cur + 1} sao!`;
+  }
+  s.manh += DUP_FRAGS;
+  return `${g.name} đã đủ 5 sao: đổi thành ${DUP_FRAGS} mảnh tướng.`;
+}
+
+function spinOnce(s: PlayerState, r: Rng): SpinResult {
+  const slot = rollWheel(r, s.gacha.pity);
+  s.gacha.spins++;
+  s.gacha.pity = slot.leg ? 0 : s.gacha.pity + 1;
+  const p = slot.prize;
+  let detail = slot.label;
+  if (p.k === 'gen') {
+    const pool = GEN_IDS.filter((id) => GENERALS[id].rarity === (p.pool as Rarity));
+    const id = pick(r, pool);
+    detail = addGeneral(s, id);
+  } else if (p.k === 'weapon') {
+    const id = pick(r, LEG_IDS);
+    s.vuKhi[id] = (s.vuKhi[id] ?? 0) + 1;
+    if (!s.deo) s.deo = id;
+    detail = LEG_WEAPONS[id].name;
+  } else if (p.k === 'frag') {
+    s.manh += p.n;
+  } else if (p.k === 'item') {
+    s.bag[p.item] = (s.bag[p.item] ?? 0) + p.n;
+  } else {
+    // quà từ vòng quay không bị giới hạn kho
+    for (const [k, v] of Object.entries(p.res)) s.res[k as ResKey] += v ?? 0;
+  }
+  return { slot: slot.id, label: slot.label, detail, leg: !!slot.leg };
+}
+
+/** Sức mạnh cộng thêm từ tướng và vũ khí truyền thuyết. */
+export function genPower(s: PlayerState): number {
+  let p = 0;
+  for (const id of GEN_IDS) {
+    const st = s.tuong[id];
+    if (!st) continue;
+    const base = GENERALS[id].rarity === 'Truyền Thuyết' ? 120 : GENERALS[id].rarity === 'Sử Thi' ? 80 : 50;
+    p += Math.round(base * starMult(st));
+  }
+  for (const id of LEG_IDS) p += 60 * Math.min(1, s.vuKhi[id] ?? 0);
+  return p;
+}
+
+/** Kiểm tra chủ tướng trong dữ liệu công khai (không tin dữ liệu lạ). */
+export function cleanGen(raw: unknown): TeamSpec['gen'] {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const g = raw as { id?: unknown; star?: unknown; w?: unknown };
+  if (typeof g.id !== 'string' || !(g.id in GENERALS)) return undefined;
+  const star = Math.max(1, Math.min(MAX_STAR, Math.floor(Number(g.star)) || 1));
+  const w = typeof g.w === 'string' && g.w in LEG_WEAPONS ? (g.w as LegWeaponId) : null;
+  return { id: g.id as GenId, star, w };
+}
+
+/** Linh Thạch rơi thêm sau trận (chiếm đảo, hang quái, hòm báu). */
+export function dropLT(s: PlayerState, kind: 'conquer' | 'bian' | 'wild' | 'chest'): number {
+  const n = ltDrop(rngOf(s), kind);
+  if (n > 0) s.res.lt += n;
+  return n;
+}

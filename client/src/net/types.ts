@@ -70,4 +70,6 @@ export interface Net {
   market?(op: string, args?: Record<string, unknown>): Promise<{ ok: boolean; msg: string; data?: any }>;
   /** Thủy Tinh tuần này: máu chung cả Hải Khu (bản chính thức do server gửi). */
   bossWorld(s: PlayerState): BossWorld;
+  /** Gọi API của server kèm phiên đăng nhập (chỉ bản chính thức). */
+  api?(path: string, body?: Record<string, unknown>): Promise<any>;
 }

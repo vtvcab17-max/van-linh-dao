@@ -197,7 +197,7 @@ describe('Thủy Tinh, trang bị, phi thăng', () => {
     const s = newPlayer(id, 'Lan', WEEK0 + 1000);
     for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 5;
     for (const k of ['an', 'ngoc', 'ha', 'chau'] as const) s.comps[k] = { lv: 20, xp: 0, unlocked: true };
-    s.res = { co: 9999, la: 9999, tre: 9999, go: 9999, cui: 9999, da: 9999, sat: 9999, so: 9999, ngoc: 99, tien: 9999 };
+    s.res = { co: 9999, la: 9999, tre: 9999, go: 9999, cui: 9999, da: 9999, sat: 9999, so: 9999, ngoc: 99, tien: 9999, lt: 0 };
     return s;
   };
   it('chế tạo trang bị cần công trình đủ bậc và tài nguyên', () => {
@@ -272,7 +272,7 @@ describe('Kinh tế: nhà cửa, thuế, cửa hàng, thôn tính', () => {
     const s = newPlayer(id, 'Lan', T0);
     for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 4;
     for (const k of ['an', 'ngoc', 'ha', 'chau'] as const) s.comps[k] = { lv: 18, xp: 0, unlocked: true };
-    s.res = { co: 5000, la: 5000, tre: 5000, go: 5000, cui: 5000, da: 5000, sat: 5000, so: 5000, ngoc: 50, tien: 5000 };
+    s.res = { co: 5000, la: 5000, tre: 5000, go: 5000, cui: 5000, da: 5000, sat: 5000, so: 5000, ngoc: 50, tien: 5000, lt: 0 };
     return s;
   };
   const freeTile = (s: ReturnType<typeof rich>) => {
@@ -341,5 +341,53 @@ describe('nhân vật chỉ đổi một lần', () => {
     expect(apply(s, { t: 'avatar', av: av2 }).ok).toBe(true);
     expect(s.bag.thegd).toBe(0);
     expect(apply(s, { t: 'avatar', av }).ok).toBe(false);
+  });
+});
+
+import { addGeneral } from '../shared/logic';
+import { PITY, SPIN_COST, WHEEL_TOTAL, LT_BUY_DAILY } from '../shared/gacha';
+describe('Linh Thạch, vòng quay, tướng', () => {
+  it('bảng giải đủ 10.000 và quay tốn đúng Linh Thạch', () => {
+    expect(WHEEL_TOTAL).toBe(10_000);
+    const s = newPlayer('lt1', 'An', T0);
+    expect(apply(s, { t: 'quay', n: 1 }).ok).toBe(false);
+    s.res.lt = SPIN_COST;
+    const o = apply(s, { t: 'quay', n: 1 });
+    expect(o.ok).toBe(true);
+    expect(o.spin?.length).toBe(1);
+    expect(s.res.lt).toBeGreaterThanOrEqual(0);
+    expect(s.gacha.spins).toBe(1);
+  });
+  it('bảo hiểm: quay đủ 60 lần chắc chắn ra đồ truyền thuyết', () => {
+    const s = newPlayer('lt2', 'An', T0);
+    s.res.lt = 50 * 200;
+    let gap = 0, maxGap = 0, legs = 0;
+    for (let i = 0; i < 200; i++) {
+      const o = apply(s, { t: 'quay', n: 1 });
+      if (o.spin![0].leg) { legs++; gap = 0; } else gap++;
+      maxGap = Math.max(maxGap, gap);
+    }
+    expect(maxGap).toBeLessThan(PITY);
+    expect(legs).toBeGreaterThanOrEqual(3);
+  });
+  it('tướng trùng lên sao, đủ 5 sao thành mảnh; chủ tướng ra trận', () => {
+    const s = newPlayer('lt3', 'An', T0);
+    for (let i = 0; i < 6; i++) addGeneral(s, 'giong');
+    expect(s.tuong.giong).toBe(5);
+    expect(s.manh).toBe(20);
+    expect(s.chuTuong).toBe('giong');
+    const p0 = teamSpec(s, false);
+    expect(p0.gen?.id).toBe('giong');
+    expect(publicOf(s).gen?.star).toBe(5);
+  });
+  it('đổi đồng vàng lấy Linh Thạch có giới hạn ngày, bán lại rẻ hơn', () => {
+    const s = newPlayer('lt4', 'An', T0);
+    s.res.tien = 100_000;
+    expect(apply(s, { t: 'doiLT', dir: 'mua', n: LT_BUY_DAILY }).ok).toBe(true);
+    expect(apply(s, { t: 'doiLT', dir: 'mua', n: 1 }).ok).toBe(false);
+    expect(s.res.lt).toBe(LT_BUY_DAILY);
+    const before = s.res.tien;
+    expect(apply(s, { t: 'doiLT', dir: 'ban', n: 5 }).ok).toBe(true);
+    expect(s.res.tien - before).toBe(400);
   });
 });

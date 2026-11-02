@@ -23,6 +23,12 @@ export interface Env {
   ADMIN_TOKEN?: string;
   DEV_LOGIN?: string;
   ALLOW_SPEED?: string;
+  /** Bán gói lượt quay: ngân hàng nhận tiền (mã VietQR, ví dụ MB, VCB, TCB), số tài khoản, tên chủ tài khoản. */
+  NAP_BANK_ID?: string;
+  NAP_BANK_ACC?: string;
+  NAP_BANK_NAME?: string;
+  /** Khoá API mà SePay gửi kèm khi báo có tiền vào. */
+  NAP_WEBHOOK_KEY?: string;
 }
 
 interface Att {

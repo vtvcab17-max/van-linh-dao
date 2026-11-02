@@ -280,4 +280,7 @@ export const GENERALS: GeneralDef[] = [
   { id: 'auco', name: 'Âu Cơ', title: 'Mẹ Tiên', skill: 'Hồi máu cho cả đội mỗi lượt', rarity: 'Sử Thi', look: { hat: 'hoa', weapon: 'quat', cloth: [C.pink, C.pink2], female: true, cape: C.white } },
   { id: 'caolo', name: 'Cao Lỗ', title: 'Thần Nỏ', skill: 'Nỏ thần bắn một phát trúng mười', rarity: 'Sử Thi', look: { hat: 'toc_bui', weapon: 'no_vang', cloth: [C.brown, C.brown2, C.gold2], cape: C.gold2 } },
   { id: 'nuthuy', name: 'Nữ Tướng Hải Âu', title: 'Thủy Quân Đô Đốc', skill: 'Thuyền mình đi nhanh hơn 30%', rarity: 'Hiếm', look: { hat: 'khan_do', weapon: 'kiem', cloth: [C.white, C.blue2], female: true, cape: C.blue } },
+  { id: 'nghiaquan', name: 'Thủ Lĩnh Nghĩa Quân', title: 'Áo Vải Cờ Đào', skill: 'Đòn hiểm 140% công', rarity: 'Hiếm', look: { hat: 'khan_ran', weapon: 'giao', cloth: [C.brown, C.brown2], cape: C.red } },
+  { id: 'ngudan', name: 'Lão Ngư Mắt Bão', title: 'Người Nghe Sóng', skill: 'Cả đội tăng 25% công', rarity: 'Hiếm', look: { hat: 'nonla', weapon: 'chia', cloth: [C.indigo, C.indigo2], hair: ['#d8d2c8', '#b0a898'] } },
+  { id: 'thaylang', name: 'Thầy Lang Đảo', title: 'Nam Dược Thần Hiệu', skill: 'Hồi máu đồng đội yếu nhất', rarity: 'Hiếm', look: { hat: 'toc_bui', weapon: 'gay', cloth: [C.white, C.white2], belt: C.green2 } },
 ];

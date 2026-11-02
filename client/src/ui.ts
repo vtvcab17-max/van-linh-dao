@@ -30,6 +30,7 @@ import { avatarFrom, cleanAvatar, GENDERS, HAIRS, HAIR_COLORS, HATS, ITEMS as AV
 import { hashStr } from '../../shared/rng';
 import { LV_LABEL, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, GEAR, GEAR_KEYS, gearBonus, noGear, weekEnd, weekOf, type GearKey, type GearSet } from '../../shared/boss';
 import { thuongGioiHtml } from './thuonggioi';
+import { openGenerals, openWheel } from './ui-gacha';
 import {
   B_KEYS, BUILDINGS, DAY0, dayOf, GUILD_COST, guildLevel, ITEM_KEYS, ITEMS, marketFee, PORT_MULT, RARITY_COLOR, ROUTE_MS, routePeriod, routesNear, SHOP_BASE, shopSpecial, tollPerHour, tributePerHour, goodRarity, bLevel,
   type BKey, type ItemKey, type Route,
@@ -203,6 +204,9 @@ export class UI {
     document.querySelectorAll<HTMLButtonElement>('#nav button').forEach((b) => b.addEventListener('click', () => this.showTab(b.dataset.tab as Tab)));
     $('#btnSettings').addEventListener('click', () => this.openSettings());
     $('#meAv').addEventListener('click', () => this.openAvatar());
+    $('#btnWheel').addEventListener('click', () => openWheel(this));
+    $('#res').addEventListener('click', (e) => (e.target as HTMLElement).closest('[data-k="lt"]') && openWheel(this));
+    $('#btnTuong').addEventListener('click', () => openGenerals(this));
     $('#btnBuild').addEventListener('click', () => (this.island.placing ? this.island.setPlacing(null) : this.openBuildMenu()));
     $('#income').addEventListener('click', () => this.openCho('linh'));
     $('#vassal').addEventListener('click', () => this.openCho('linh'));
@@ -289,12 +293,12 @@ export class UI {
     $('#islandName').textContent = s.islandName;
     $('#title').textContent = `${titleOf(p)} · ${p} sức mạnh`;
     const inc = incomePerHour(s, this.store.now());
-    $('#income').textContent = `${inc.total >= 0 ? '+' : ''}${Math.round(inc.total)} tiền/giờ`;
+    $('#income').textContent = `${inc.total >= 0 ? '+' : ''}${Math.round(inc.total)} đồng/giờ`;
     const vb = $('#vassal');
     const lord = s.chuQuan && s.chuQuan.until > this.store.now() ? s.chuQuan : null;
     vb.hidden = !lord && !s.chuHau.length;
     vb.innerHTML = lord
-      ? `<b class="bad">Chư hầu của ${esc(lord.name)}</b><span>nộp ${tributePerHour(power(s))} tiền/giờ · còn ${hms(lord.until - this.store.now())}</span>`
+      ? `<b class="bad">Chư hầu của ${esc(lord.name)}</b><span>nộp ${tributePerHour(power(s))} đồng/giờ · còn ${hms(lord.until - this.store.now())}</span>`
       : s.chuHau.length
         ? `<b>Lãnh chúa ${s.chuHau.length} đảo</b><span>${s.chuHau.map((v) => esc(v.islandName)).slice(0, 2).join(', ')}</span>`
         : '';
@@ -314,7 +318,7 @@ export class UI {
     const s = this.store.s;
     const cap = storageCap(s);
     const el = $('#res');
-    const show: ResKey[] = ['tien', 'co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc'];
+    const show: ResKey[] = ['lt', 'tien', 'co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc'];
     if (el.childElementCount !== show.length) {
       el.innerHTML = show.map((k) => `<span class="r" data-k="${k}" title="${RES[k].name}"><img src="${iconUrl(k)}" alt="${RES[k].name}"><b></b></span>`).join('');
     }
@@ -815,12 +819,12 @@ export class UI {
         <p class="muted small">So sức: bạn ${me.power} · họ ${p.power}${p.fort ? ` · thành trì: ${['Đảo Trống', 'Xóm Đảo', 'Làng Lũy', 'Đồn Lũy', 'Thành Trì', 'Kinh Thành'][p.fort]}` : ''}${p.guild ? ` · hội [${esc(p.guild)}]` : ''}</p>
         ${p.lord ? `<p class="hint">Đảo này đang là chư hầu của ${p.lord.id === s.id ? '<b>bạn</b>' : esc(p.lord.name)}.</p>` : ''}
         ${s.chuQuan && s.chuQuan.id === p.id ? '<p class="hint">Đây là chủ của bạn. Đánh thắng họ để <b>khởi nghĩa</b>, giành lại tự do.</p>' : ''}
-        <p class="muted small">Thuế thương thuyền ở đảo này: ~${Math.round(tollPerHour(to, routePeriod(this.store.now()), p.port ?? 0))} tiền/giờ${routesNear(to, routePeriod(this.store.now())).length ? ` (${routesNear(to, routePeriod(this.store.now())).map((r) => r.m.name).join(', ')} đi ngang)` : ''}.</p>
+        <p class="muted small">Thuế thương thuyền ở đảo này: ~${Math.round(tollPerHour(to, routePeriod(this.store.now()), p.port ?? 0))} đồng/giờ${routesNear(to, routePeriod(this.store.now())).length ? ` (${routesNear(to, routePeriod(this.store.now())).map((r) => r.m.name).join(', ')} đi ngang)` : ''}.</p>
         ${this.sailLine(to)}
         ${this.sailButton(cd <= 0, `Vừa đột kích, chờ ${secs(cd / s.speed)}`, 'Đột kích cướp tài nguyên')}
         ${s.voyage || cd > 0 ? '' : (() => {
           const err = conquerCheck(s, p);
-          return `<button class="wide ${err ? '' : 'hot'}" id="btnConquer" ${err ? 'disabled' : ''}>${err ? esc(err) : 'Đánh chiếm làm chư hầu (72 giờ)'}</button><p class="muted small">Thắng thì đảo này cống nạp ~${tributePerHour(p.power)} tiền/giờ, chia bạn một nửa thuế thương thuyền, và thành cứ điểm cho thuyền xuất phát.</p>`;
+          return `<button class="wide ${err ? '' : 'hot'}" id="btnConquer" ${err ? 'disabled' : ''}>${err ? esc(err) : 'Đánh chiếm làm chư hầu (72 giờ)'}</button><p class="muted small">Thắng thì đảo này cống nạp ~${tributePerHour(p.power)} đồng/giờ, chia bạn một nửa thuế thương thuyền, và thành cứ điểm cho thuyền xuất phát.</p>`;
         })()}`}`;
     this.openSheet('island', isMe ? 'Đảo của bạn' : 'Đảo láng giềng', html, (body) => {
       body.querySelector('#btnHome')?.addEventListener('click', () => this.goIsland());
@@ -1068,7 +1072,7 @@ export class UI {
 
   openMerchant(rt: Route) {
     const s = this.store.s;
-    const html = `<div class="card"><small>${esc(rt.m.name)}</small><p>Tuyến buôn 6 giờ này ghé ${rt.pts.length} điểm. Đảo nằm sát tuyến (trong ${2.5} hải lý) thu <b>${rt.value} tiền/giờ</b> × hệ số Trạm thuế (${PORT_MULT.join(' / ')}).</p>
+    const html = `<div class="card"><small>${esc(rt.m.name)}</small><p>Tuyến buôn 6 giờ này ghé ${rt.pts.length} điểm. Đảo nằm sát tuyến (trong ${2.5} hải lý) thu <b>${rt.value} đồng/giờ</b> × hệ số Trạm thuế (${PORT_MULT.join(' / ')}).</p>
       <p>Hàng mang theo: ${rt.m.goods.map((g) => `<span style="color:${RARITY_COLOR[goodRarity(g)]}">${esc(goodLabel(g))}</span>`).join(', ')}</p>
       <p class="muted small">Đổi tuyến sau ${hms(ROUTE_MS - ((this.store.now() - DAY0) % ROUTE_MS))}. Đảo bạn ${routesNear(homeCell(s), routePeriod(this.store.now())).some((r) => r.m.id === rt.m.id) ? '<b class="good">đang nằm trên tuyến này</b>' : 'không nằm trên tuyến này'}.</p></div>
       <button class="primary wide" id="btnGoMarket">Xem hàng của thương buôn ở chợ</button>`;
@@ -1124,7 +1128,7 @@ export class UI {
     const body = () => {
       const S = s();
       const tabBar = `<div class="seg scrolltabs">${tabs.map(([k, n]) => `<button type="button" data-tab2="${k}" aria-checked="${this.choTab === k}">${n}</button>`).join('')}</div>
-        <p class="money"><img src="${iconUrl('tien')}" alt=""> <b>${fmt(S.res.tien)}</b> tiền đồng${st.busy ? ' · <i>đang chờ chợ...</i>' : ''}</p>`;
+        <p class="money"><img src="${iconUrl('tien')}" alt=""> <b>${fmt(S.res.tien)}</b> đồng vàng${st.busy ? ' · <i>đang chờ chợ...</i>' : ''}</p>`;
       switch (this.choTab) {
         case 'shop': {
           const day = dayOf(this.store.now());
@@ -1204,11 +1208,11 @@ export class UI {
           const near = routesNear(homeCell(S), routePeriod(now));
           return tabBar + `<div class="card"><small>Thu nhập mỗi giờ</small>
               <p>Nhà dân <b>+${Math.round(inc.dan)}</b> · Thuế thương thuyền <b>+${Math.round(inc.toll)}</b> · Chư hầu cống nạp <b>+${Math.round(inc.cong)}</b>${inc.nop ? ` · Nộp cho chủ <b class="bad">−${Math.round(inc.nop)}</b>` : ''}</p>
-              <p>Tổng: <b>${Math.round(inc.total)} tiền/giờ</b> · hôm nay đã thu ${fmt(S.thue.today)}</p></div>
+              <p>Tổng: <b>${Math.round(inc.total)} đồng/giờ</b> · hôm nay đã thu ${fmt(S.thue.today)}</p></div>
             <div class="card"><small>Tuyến buôn đi ngang đảo bạn</small><p>${near.length ? near.map((r) => `<span style="color:${r.m.color}">${esc(r.m.name)}</span> (${r.value}/giờ)`).join(', ') : 'Khung giờ này không có thương thuyền nào đi ngang.'}</p>
               <p class="muted small">Thương buôn đổi tuyến sau ${hms(ROUTE_MS - ((now - DAY0) % ROUTE_MS))}. Trạm thuế cấp ${bLevel(S.dinh, 'tramthue')} → hệ số ×${PORT_MULT[bLevel(S.dinh, 'tramthue')]}.</p></div>
-            <div class="card"><small>Chư hầu, cứ điểm (${S.chuHau.length})</small>${S.chuHau.length ? S.chuHau.map((v) => `<p><b>${esc(v.islandName)}</b> (${esc(v.name)}) · +${tributePerHour(v.power)} tiền/giờ · còn ${hms(v.until - now)}</p>`).join('') : '<p class="muted">Chưa có. Xây Trại Lính rồi ra Hải Khu chọn đảo, bấm "Đánh chiếm".</p>'}</div>
-            ${S.chuQuan && S.chuQuan.until > now ? `<div class="card danger-card"><small>Bạn đang là chư hầu</small><p>Chủ: <b>${esc(S.chuQuan.name)}</b> (${esc(S.chuQuan.islandName)}). Nộp ${tributePerHour(power(S))} tiền/giờ, còn ${hms(S.chuQuan.until - now)}.</p><p class="muted small">Ra Hải Khu, chọn đảo của họ và đánh thắng để khởi nghĩa.</p></div>` : ''}`;
+            <div class="card"><small>Chư hầu, cứ điểm (${S.chuHau.length})</small>${S.chuHau.length ? S.chuHau.map((v) => `<p><b>${esc(v.islandName)}</b> (${esc(v.name)}) · +${tributePerHour(v.power)} đồng/giờ · còn ${hms(v.until - now)}</p>`).join('') : '<p class="muted">Chưa có. Xây Trại Lính rồi ra Hải Khu chọn đảo, bấm "Đánh chiếm".</p>'}</div>
+            ${S.chuQuan && S.chuQuan.until > now ? `<div class="card danger-card"><small>Bạn đang là chư hầu</small><p>Chủ: <b>${esc(S.chuQuan.name)}</b> (${esc(S.chuQuan.islandName)}). Nộp ${tributePerHour(power(S))} đồng/giờ, còn ${hms(S.chuQuan.until - now)}.</p><p class="muted small">Ra Hải Khu, chọn đảo của họ và đánh thắng để khởi nghĩa.</p></div>` : ''}`;
         }
       }
       return tabBar;
