@@ -34,6 +34,8 @@ import {
 import { simulate, teamFromMonsters, teamFromSpec, type BattleResult, type TeamSpec } from './battle';
 import { hashStr, mulberry32, pick, rint, weighted, type Rng } from './rng';
 import { avatarFrom, cleanAvatar, type Avatar } from './avatar';
+import { LV_LABEL, ASCEND_REWARD, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, cleanGear, GEAR, GEAR_KEYS, gearBonus, gearPower, noGear, weekOf, type GearKey, type GearSet } from './boss';
+import { teamFromBoss } from './battle';
 
 export type Mood = 'vui' | 'thuong' | 'doi';
 export interface LvState {
@@ -96,6 +98,14 @@ export interface PlayerState {
   avatar: Avatar;
   /** Đã tự chỉnh nhân vật lần nào chưa (chưa → mời chỉnh khi vào game). */
   avatarSet: boolean;
+  /** Kho trang bị đang cất ở nhà (tăng sức cho mọi trận). */
+  kho: GearSet;
+  /** Thành tích đánh Thủy Tinh trong tuần hiện tại (làm mới mỗi thứ Hai). */
+  boss: { week: number; best: number; tries: number; won: boolean };
+  /** Số lần phi thăng. */
+  asc: number;
+  /** Dành sẵn cho Thượng Giới (bản sau). Để trống. */
+  thuongGioi: Record<string, unknown>;
 }
 
 export interface Build {
@@ -108,7 +118,9 @@ export interface Build {
 /** Một chuyến thuyền: đi (mất thời gian) → đánh khi cập đảo → về bến (mất thời gian) mới nhận chiến lợi phẩm. */
 export interface Voyage {
   id: string;
-  kind: 'wild' | 'island';
+  kind: 'wild' | 'island' | 'boss';
+  /** trang bị chở theo (chỉ khi đánh Thủy Tinh) */
+  carry?: GearSet;
   targetId: string;
   targetName: string;
   target?: IslandPub;
@@ -213,6 +225,10 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     outbox: [],
     avatar: avatarFrom(id),
     avatarSet: false,
+    kho: noGear(),
+    boss: { week: weekOf(now), best: 0, tries: 0, won: false },
+    asc: 0,
+    thuongGioi: {},
   };
   // mỗi đảo một hình dạng riêng, sinh từ mã đảo
   const shape = startShape(seed);
@@ -325,12 +341,16 @@ export function addRes(s: PlayerState, gain: Partial<Record<ResKey, number>>): P
 }
 
 /** Công thức sức mạnh dùng chung — server tự tính lại bằng đúng hàm này. */
-export function powerFrom(tiers: Partial<Record<LvKey, number>>, team: { lv: number }[], land: number): number {
-  return Math.round(land + (tiers.leu ?? 1) * 30 + (tiers.cuoc ?? 1) * 25 + (tiers.rao ?? 1) * 25 + (tiers.thuyen ?? 1) * 15 + team.reduce((t, c) => t + c.lv * 12, 0));
+export function powerFrom(tiers: Partial<Record<LvKey, number>>, team: { lv: number }[], land: number, gear?: Partial<GearSet>, asc = 0): number {
+  return Math.round(land + (tiers.leu ?? 1) * 30 + (tiers.cuoc ?? 1) * 25 + (tiers.rao ?? 1) * 25 + (tiers.thuyen ?? 1) * 15 + team.reduce((t, c) => t + c.lv * 12, 0) + gearPower(gear) + asc * 150);
 }
 export function power(s: PlayerState): number {
   const team = COMP_KEYS.filter((k) => s.comps[k].unlocked).map((k) => s.comps[k]);
-  return powerFrom({ leu: s.lv.leu.tier, cuoc: s.lv.cuoc.tier, rao: s.lv.rao.tier, thuyen: s.lv.thuyen.tier }, team, landCount(s));
+  return powerFrom({ leu: s.lv.leu.tier, cuoc: s.lv.cuoc.tier, rao: s.lv.rao.tier, thuyen: s.lv.thuyen.tier }, team, landCount(s), s.kho, s.asc);
+}
+/** Danh hiệu: đã phi thăng thì là Tiên Nhân. */
+export function titleFor(s: PlayerState): string {
+  return s.asc > 0 ? (s.asc > 1 ? `Tiên Nhân ×${s.asc}` : 'Tiên Nhân') : titleOf(power(s));
 }
 export function titleOf(p: number): string {
   let t = TITLES[0][1];
@@ -348,6 +368,7 @@ export function teamSpec(s: PlayerState, defending: boolean): TeamSpec {
     cuocTier: s.lv.cuoc.tier,
     raoTier: defending ? s.lv.rao.tier : undefined,
     hero: s.name,
+    gear: gearBonus(s.kho),
   };
 }
 
@@ -391,6 +412,9 @@ export function tick(s: PlayerState, now: number): string[] {
   const notes: string[] = [];
   const dtReal = Math.max(0, Math.min(now - s.lastReal, 7 * 24 * 3600_000));
   s.lastReal = now;
+  // thứ Hai: Thủy Tinh hồi sinh, thành tích tuần làm mới (số lần phi thăng giữ nguyên)
+  const wk = weekOf(now);
+  if (s.boss.week !== wk) s.boss = { week: wk, best: 0, tries: 0, won: false };
   const dt = dtReal * s.speed;
   s.gt += dt;
   const min = dt / 60_000;
@@ -454,9 +478,50 @@ function buildTick(s: PlayerState): string[] {
   return notes;
 }
 
-export function sailMs(s: PlayerState, to: { x: number; y: number }): number {
+export function sailMs(s: PlayerState, to: { x: number; y: number }, mul = 1): number {
   const dist = Math.max(1, Math.hypot(to.x - HOME_CELL.x, to.y - HOME_CELL.y));
-  return Math.round((dist * EFFECTS.sailSecPerCell[tierIdx(s, 'thuyen')] * 1000) / moodMult(s.lv.thuyen));
+  return Math.round((dist * EFFECTS.sailSecPerCell[tierIdx(s, 'thuyen')] * 1000 * mul) / moodMult(s.lv.thuyen));
+}
+
+/** Điều kiện ra khơi đánh Thủy Tinh; trả về lý do nếu chưa được. */
+export function bossCheck(s: PlayerState): string | null {
+  if (s.lv.leu.tier < BOSS_REQ.leu) return `Cần Nhà chính bậc ${BOSS_REQ.leu} trở lên.`;
+  if (s.lv.thuyen.tier < BOSS_REQ.thuyen) return `Cần thuyền bậc ${BOSS_REQ.thuyen} trở lên mới vượt được vùng bão.`;
+  if (s.builds.some((b) => b.lv === 'thuyen')) return 'Thuyền đang được nâng cấp, chưa ra khơi được.';
+  if (s.boss.won) return 'Bạn đã phi thăng tuần này. Thủy Tinh sẽ hồi sinh vào thứ Hai.';
+  if (s.voyage) return 'Thuyền đang ở ngoài biển.';
+  return null;
+}
+
+/** Đại chiến Thủy Tinh: đội + trang bị chở theo, đấu tối đa 30 lượt. */
+export function fightBoss(s: PlayerState, carry: GearSet): Outcome {
+  const week = weekOf(s.lastReal);
+  const form = bossOf(week);
+  const spec = { ...teamSpec(s, false), gear: gearBonus(carry) };
+  const r = rngOf(s);
+  const real = simulate(teamFromSpec(spec, 0), teamFromBoss(form, 1), r, 40);
+  s.stats.battles++;
+  s.boss.tries++;
+  const dmg = Math.max(0, form.hp - (real.hpB?.[0] ?? form.hp));
+  s.boss.best = Math.max(s.boss.best, dmg);
+  const win = real.winner === 0;
+  const ups = rewardComps(s, spec, win ? 60 : 15);
+  if (win) {
+    s.stats.wins++;
+    s.boss.won = true;
+    s.asc++;
+    log(s, `PHI THĂNG! Đánh bại ${form.name} · ${form.title}.`);
+    return { ok: true, msg: `Đánh bại ${form.name} · ${form.title}! Bạn đã phi thăng.`, battle: real, gained: { ...ASCEND_REWARD }, levelUps: ups, boss: { dmg, win, form: form.key } };
+  }
+  log(s, `Thua ${form.name}: mất trang bị mang theo, thuyền bị đánh chìm.`);
+  return { ok: true, msg: `Thua ${form.name} · ${form.title}. Gây ${dmg} sát thương.`, battle: real, gained: {}, levelUps: ups, boss: { dmg, win, form: form.key } };
+}
+
+/** Thuyền bị Thủy Tinh đánh chìm: về Thuyền Thúng, mất hết công sức xây. */
+function sinkBoat(s: PlayerState) {
+  s.lv.thuyen.tier = 1;
+  s.lv.thuyen.xp = 0;
+  s.builds = s.builds.filter((b) => b.lv !== 'thuyen');
 }
 
 function fmtLoot(g: Partial<Record<ResKey, number>>) {
@@ -471,21 +536,41 @@ function voyageTick(s: PlayerState): string[] {
   if (!v) return notes;
   if (v.phase === 'di' && s.gt >= v.arriveAt) {
     let o: Outcome;
-    if (v.kind === 'wild') {
+    if (v.kind === 'boss') {
+      const carry = cleanGear(v.carry);
+      o = fightBoss(s, carry);
+      s.lastBattle = { title: 'Đại chiến Thủy Tinh', o, seen: false };
+      if (o.boss?.win) {
+        // thắng: chở trang bị và phần thưởng về nhà
+        v.loot = o.gained ?? {};
+        v.win = true;
+        v.phase = 've';
+        notes.push('THỦY TINH ĐÃ BỊ ĐÁNH BẠI! Bạn đã phi thăng. Bấm "Xem trận".');
+      } else {
+        // thua: mất sạch trang bị mang theo, thuyền bị đánh chìm, người bơi về đảo
+        sinkBoat(s);
+        s.voyage = null;
+        notes.push(`Thua Thủy Tinh (gây ${o.boss?.dmg ?? 0} sát thương). Mất trang bị mang theo, thuyền bị đánh chìm.`);
+        return notes;
+      }
+    } else if (v.kind === 'wild') {
       const w = WILDS.find((x) => x.id === v.targetId)!;
       o = fightWild(s, w, true);
     } else {
       o = raid(s, v.target!, true);
       if (o.event) s.outbox.push(o.event);
     }
-    v.loot = o.gained ?? {};
-    v.win = o.battle?.winner === 0;
-    v.phase = 've';
-    s.lastBattle = { title: v.kind === 'wild' ? `Trận ${v.targetName}` : `Đột kích ${v.targetName}`, o, seen: false };
-    notes.push(`Thuyền đã cập ${v.targetName}: ${v.win ? 'thắng trận' : 'thua trận'}. Bấm "Xem trận".`);
-    if (o.quest) notes.push(`Xong việc: ${o.quest}`);
+    if (v.kind !== 'boss') {
+      v.loot = o.gained ?? {};
+      v.win = o.battle?.winner === 0;
+      v.phase = 've';
+      s.lastBattle = { title: v.kind === 'wild' ? `Trận ${v.targetName}` : `Đột kích ${v.targetName}`, o, seen: false };
+      notes.push(`Thuyền đã cập ${v.targetName}: ${v.win ? 'thắng trận' : 'thua trận'}. Bấm "Xem trận".`);
+      if (o.quest) notes.push(`Xong việc: ${o.quest}`);
+    }
   }
   if (v.phase === 've' && s.gt >= v.returnAt) {
+    if (v.carry) for (const k of GEAR_KEYS) s.kho[k] = Math.min(GEAR[k].max, s.kho[k] + (v.carry[k] ?? 0));
     const got = addRes(s, v.loot);
     const txt = Object.keys(got).length ? `Thuyền về bến, chở về ${fmtLoot(got)}.` : 'Thuyền về bến tay không.';
     notes.push(txt);
@@ -505,6 +590,8 @@ export type Action =
   | { t: 'chest'; id: string }
   | { t: 'sail'; kind: 'wild'; id: string }
   | { t: 'sail'; kind: 'island'; target: IslandPub; to: { x: number; y: number } }
+  | { t: 'sail'; kind: 'boss'; carry: Partial<GearSet> }
+  | { t: 'craft'; g: GearKey }
   | { t: 'rename'; name: string; island: string }
   | { t: 'avatar'; av: Avatar }
   | { t: 'speed'; speed: number };
@@ -521,6 +608,7 @@ export interface Outcome {
   chest?: number;
   levelUps?: CompKey[];
   event?: RaidEvent;
+  boss?: { dmg: number; win: boolean; form: string };
 }
 
 const fail = (msg: string): Outcome => ({ ok: false, msg });
@@ -667,6 +755,18 @@ export function apply(s: PlayerState, a: Action): Outcome {
       let targetId: string;
       let targetName: string;
       let target: IslandPub | undefined;
+      if (a.kind === 'boss') {
+        const err = bossCheck(s);
+        if (err) return fail(err);
+        const want = cleanGear(a.carry);
+        for (const k of GEAR_KEYS) if (want[k] > s.kho[k]) return fail(`Không đủ ${GEAR[k].name} trong kho.`);
+        for (const k of GEAR_KEYS) s.kho[k] -= want[k];
+        const form = bossOf(weekOf(s.lastReal));
+        const one = sailMs(s, BOSS_CELL, BOSS_TRAVEL_MUL);
+        s.voyage = { id: nid(s, 'v'), kind: 'boss', targetId: 'thuytinh', targetName: `Mắt Bão · ${form.name}`, to: { ...BOSS_CELL }, departAt: s.gt, arriveAt: s.gt + one, returnAt: s.gt + one * 2, phase: 'di', loot: {}, carry: want };
+        log(s, 'Thuyền vượt bão đi đánh Thủy Tinh.');
+        return { ok: true, msg: `${LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1]} vượt bão ra Mắt Bão. Sống chết có số!` };
+      }
       if (a.kind === 'wild') {
         const w = WILDS.find((x) => x.id === a.id);
         if (!w) return fail('Không có đảo này.');
@@ -695,6 +795,17 @@ export function apply(s: PlayerState, a: Action): Outcome {
       s.name = name;
       s.islandName = island || `Đảo của ${name}`;
       return { ok: true, msg: 'Đã đổi tên.' };
+    }
+    case 'craft': {
+      const g = GEAR[a.g];
+      if (!g) return fail('Không có trang bị này.');
+      if (s.lv[g.need.lv].tier < g.need.tier) return fail(`Cần ${LV_LABEL[g.need.lv]} bậc ${g.need.tier} để chế tạo.`);
+      if (s.kho[a.g] >= g.max) return fail(`Kho chỉ chứa tối đa ${g.max} ${g.name}.`);
+      if (!canPay(s, g.cost)) return fail('Chưa đủ tài nguyên.');
+      pay(s, g.cost);
+      s.kho[a.g]++;
+      log(s, `Chế tạo ${g.name}.`);
+      return { ok: true, msg: `Đã chế tạo ${g.name}.` };
     }
     case 'avatar': {
       const av = cleanAvatar(a.av);
@@ -758,6 +869,12 @@ export interface IslandPub {
   updatedAt: number;
   bot?: boolean;
   avatar?: Avatar;
+  /** trang bị cất ở nhà (giữ đảo khi bị đột kích) */
+  gear?: GearSet;
+  /** thành tích Thủy Tinh tuần */
+  boss?: { week: number; best: number; won: boolean };
+  /** số lần phi thăng */
+  asc?: number;
 }
 
 export function publicOf(s: PlayerState): IslandPub {
@@ -773,13 +890,16 @@ export function publicOf(s: PlayerState): IslandPub {
     name: s.name,
     islandName: s.islandName,
     power: power(s),
-    title: titleOf(power(s)),
+    title: titleFor(s),
     land: landCount(s),
     tiers: { leu: s.lv.leu.tier, cuoc: s.lv.cuoc.tier, rao: s.lv.rao.tier, thuyen: s.lv.thuyen.tier },
     team: teamSpec(s, false).comps,
     lootable,
     updatedAt: Date.now(),
     avatar: s.avatar,
+    gear: { ...s.kho },
+    boss: { week: s.boss.week, best: s.boss.best, won: s.boss.won },
+    asc: s.asc,
   };
 }
 
@@ -802,7 +922,7 @@ export function raidSeed(attackerId: string, targetId: string, n: number) {
 /** Tính trận đột kích từ hai bản công khai — server dùng đúng hàm này để kiểm lại. */
 export function resolveRaid(att: TeamSpec, target: IslandPub, seed: number): { battle: BattleResult; loot: Partial<Record<ResKey, number>> } {
   const r = mulberry32(seed);
-  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name };
+  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear) };
   const battle = simulate(teamFromSpec(att, 0), teamFromSpec(defSpec, 1), r);
   const loot: Partial<Record<ResKey, number>> = {};
   if (battle.winner === 0) {

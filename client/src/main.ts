@@ -7,6 +7,8 @@ import { IslandScene } from './scenes/IslandScene';
 import { SeaScene } from './scenes/SeaScene';
 import { Store } from './store';
 import { UI } from './ui';
+import { playTrailer } from './trailer';
+import { ls } from './net/base';
 
 const t0 = performance.now();
 
@@ -110,6 +112,11 @@ async function boot() {
     const sp = document.getElementById('splash')!;
     sp.classList.add('out');
     setTimeout(() => (sp.hidden = true), 500);
+    // trailer hoạt hình: chiếu một lần trên mỗi máy, ngay sau khi vào game
+    if (!ls.get('vld-trailer')) {
+      ls.set('vld-trailer', '1');
+      await playTrailer(store.s.avatar);
+    }
     await ui.intro();
     document.body.dataset.ready = '1';
   });

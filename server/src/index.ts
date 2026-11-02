@@ -71,6 +71,9 @@ export default {
       return stub.fetch(new Request(req, { headers }));
     }
 
+    // THƯỢNG GIỚI: để trống cho bản sau (xem shared/thuonggioi.ts)
+    if (p.startsWith('/thuong-gioi')) return json({ open: false, msg: 'Thượng Giới chưa mở.' }, 501);
+
     if (p === '/admin/stats') {
       if (!env.ADMIN_TOKEN || url.searchParams.get('token') !== env.ADMIN_TOKEN) return json({ error: 'Cần ADMIN_TOKEN' }, 403);
       return json(await directory(env).stats());

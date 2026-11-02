@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { HOME_CELL, LINH_VAT, WILDS } from '../../../shared/data';
 import { publicOf, type IslandPub } from '../../../shared/logic';
 import { islandCell } from '../../../shared/map';
+import { BOSS_CELL, bossOf, weekEnd, weekOf } from '../../../shared/boss';
 import type { Store } from '../store';
 import type { UI } from '../ui';
 import { zoomFor } from './IslandScene';
@@ -206,7 +207,7 @@ export class SeaScene extends Phaser.Scene {
     const s = this.store.s;
     const list = this.store.net.islands();
     const online = new Set(this.store.net.online().map((o) => o.id));
-    const sig = JSON.stringify([list.map((p) => [p.id, p.power, p.land, p.tiers?.leu]), s.land.split("1").length, [...online], Object.values(s.wilds).map((w) => w.readyAt > s.gt), s.lv.leu.tier, this.portrait, s.voyage?.id]);
+    const sig = JSON.stringify([list.map((p) => [p.id, p.power, p.land, p.tiers?.leu]), s.land.split("1").length, [...online], Object.values(s.wilds).map((w) => w.readyAt > s.gt), s.lv.leu.tier, s.boss.won, s.boss.week, this.portrait, s.voyage?.id]);
     if (sig === this.sig && !force) return;
     this.sig = sig;
     this.layer.removeAll(true);
@@ -222,6 +223,18 @@ export class SeaScene extends Phaser.Scene {
       const q = this.P(w.sx, w.sy);
       const d = this.island(w.id, q.x, q.y, 'wild', 20 + w.level * 8, 1, () => this.ui.openWild(w));
       this.label(q.x, q.y + d, w.name, ready ? '#ff9b8a' : '#9aa0a8', `cấp ${w.level}${ready ? '' : ' · đã dọn'}`);
+    }
+    // Mắt Bão: Thủy Tinh, boss cuối hồi sinh mỗi tuần
+    {
+      const q = this.P(BOSS_CELL.x, BOSS_CELL.y);
+      const now = this.store.now();
+      const f = bossOf(weekOf(now));
+      const left = weekEnd(now) - now;
+      const d = this.island('thuytinh', q.x, q.y, 'wild', 70, 1, () => this.ui.openBoss());
+      const ring = this.add.circle(q.x, q.y + 2, 22).setStrokeStyle(2, 0x8fb8ff, 0.5);
+      this.tweens.add({ targets: ring, scale: { from: 0.8, to: 1.25 }, alpha: { from: 0.9, to: 0 }, duration: 1600, repeat: -1 });
+      this.layer.add(ring);
+      this.label(q.x, q.y + d, `Mắt Bão · ${f.name}`, '#ff6b6b', s.boss.won ? 'bạn đã phi thăng tuần này' : `${f.title} · hồi sinh sau ${Math.floor(left / 86_400_000)}n ${Math.floor((left % 86_400_000) / 3_600_000)}g`);
     }
     for (const p of list) {
       const t = islandCell(p.id);

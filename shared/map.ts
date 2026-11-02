@@ -1,6 +1,7 @@
 // Vị trí các đảo trên hải đồ — client và server tính giống hệt nhau (để thời gian đi thuyền khớp).
 import { HOME_CELL, WILDS } from './data';
 import { BOTS } from './bots';
+import { BOSS_CELL } from './boss';
 import { hashStr } from './rng';
 
 export const SEA_COLS = 40;
@@ -23,7 +24,7 @@ let fixed: { cells: Cell[]; bots: Map<string, Cell> } | null = null;
 /** Đảo hoang, đảo nhà, đảo máy: chỗ cố định, không chồng lên nhau. */
 function fixedCells() {
   if (fixed) return fixed;
-  const cells: Cell[] = [...WILDS.map((w) => ({ x: w.sx, y: w.sy })), HOME_CELL];
+  const cells: Cell[] = [...WILDS.map((w) => ({ x: w.sx, y: w.sy })), HOME_CELL, BOSS_CELL];
   const bots = new Map<string, Cell>();
   for (const b of BOTS) {
     const c = place(b.id, cells);

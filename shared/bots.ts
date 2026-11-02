@@ -4,6 +4,7 @@ import { COMP_KEYS, RES_KEYS, type CompKey, type ResKey } from './data';
 import { titleOf, type IslandPub } from './logic';
 import { hashStr, mulberry32 } from './rng';
 import { avatarFrom } from './avatar';
+import { bossOf, weekOf } from './boss';
 
 interface BotDef {
   id: string;
@@ -53,6 +54,9 @@ export function botPub(b: BotDef, now: number): IslandPub {
     updatedAt: now,
     bot: true,
     avatar: avatarFrom(b.id),
+    // đảo máy cũng thử sức với Thủy Tinh mỗi tuần (không bao giờ phi thăng)
+    boss: { week: weekOf(now), best: Math.round(bossOf(weekOf(now)).hp * Math.min(0.85, p / 900) * (0.6 + 0.4 * mulberry32(hashStr(`${b.id}:w${weekOf(now)}`))())), won: false },
+    asc: 0,
   };
 }
 

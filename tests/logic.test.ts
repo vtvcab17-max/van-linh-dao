@@ -187,3 +187,58 @@ describe('Đảo và nhân vật', () => {
     expect(islandCell('abc')).toEqual(islandCell('abc'));
   });
 });
+
+import { fightBoss, bossCheck } from '../shared/logic';
+import { BOSS_FORMS, WEEK0, WEEK_MS, weekOf } from '../shared/boss';
+
+describe('Thủy Tinh, trang bị, phi thăng', () => {
+  const strong = (id: string) => {
+    const s = newPlayer(id, 'Lan', WEEK0 + 1000);
+    for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 5;
+    for (const k of ['an', 'ngoc', 'ha', 'chau'] as const) s.comps[k] = { lv: 20, xp: 0, unlocked: true };
+    s.res = { co: 9999, la: 9999, tre: 9999, go: 9999, cui: 9999, da: 9999, sat: 9999, so: 9999, ngoc: 99 };
+    return s;
+  };
+  it('chế tạo trang bị cần công trình đủ bậc và tài nguyên', () => {
+    const s = newPlayer('g1', 'An', T0);
+    expect(apply(s, { t: 'craft', g: 'giao' }).ok).toBe(false);
+    const p = strong('g2');
+    expect(apply(p, { t: 'craft', g: 'giao' }).ok).toBe(true);
+    expect(p.kho.giao).toBe(1);
+  });
+  it('chưa đủ bậc thì không ra Mắt Bão được', () => {
+    expect(bossCheck(newPlayer('g3', 'An', T0))).not.toBeNull();
+    expect(bossCheck(strong('g4'))).toBeNull();
+  });
+  it('thua Thủy Tinh: mất trang bị mang theo, thuyền về bậc 1', () => {
+    const s = strong('g5');
+    for (const k of ['an', 'ngoc', 'ha', 'chau'] as const) s.comps[k].lv = 3;
+    s.kho = { giao: 2, khien: 1, thuoc: 0, bua: 0 };
+    expect(apply(s, { t: 'sail', kind: 'boss', carry: { giao: 2 } }).ok).toBe(true);
+    expect(s.kho.giao).toBe(0);
+    tick(s, s.lastReal + 3 * 3600_000);
+    expect(s.voyage).toBeNull();
+    expect(s.lv.thuyen.tier).toBe(1);
+    expect(s.kho).toEqual({ giao: 0, khien: 1, thuoc: 0, bua: 0 });
+    expect(s.asc).toBe(0);
+    expect(s.boss.best).toBeGreaterThan(0);
+  });
+  it('thắng Thủy Tinh: phi thăng, trang bị về nhà, tuần sau hồi sinh', () => {
+    const s = strong('g6');
+    s.kho = { giao: 5, khien: 5, thuoc: 5, bua: 3 };
+    apply(s, { t: 'sail', kind: 'boss', carry: { ...s.kho } });
+    tick(s, s.lastReal + 6 * 3600_000);
+    expect(s.asc).toBe(1);
+    expect(s.boss.won).toBe(true);
+    expect(s.kho.giao).toBe(5);
+    expect(bossCheck(s)).not.toBeNull();
+    tick(s, WEEK0 + WEEK_MS + 1000);
+    expect(s.boss.won).toBe(false);
+    expect(s.asc).toBe(1);
+    expect(weekOf(s.lastReal)).toBe(1);
+  });
+  it('mỗi tuần một dạng Thủy Tinh', () => {
+    expect(new Set(BOSS_FORMS.map((f) => f.title)).size).toBe(4);
+    void fightBoss;
+  });
+});

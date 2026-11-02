@@ -215,6 +215,7 @@ export const CHAR_MAPS: Record<string, string[]> = {
 // ---------------- linh vật (kiến trúc theo bậc) ----------------
 export { drawLeu, drawCuoc, drawRao, drawThuyen, drawScaffold, opaqueBox, LV_SIZE } from './buildings';
 import { drawRao } from './buildings';
+import { drawThuyBinh, drawThuyTinh } from './boss';
 
 // ---------------- điểm tài nguyên ----------------
 export function drawNode(kind: string): Canvas {
@@ -379,6 +380,8 @@ export function drawBattleBg(w: number, h: number): Canvas {
 }
 
 export function charCanvas(key: string): Canvas {
+  if (key === 'thuytinh') return drawThuyTinh();
+  if (key === 'thuybinh') return drawThuyBinh();
   if (key === 'cuada') return fromMap(recolor(CUA_GAI, { e: 'n', E: 'N', O: 'M' }), PAL, 2);
   if (key.startsWith('rao')) return drawRao(Number(key.slice(3)) || 1, false, 'thuong');
   return fromMap(CHAR_MAPS[key] ?? CUA_GAI);

@@ -21,13 +21,17 @@ import {
   type ResKey,
   type WildDef,
 } from '../../shared/data';
-import { buildMs, buildOf, buildSlots, canPay, currentQuest, dockPos, expandCost, landCap, landCount, LV_POS, newPlayer, power, publicOf, sailMs, storageCap, titleOf, xpForLevel, type IslandPub, type Outcome } from '../../shared/logic';
+import { bossCheck, buildMs, buildOf, buildSlots, canPay, currentQuest, dockPos, expandCost, landCap, landCount, LV_POS, newPlayer, power, publicOf, sailMs, storageCap, titleOf, xpForLevel, type IslandPub, type Outcome } from '../../shared/logic';
 import { drawLeu, drawMiniIsland, drawEmote } from './art/sprites';
 import { canvasUrl, iconUrl, lvCanvas, portraitUrl } from './art/textures';
 import { avatarUrl } from './art/avatar';
 import { drawSeaIsland, lookOf } from './art/islands';
 import { avatarFrom, cleanAvatar, GENDERS, HAIRS, HAIR_COLORS, HATS, ITEMS, OUTFITS, OUTFIT_COLORS, SKINS, type Avatar } from '../../shared/avatar';
 import { hashStr } from '../../shared/rng';
+import { LV_LABEL, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, GEAR, GEAR_KEYS, gearBonus, noGear, weekEnd, weekOf, type GearKey, type GearSet } from '../../shared/boss';
+import { thuongGioiHtml } from './thuonggioi';
+import { canvas, Pen } from './art/pixel';
+import { playTrailer } from './trailer';
 import type { IslandScene } from './scenes/IslandScene';
 import type { SeaScene } from './scenes/SeaScene';
 import type { BattleScene, BattleData } from './scenes/BattleScene';
@@ -53,7 +57,7 @@ const costHtml = (cost: Partial<Record<ResKey, number>>, have: Record<ResKey, nu
     .map(([k, v]) => `<span class="cost ${have[k as ResKey] >= (v ?? 0) ? '' : 'short'}"><img src="${iconUrl(k)}" alt="">${v} ${RES[k as ResKey].name}</span>`)
     .join(' ');
 
-type Tab = 'island' | 'sea' | 'team' | 'chat' | 'feedback';
+type Tab = 'island' | 'sea' | 'team' | 'chat' | 'feedback' | 'bxh';
 
 /** Dáng vẻ của một đảo người khác (dữ liệu gửi qua mạng nên luôn kiểm lại). */
 export const pubAvatar = (p: { id: string; avatar?: unknown }): Avatar => cleanAvatar(p.avatar) ?? avatarFrom(p.id);
@@ -171,9 +175,9 @@ export class UI {
     this.runBattle(lb.o, lb.title, true);
   }
 
-  private sailLine(to: { x: number; y: number }) {
+  private sailLine(to: { x: number; y: number }, mul = 1) {
     const s = this.store.s;
-    const ms = sailMs(s, to) / s.speed;
+    const ms = sailMs(s, to, mul) / s.speed;
     const dist = Math.max(1, Math.hypot(to.x - HOME_CELL.x, to.y - HOME_CELL.y));
     return `<div class="card"><small>Hải trình</small><p>Cách đảo bạn <b>${dist.toFixed(1).replace('.', ',')} hải lý</b>. ${esc(LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1])} đi mất <b>${hms(ms)}</b>, về mất <b>${hms(ms)}</b>.</p><p class="muted small">Xa hơn thì lâu hơn. Tiến hóa thuyền để đi nhanh hơn. Chiến lợi phẩm về tới bến mới nhận.</p></div>`;
   }
@@ -212,6 +216,7 @@ export class UI {
       team: avatarUrl(this.store.s.avatar, 2, true),
       chat: canvasUrl('nav-chat', () => drawEmote('nghe'), 3),
       feedback: canvasUrl('nav-fb', () => drawEmote('vui'), 3),
+      bxh: canvasUrl('nav-bxh', drawCup, 2),
     };
     document.querySelectorAll<HTMLButtonElement>('#nav button').forEach((b) => {
       const img = document.createElement('img');
@@ -337,7 +342,8 @@ export class UI {
     if (tab === 'team') this.openTeam();
     if (tab === 'chat') this.openChat();
     if (tab === 'feedback') this.openFeedback();
-    if (tab === 'team' || tab === 'chat' || tab === 'feedback') {
+    if (tab === 'bxh') this.openBxh();
+    if (tab === 'team' || tab === 'chat' || tab === 'feedback' || tab === 'bxh') {
       document.querySelectorAll<HTMLButtonElement>('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
       this.tab = prev === 'sea' ? 'sea' : 'island';
       this.tabSheet = tab;
@@ -408,7 +414,7 @@ export class UI {
 
   // ---------------- bong bóng tiếng lòng ----------------
   showBubble(text: string, anchor: () => { x: number; y: number }, ms = 4200) {
-    if (!text) return;
+    if (!text || !$('#sheet').hidden) return;
     this.bubble = { text, until: Date.now() + ms, anchor };
     const el = $('#bubble');
     el.textContent = text;
@@ -435,9 +441,15 @@ export class UI {
   // ---------------- bảng trượt ----------------
   openSheet(kind: string, title: string, html: string, bind?: (body: HTMLElement) => void, refresh?: () => void) {
     this.sheetKind = kind;
+    // lời thoại linh vật không được che bảng
+    this.bubble = null;
+    $('#bubble').hidden = true;
     const sheet = $('#sheet');
     sheet.querySelector('h2')!.textContent = title;
-    const body = sheet.querySelector<HTMLElement>('.sheet-body')!;
+    // thay khung nội dung mới để bỏ hết trình xử lý bấm của bảng trước
+    const old = sheet.querySelector<HTMLElement>('.sheet-body')!;
+    const body = old.cloneNode(false) as HTMLElement;
+    old.replaceWith(body);
     body.innerHTML = html;
     bind?.(body);
     this.sheetRefresh = refresh ?? null;
@@ -583,7 +595,7 @@ export class UI {
   openTeam() {
     const draw = () => {
       const s = this.store.s;
-      return `<p class="hint">Đội ra trận tự động theo lượt. Chủ đảo (bạn) đánh mạnh hơn khi Cuốc tiến hóa.</p>` +
+      return this.gearHtml() + `<p class="hint">Đội ra trận tự động theo lượt. Chủ đảo (bạn) đánh mạnh hơn khi Cuốc tiến hóa.</p>` +
         COMP_KEYS.map((k) => {
           const c = k === 'an' ? { ...COMPANIONS.an, name: esc(s.name) } : COMPANIONS[k];
           const st = s.comps[k];
@@ -601,7 +613,18 @@ export class UI {
             <p class="muted small">${c.bio}</p>${k === 'an' ? '<button type="button" class="avEdit">Chỉnh nhân vật</button>' : ''}</div></div>`;
         }).join('');
     };
-    this.openSheet('team', `Đội của ${esc(this.store.s.name)}`, draw(), (body) => body.querySelector('.avEdit')?.addEventListener('click', () => this.openAvatar()));
+    this.openSheet('team', `Đội của ${esc(this.store.s.name)}`, draw(), (body) => {
+      body.addEventListener('click', (e) => {
+        const t = (e.target as HTMLElement).closest('button');
+        if (!t) return;
+        if (t.classList.contains('avEdit')) return this.openAvatar();
+        if (t.dataset.craft) {
+          const o = this.store.do({ t: 'craft', g: t.dataset.craft as GearKey });
+          this.toast(o.msg, o.ok ? 'gold' : 'bad');
+          if (o.ok) body.innerHTML = draw();
+        }
+      });
+    });
   }
 
   // ---------------- chat ----------------
@@ -804,6 +827,7 @@ export class UI {
   }
 
   showResult(o: Outcome, title: string, fromVoyage = false) {
+    if (o.boss) return this.showBossResult(o);
     const win = o.battle?.winner === 0;
     const gained = Object.entries(o.gained ?? {})
       .map(([k, v]) => `<span class="cost"><img src="${iconUrl(k)}" alt="">+${v}</span>`)
@@ -836,6 +860,8 @@ export class UI {
       }</div>
       <div class="row wrap">
         <button type="button" id="btnAv">Chỉnh nhân vật</button>
+        <button type="button" id="btnTrailer">Xem trailer</button>
+        <button type="button" id="btnTG">Cổng Thượng Giới</button>
         <button type="button" id="btnPerf">${this.perfOn ? 'Tắt bảng đo' : 'Bật bảng đo hiệu năng'}</button>
         <button type="button" id="btnLog">Nhật ký đảo</button>
         <button type="button" id="btnCredits">Credit</button>
@@ -844,6 +870,11 @@ export class UI {
       <p class="credit">© 2026 ${GAME.studio}. Bảo lưu mọi quyền. · ${GAME.name} ${GAME.version}</p>`;
     this.openSheet('settings', 'Cài đặt', html, (body) => {
       body.querySelector('#btnAv')?.addEventListener('click', () => this.openAvatar());
+      body.querySelector('#btnTrailer')?.addEventListener('click', () => {
+        this.closeSheet();
+        void playTrailer(this.store.s.avatar);
+      });
+      body.querySelector('#btnTG')?.addEventListener('click', () => this.openThuongGioi());
       body.querySelector('#nameForm')!.addEventListener('submit', (e) => {
         e.preventDefault();
         const o = this.store.do({ t: 'rename', name: ($('#inName') as HTMLInputElement).value, island: ($('#inIsland') as HTMLInputElement).value });
@@ -904,6 +935,135 @@ export class UI {
     if (id === this.store.net.meId) return avatarUrl(this.store.s.avatar, 2, true);
     const p = this.store.net.islands().find((x) => x.id === id);
     return avatarUrl(p ? pubAvatar(p) : avatarFrom(id), 2, true);
+  }
+
+  // ---------------- trang bị ----------------
+  private gearHtml(): string {
+    const s = this.store.s;
+    const b = gearBonus(s.kho);
+    const rows = GEAR_KEYS.map((k) => {
+      const g = GEAR[k];
+      const locked = s.lv[g.need.lv].tier < g.need.tier;
+      const full = s.kho[k] >= g.max;
+      return `<div class="gear"><img src="${canvasUrl('gear-' + k, () => drawGearIcon(k), 3)}" alt=""><div><b>${g.name} <span class="lvl">${s.kho[k]}/${g.max}</span></b>
+        <small>${g.desc}${locked ? ` · cần ${LV_LABEL[g.need.lv]} bậc ${g.need.tier}` : ''}</small><div class="costs">${costHtml(g.cost, s.res)}</div></div>
+        <button type="button" data-craft="${k}" ${locked || full ? 'disabled' : ''}>${full ? 'Đầy' : 'Chế tạo'}</button></div>`;
+    }).join('');
+    return `<div class="card"><small>Trang bị trong kho</small><p class="muted small">Cất ở nhà thì tăng sức cho mọi trận và khi giữ đảo. Mang đi đánh Thủy Tinh mà thua thì mất hết.</p>
+      <p><b>+${Math.round(b.atk * 100)}%</b> công · <b>+${Math.round(b.def * 100)}%</b> thủ · <b>+${Math.round(b.hp * 100)}%</b> máu</p>${rows}</div>`;
+  }
+
+  // ---------------- Thủy Tinh ----------------
+  openBoss() {
+    const carry: GearSet = noGear();
+    let armed = false;
+    const draw = () => {
+      const s = this.store.s;
+      const now = this.store.now();
+      const week = weekOf(now);
+      const f = bossOf(week);
+      const left = weekEnd(now) - now;
+      const d = Math.floor(left / 86_400_000);
+      const h = Math.floor((left % 86_400_000) / 3_600_000);
+      const m = Math.floor((left % 3_600_000) / 60_000);
+      for (const k of GEAR_KEYS) carry[k] = Math.min(carry[k], s.kho[k]);
+      const b = gearBonus(carry);
+      const err = bossCheck(s);
+      const req = (ok: boolean, t: string) => `<li class="${ok ? 'good' : 'bad'}">${ok ? '✓' : '✗'} ${t}</li>`;
+      const pick = GEAR_KEYS.map(
+        (k) => `<div class="avrow"><span>${GEAR[k].name.split(' ').slice(0, 2).join(' ')}</span><div class="step"><button type="button" data-c="${k}" data-d="-1" aria-label="Bớt">‹</button><b>${carry[k]} / ${s.kho[k]}</b><button type="button" data-c="${k}" data-d="1" aria-label="Thêm">›</button></div></div>`,
+      ).join('');
+      return `
+        <div class="lv-head"><img class="lv-img" src="${portraitUrl('thuytinh')}" alt=""><div><h3>${f.name} · ${f.title}</h3><p class="muted">${f.lore}</p>
+          <div class="stats"><span>Máu ${f.hp}</span><span>Công ${f.atk}</span><span>Thủ ${f.def}</span><span>Tốc ${f.spd}</span><span>+${f.minions} Thủy Binh</span></div></div></div>
+        <div class="card"><small>Hồi sinh và đổi dạng sau</small><p><b>${d} ngày ${h} giờ ${m} phút</b> (thứ Hai 00:00)</p>
+          <p>Tuần này: sát thương cao nhất <b>${s.boss.best}</b> / ${f.hp} · ${s.boss.tries} lần đánh${s.boss.won ? ' · <b class="good">ĐÃ PHI THĂNG</b>' : ''}</p><p class="muted small">Đã phi thăng tổng cộng ${s.asc} lần.</p></div>
+        <ul class="req">${req(s.lv.leu.tier >= BOSS_REQ.leu, `Nhà chính bậc ${BOSS_REQ.leu}+`)}${req(s.lv.thuyen.tier >= BOSS_REQ.thuyen, `Thuyền bậc ${BOSS_REQ.thuyen}+ để vượt bão`)}${req(!s.boss.won, 'Chưa phi thăng tuần này')}</ul>
+        <div class="card"><small>Chở trang bị theo thuyền</small><div class="avopts">${pick}</div>
+          <p>Đội được thêm <b>+${Math.round(b.atk * 100)}%</b> công · <b>+${Math.round(b.def * 100)}%</b> thủ · <b>+${Math.round(b.hp * 100)}%</b> máu</p>
+          <p class="muted small">Chỉ trang bị mang theo mới có tác dụng ở Mắt Bão. Trang bị mang đi thì đảo nhà yếu đi khi bị đột kích.</p></div>
+        <div class="card danger-card"><small>Luật Mắt Bão</small><p><b>Thắng:</b> phi thăng, nhận ${'600 sò, 12 ngọc'}, mở cổng Thượng Giới, trang bị theo thuyền về nhà.</p>
+          <p><b>Thua:</b> mất <b>toàn bộ trang bị mang theo</b>, thuyền bị đánh chìm, về lại <b>Thuyền Thúng</b> (phải xây lại từ đầu).</p></div>
+        ${this.sailLine(BOSS_CELL, BOSS_TRAVEL_MUL)}
+        ${s.voyage ? this.sailButton(false, '', '') : `<button class="primary wide ${armed ? 'hot' : ''}" id="btnBoss" ${err ? 'disabled' : ''}>${err ? esc(err) : armed ? 'Chắc chắn? Bấm lần nữa để ra khơi' : 'Vượt bão đánh Thủy Tinh'}</button>`}
+        ${s.asc > 0 ? '<button class="wide" id="btnTG">Cổng Thượng Giới</button>' : ''}`;
+    };
+    this.openSheet('boss', 'Mắt Bão', draw(), (body) => {
+      body.addEventListener('click', (e) => {
+        const t = (e.target as HTMLElement).closest('button');
+        if (!t) return;
+        if (t.dataset.c) {
+          const k = t.dataset.c as GearKey;
+          carry[k] = Math.max(0, Math.min(this.store.s.kho[k], carry[k] + Number(t.dataset.d)));
+          armed = false;
+        } else if (t.id === 'btnBoss') {
+          if (!armed) armed = true;
+          else {
+            const o = this.store.do({ t: 'sail', kind: 'boss', carry: { ...carry } });
+            if (o.ok) this.store.net.setActivity('đang vượt bão đi đánh Thủy Tinh');
+            return this.sail(o);
+          }
+        } else if (t.id === 'btnTG') return this.openThuongGioi();
+        body.innerHTML = draw();
+      });
+    });
+  }
+
+  showBossResult(o: Outcome) {
+    const s = this.store.s;
+    const win = !!o.boss?.win;
+    const f = bossOf(weekOf(this.store.now()));
+    const html = win
+      ? `<div class="result win asc"><b>PHI THĂNG</b><span>Đánh bại ${f.name} · ${f.title}</span></div>
+         <p>Mây ngũ sắc phủ kín ${esc(s.islandName)}. Bạn là <b>Tiên Nhân</b> (phi thăng ${s.asc} lần).</p>
+         <div class="card"><small>Thuyền đang chở về</small><div class="costs">${Object.entries(o.gained ?? {}).map(([k, v]) => `<span class="cost"><img src="${iconUrl(k)}" alt="">+${v}</span>`).join(' ')}</div><p class="muted small">Trang bị mang theo cũng về nhà cùng thuyền.</p></div>
+         ${thuongGioiHtml(s)}`
+      : `<div class="result lose"><b>Thất bại</b><span>${o.battle?.rounds ?? 0} lượt</span></div>
+         <p>Gây <b>${o.boss?.dmg ?? 0}</b> / ${f.hp} sát thương cho ${f.name}.</p>
+         <div class="card danger-card"><small>Cái giá phải trả</small><p>Toàn bộ trang bị mang theo đã chìm xuống đáy biển. Thuyền bị đánh chìm, bạn bơi về đảo và chỉ còn <b>Thuyền Thúng</b>.</p></div>
+         <p class="hint">Nâng cấp đội, chế tạo thêm trang bị, xây lại thuyền rồi quay lại. Thủy Tinh hồi sinh và đổi dạng mỗi thứ Hai.</p>`;
+    this.openSheet('result', 'Đại chiến Thủy Tinh', html + '<button class="primary wide" id="btnOk">Tiếp tục</button>', (b) => b.querySelector('#btnOk')!.addEventListener('click', () => this.closeSheet()));
+  }
+
+  openThuongGioi() {
+    this.openSheet('thuonggioi', 'Cổng Thượng Giới', thuongGioiHtml(this.store.s));
+  }
+
+  // ---------------- bảng xếp hạng ----------------
+  openBxh() {
+    let tab: 'power' | 'boss' | 'asc' = 'power';
+    const draw = () => {
+      const s = this.store.s;
+      const week = weekOf(this.store.now());
+      const me = { ...publicOf(s), me: true };
+      const all = [me, ...this.store.net.islands().map((p) => ({ ...p, me: false }))];
+      const val = (p: IslandPub) => (tab === 'power' ? p.power : tab === 'boss' ? (p.boss?.week === week ? p.boss.best : 0) : p.asc ?? 0);
+      const list = all.filter((p) => tab !== 'asc' || (p.asc ?? 0) > 0).sort((a, b) => val(b) - val(a) || b.power - a.power).slice(0, 50);
+      const unit = tab === 'power' ? 'sức mạnh' : tab === 'boss' ? 'sát thương' : 'lần';
+      const rows = list
+        .map(
+          (p, i) => `<li class="${p.me ? 'me' : ''}"><i>${i + 1}</i><img src="${avatarUrl(p.me ? s.avatar : pubAvatar(p), 2, true)}" alt=""><div><b>${esc(p.name)}${p.me ? ' (bạn)' : ''}${p.bot ? ' <em>máy</em>' : ''}</b><small>${esc(p.title)} · ${esc(p.islandName)}</small></div>
+            <span>${val(p)} <small>${unit}</small>${tab === 'boss' && p.boss?.week === week && p.boss.won ? ' ★' : ''}</span></li>`,
+        )
+        .join('');
+      const f = bossOf(week);
+      return `<div class="seg tabs3">${(['power', 'boss', 'asc'] as const).map((k) => `<button type="button" data-t="${k}" aria-checked="${tab === k}">${k === 'power' ? 'Sức mạnh' : k === 'boss' ? 'Thủy Tinh tuần' : 'Phi thăng'}</button>`).join('')}</div>
+        ${tab === 'boss' ? `<p class="muted small">Tuần này: ${f.name} · ${f.title} (${f.hp} máu). ★ = đã đánh bại và phi thăng. Làm mới mỗi thứ Hai.</p>` : ''}
+        ${tab === 'asc' && !list.length ? '<p class="hint">Chưa ai phi thăng. Hãy là người đầu tiên đánh bại Thủy Tinh!</p>' : ''}
+        <ol class="bxh">${rows}</ol>
+        <button type="button" class="wide" id="btnBossGo">Xem Thủy Tinh ở Mắt Bão</button>`;
+    };
+    this.openSheet('bxh', 'Bảng xếp hạng', draw(), (body) => {
+      body.addEventListener('click', (e) => {
+        const t = (e.target as HTMLElement).closest('button');
+        if (!t) return;
+        if (t.id === 'btnBossGo') return this.openBoss();
+        if (t.dataset.t) {
+          tab = t.dataset.t as typeof tab;
+          body.innerHTML = draw();
+        }
+      });
+    });
   }
 
   // ---------------- tạo / chỉnh nhân vật ----------------
@@ -1005,4 +1165,47 @@ export class UI {
       next();
     });
   }
+}
+
+/** Cúp vàng cho nút Bảng xếp hạng. */
+function drawCup() {
+  const [c, ctx] = canvas(12, 12);
+  const p = new Pen(ctx);
+  p.rect(2, 1, 8, 5, 'l');
+  p.rect(3, 6, 6, 1, 'l');
+  p.rect(5, 7, 2, 2, 'L');
+  p.rect(3, 9, 6, 2, 'L');
+  p.px(1, 2, 'l');
+  p.px(10, 2, 'l');
+  p.px(0, 3, 'L');
+  p.px(11, 3, 'L');
+  p.px(3, 2, 'i');
+  p.vline(3, 2, 4, 'i');
+  return c;
+}
+
+/** Biểu tượng trang bị. */
+function drawGearIcon(k: GearKey) {
+  const [c, ctx] = canvas(12, 12);
+  const p = new Pen(ctx);
+  if (k === 'giao') {
+    p.line(1, 11, 9, 3, 'T');
+    p.poly([[8, 1], [11, 0], [10, 3], [9, 4]], 'm');
+    p.px(10, 1, 'i');
+  } else if (k === 'khien') {
+    p.ellipse(6, 6, 5, 5, 'Y');
+    p.ellipse(6, 6, 5, 5, 'z', false);
+    p.ellipse(6, 6, 2, 2, 'l');
+  } else if (k === 'thuoc') {
+    p.rect(3, 4, 6, 7, 'G');
+    p.rect(4, 2, 4, 2, 'T');
+    p.rect(4, 6, 4, 2, 'f');
+    p.px(5, 7, 'e');
+  } else {
+    p.ellipse(6, 6, 4, 4, 'x');
+    p.ellipse(6, 6, 4, 4, 'X', false);
+    p.px(5, 4, 'i');
+    p.vline(6, 0, 2, 'e');
+  }
+  return c;
 }

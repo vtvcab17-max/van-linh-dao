@@ -1,35 +1,122 @@
-# Vạn Linh Đảo
+<h1 align="center">Vạn Linh Đảo</h1>
+<p align="center"><b>Vạn vật đều có hồn. Lắng nghe, rồi sống sót.</b><br>
+Game chiến thuật sinh tồn trên đảo, đồ họa pixel 32-bit, chơi online trên trình duyệt.<br>
+Phát triển và phát hành bởi <b>Beta Holding</b>.</p>
 
-Game chiến thuật sinh tồn trên đảo, đồ họa pixel. Phát triển và phát hành bởi **Beta Holding**.
+---
 
-Có hai bản dùng chung một bộ code:
+## Cốt truyện
 
-| Bản | Chạy ở đâu | Đăng nhập | Dữ liệu |
+Đêm rằm tháng Bảy, trăng đỏ như máu. **Thủy Tinh**, thần nước năm xưa thua Sơn Tinh, nổi giận dâng nước nhấn chìm đất liền, xé đất thành muôn vạn hòn đảo nhỏ: **Vạn Đảo**.
+
+Bạn tỉnh dậy trên một mỏm đảo trơ trọi, tay vẫn cầm cái cuốc rỉ đang sửa dở. Rồi cái cuốc cất tiếng nói: nó chính là cuốc của Sơn Tinh. Từ đêm ấy, bạn nghe được **tiếng lòng của vạn vật**. Túp lều, hàng rào, chiếc thuyền thúng đều có hồn, biết đói, biết vui, biết dỗi.
+
+Lắng nghe chúng, chăm chúng, cùng chúng lớn lên. Dựng lại xóm làng giữa biển, kết bạn hoặc đột kích những người lưu lạc khác. Và mỗi tuần, khi Thủy Tinh trỗi dậy ở **Mắt Bão**, hãy là người dám vượt bão đánh bại hắn để **phi thăng**.
+
+> Cảm hứng từ truyện dân gian Việt Nam: Sơn Tinh – Thủy Tinh, Thạch Sanh, Thánh Gióng, An Dương Vương, Lạc Long Quân.
+
+## Vòng chơi
+
+1. **Nhặt nhạnh**: chạm bụi cỏ, cây dừa, bụi tre, đá, sắt vụn, gỗ trôi để lấy tài nguyên. Mũi tên vàng chỉ chỗ cần bấm theo lời dặn của Rùa Vàng.
+2. **Lắng nghe và cho ăn**: mỗi linh vật (Nhà chính, Cuốc, Lũy tre, Thuyền) thích món riêng. Cho ăn đúng món thì vui, tích linh khí nhanh.
+3. **Tiến hóa**: đủ linh khí và vật liệu thì xây lên bậc mới. Bậc càng cao xây càng lâu (1 phút → 10 phút → 1 giờ → 4 giờ).
+4. **Khai hoang**: mở thêm ô đất sát biển. Mở càng nhiều càng tốn tài nguyên.
+5. **Chế tạo trang bị**, nâng đội đồng hành.
+6. **Ra khơi**: đánh đảo hoang lấy tài nguyên, hòm báu; đột kích đảo người khác. Đi xa thì lâu, thuyền tốt thì nhanh. Chiến lợi phẩm về tới bến mới nhận.
+7. **Vượt bão đánh Thủy Tinh** để phi thăng và lên bảng xếp hạng.
+
+## Thăng cấp
+
+Mỗi công trình có 5 bậc, mỗi bậc một hình dạng riêng và một sức mạnh riêng:
+
+| Bậc | Nhà chính | Cuốc | Lũy tre | Thuyền |
+| --- | --- | --- | --- | --- |
+| 1 | Túp Lều Lá | Cuốc Rỉ | Hàng Rào Tre | Thuyền Thúng |
+| 2 | Nhà Tranh Vách Đất | Cuốc Sắt | Rào Tre Gai | Ghe Nan |
+| 3 | Nhà Sàn Tre | Cuốc Thép Ròng | Lũy Tre Làng | Ghe Bầu |
+| 4 | Nhà Rường Gỗ Lim | Cuốc Phá Đá | Lũy Tre Ba Lớp | Thuyền Buồm Nâu |
+| 5 | Loa Thành Chín Vòng | Cuốc Dời Non | Lũy Tre Ngàn Năm | Thuyền Rồng Lạc Hồng |
+
+| Công trình | Lên bậc thì được gì |
+| --- | --- |
+| **Nhà chính** | Kho chứa 150 → 6.000, đất tối đa 24 → 140 ô, phần tài nguyên không bị cướp 40 → 1.500, thêm chỗ cho hòm dạt bờ, mở đồng đội Thu Hà, mở đột kích (bậc 2), mở Mắt Bão (bậc 3) |
+| **Cuốc** | Nhặt nhanh ×1 → ×3, khai hoang rẻ đến 40%, chủ đảo đánh mạnh thêm đến +30 công, mở Minh Châu, mở chế tạo Giáo (bậc 2) và Bùa Ngọc (bậc 4) |
+| **Lũy tre** | Tường chắn khi bị đột kích: 60 → 1.600 máu, phản gai đến 35%, mở chế tạo Khiên (bậc 2) |
+| **Thuyền** | Đi một ô biển 15 → 5 giây; bậc 3 trở lên mới vượt được vùng bão tới Mắt Bão |
+
+**Đồng đội** (đánh theo lượt, tự động): Chủ Đảo (chính là bạn, theo nhân vật đã chỉnh), Lâm Bảo Ngọc (võ sư Bình Định, chịu đòn), Đặng Thu Hà (dược sĩ, hồi máu), Hồ Minh Châu (sinh viên Bách Khoa, phóng sét). Thắng trận thì lên cấp.
+
+**Danh hiệu theo sức mạnh**: Kẻ Lưu Lạc → Chủ Đảo → Hào Trưởng → Đô Đốc → Vua Vạn Đảo → **Tiên Nhân** (sau khi phi thăng).
+
+## Trang bị
+
+Chế tạo từ tài nguyên, cần công trình đủ bậc. Trang bị cất ở nhà tăng sức cho **mọi trận**: đánh đảo hoang, đột kích, và giữ đảo khi bị người khác đánh.
+
+| Trang bị | Tác dụng | Cần | Tối đa |
 | --- | --- | --- | --- |
-| **Chính thức** | Web (Cloudflare) | Tài khoản Google (Gmail) | Lưu trên server, server quyết định kết quả |
-| Thử nghiệm | Trang chơi thử trên Claude, file APK, mở file HTML | Không | Lưu trên máy / trên Claude |
+| Giáo Sắt Thạch Sanh | +10% công cả đội | Cuốc bậc 2 · 40 sắt, 25 gỗ | 5 |
+| Khiên Mây Thánh Gióng | +10% thủ cả đội | Lũy tre bậc 2 · 45 tre, 35 đá | 5 |
+| Thuốc Nam Bà Đỡ | +12% máu cả đội | Nhà chính bậc 2 · 40 lá, 35 cỏ | 5 |
+| Bùa Ngọc Lạc Long | +7% công, thủ, máu | Cuốc bậc 4 · 2 ngọc, 80 sò | 3 |
 
-## Có gì trong game
+## Thủy Tinh và phi thăng
 
-- Mỗi người chơi có **nhân vật nam hoặc nữ**, tự chỉnh: kiểu tóc, màu tóc, màu da, trang phục (áo bà ba, áo dài, áo ngư dân, áo thủy thủ, áo tơi lá), màu áo, mũ nón (nón lá, khăn rằn, khăn vấn, mũ rơm, băng đô), vật cầm tay. Nhân vật đi trên đảo, ra trận, hiện trong chat và trên đảo của người khác.
-- **Mỗi đảo một hình dạng riêng**: hình bờ, kiểu đất (8 loại: dừa xanh, cát trắng, đất đỏ, đá xám, hoa dại, san hô, lá vàng, rêu ngọc), hoa cỏ, đá, san hô đều sinh từ mã đảo, không đảo nào giống đảo nào. Trên hải đồ cũng vậy, kèm nhà chính thu nhỏ theo bậc.
-- **Kiến trúc đổi theo từng bậc**:
-  - Nhà chính: Túp Lều Lá → Nhà Tranh Vách Đất → Nhà Sàn Tre → Nhà Rường Gỗ Lim → Loa Thành Chín Vòng.
-  - Cuốc: Cuốc Rỉ → Cuốc Sắt → Cuốc Thép Ròng → Cuốc Phá Đá → Cuốc Dời Non.
-  - Lũy tre: Hàng Rào Tre → Rào Tre Gai → Lũy Tre Làng → Lũy Tre Ba Lớp → Lũy Tre Ngàn Năm.
-- **Thuyền đổi theo từng bậc**: Thuyền Thúng → Ghe Nan → Ghe Bầu → Thuyền Buồm Nâu → Thuyền Rồng Lạc Hồng (cả trên đảo lẫn trên hải đồ).
-- Xây càng lên bậc càng lâu, khai hoang càng nhiều ô càng tốn, đi thuyền mất thời gian theo khoảng cách và bậc thuyền.
+**Thủy Tinh** là boss cuối, ngự ở **Mắt Bão**, góc xa nhất của Hải Khu.
 
-## Cấu trúc
+- **Siêu mạnh**: 3.900 – 4.500 máu, có 2–3 Thủy Binh hộ vệ. Đội giữa game không gây nổi 10% máu; chỉ đội gần tối đa, trang bị đầy đủ mới hạ được.
+- **Mỗi tuần một dạng**, hồi sinh lúc **thứ Hai 00:00** (giờ Việt Nam):
+  - **Hồng Thủy**: đánh cả đội.
+  - **Bão Tố**: đánh liên hoàn.
+  - **Thủy Quái Vương**: phản đòn.
+  - **Hải Long**: phun độc.
+- **Điều kiện**: Nhà chính bậc 3+, thuyền bậc 3+. Hải trình qua vùng bão chậm gấp 5 lần đường thường.
+- **Mang trang bị lên thuyền**: chỉ trang bị mang theo mới có tác dụng ở Mắt Bão. Trong lúc thuyền đi, đảo nhà yếu hơn khi bị đột kích.
+- **Thắng**:
+  - Phi thăng, danh hiệu Tiên Nhân, vầng hào quang trên đầu nhân vật.
+  - Nhận 600 sò, 12 ngọc, mở cổng Thượng Giới.
+  - Trang bị theo thuyền về nhà.
+- **Thua**:
+  - Mất **toàn bộ trang bị mang theo**.
+  - **Thuyền bị đánh chìm**, về lại Thuyền Thúng, phải xây lại từ đầu.
+
+Mọi thứ nối với nhau: tài nguyên → công trình → trang bị và đồng đội → đánh đảo, đột kích → Thủy Tinh. Thua Thủy Tinh thì phải quay lại vòng chơi để xây lại thuyền và rèn lại trang bị.
+
+## Bảng xếp hạng
+
+Ba bảng trong mỗi Hải Khu:
+- **Sức mạnh**: công trình, đồng đội, trang bị, đất đai, số lần phi thăng.
+- **Thủy Tinh tuần**: sát thương cao nhất lên Thủy Tinh trong tuần, ★ cho người đã hạ được. Làm mới mỗi thứ Hai.
+- **Phi thăng**: số lần phi thăng.
+
+## Thượng Giới (sắp ra mắt)
+
+Người đã phi thăng có quyền vào Thượng Giới. Phần này **đang để trống** cho các bản sau. Chỗ viết tiếp đã chừa sẵn:
+- luật chơi: `shared/thuonggioi.ts`
+- giao diện: `client/src/thuonggioi/`
+- server: đường `/thuong-gioi`
+- dữ liệu người chơi: `PlayerState.thuongGioi`
+
+## Nhân vật, đảo và đồ họa
+
+- **Nhân vật nam hoặc nữ**, chỉnh kiểu tóc, màu tóc, màu da, trang phục, mũ nón, vật cầm tay.
+  - Trang phục: áo bà ba, áo dài, áo ngư dân, áo thủy thủ, áo tơi lá.
+  - Mũ nón: nón lá, khăn rằn, khăn vấn, mũ rơm, băng đô.
+- **Mỗi đảo một hình dạng riêng**: hình bờ, kiểu đất (dừa xanh, cát trắng, đất đỏ, đá xám, hoa dại, san hô, lá vàng, rêu ngọc), hoa cỏ, đá, san hô đều sinh từ mã đảo.
+- **Đồ họa 32-bit** vẽ bằng code, không dùng file ảnh:
+  - chi tiết gấp đôi
+  - viền cùng tông màu
+  - ánh sáng và đổ bóng
+- **Trailer hoạt hình** chiếu sau lần đăng nhập đầu tiên, có nhạc ngũ cung. Xem lại trong Cài đặt.
+
+## Cấu trúc mã nguồn
 
 | Thư mục | Nội dung |
 | --- | --- |
-| `shared/` | Luật chơi dùng chung cho client và server: dữ liệu, nhân vật (`avatar.ts`), hình đảo, trận đánh, đột kích, hải đồ (`map.ts`) |
-| `client/` | Game (Phaser 3 + TypeScript). Đồ họa pixel vẽ bằng code: `art/buildings.ts` (kiến trúc, thuyền), `art/avatar.ts` (nhân vật), `art/islands.ts` (đảo) |
-| `client/src/login.ts` | Đăng nhập Google cho bản chính thức |
-| `server/` | Cloudflare Worker + Durable Object: `Directory` (danh bạ, chia Hải Khu) và `HaiKhu` (giữ đảo, chạy luật chơi). Cấu hình ở `wrangler.toml` thư mục gốc |
-| `tests/` | Test logic và đăng nhập (vitest) |
-| `tools/` | Bot chơi thử, mô phỏng cân bằng, test server, bảng xem đồ họa (`tools/preview/`) |
+| `shared/` | Luật chơi dùng chung client và server: dữ liệu, trận đánh, đột kích, `boss.ts` (Thủy Tinh, trang bị), `avatar.ts`, `map.ts`, `thuonggioi.ts` |
+| `client/` | Game (Phaser 3 + TypeScript). Đồ họa trong `client/src/art/`, trailer trong `client/src/trailer.ts` |
+| `server/` | Cloudflare Worker + Durable Object: `Directory` (chia Hải Khu) và `HaiKhu` (giữ đảo, chạy luật chơi) |
+| `tests/` | Test luật chơi, Thủy Tinh, đăng nhập (vitest) |
+| `tools/` | Bot chơi thử, mô phỏng cân bằng, test server, bảng xem đồ họa |
 
 ## Bản chính thức: đưa lên web với đăng nhập Gmail
 

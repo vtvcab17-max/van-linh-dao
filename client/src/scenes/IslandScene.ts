@@ -47,6 +47,7 @@ export class IslandScene extends Phaser.Scene {
   private lastBuildText = 0;
   private bounds = { x: 0, y: 0, w: WORLD, h: WORLD };
   private guide!: Phaser.GameObjects.Image;
+  private halo!: Phaser.GameObjects.Image;
 
   private get dragged() {
     return this.ctl?.dragged ?? false;
@@ -93,6 +94,8 @@ export class IslandScene extends Phaser.Scene {
     this.events.on('wake', () => labelsBox()?.removeAttribute('hidden'));
     this.rua.setInteractive({ useHandCursor: true }).on('pointerup', () => !this.dragged && this.ui.openRua());
 
+    // vầng hào quang trên đầu người đã phi thăng
+    this.halo = this.add.image(0, 0, ensureTex(this, 'halo', drawHalo)).setOrigin(0.5, 1).setScale(Q).setVisible(false);
     // mũi tên vàng chỉ chỗ cần bấm theo nhiệm vụ Rùa Vàng
     this.guide = this.add.image(0, 0, ensureTex(this, 'guide-arrow', drawGuideArrow)).setOrigin(0.5, 1).setDepth(6000).setScale(Q).setVisible(false);
     this.time.addEvent({ delay: 700, loop: true, callback: () => this.water.setTexture(`iw${(this.waterF ^= 1)}-${this.islandVer}`) });
@@ -467,6 +470,8 @@ export class IslandScene extends Phaser.Scene {
   }
 
   update(time: number) {
+    this.halo.setVisible(this.store.s.asc > 0);
+    if (this.halo.visible) this.halo.setPosition(this.an.x, this.an.y - this.an.displayHeight + 1 + Math.round(Math.sin(time / 400))).setDepth(this.an.depth + 1);
     const g = this.guideAt();
     this.guide.setVisible(!!g);
     if (g) this.guide.setPosition(g.x, g.y - 2 - Math.round(Math.abs(Math.sin(time / 260)) * 4));
@@ -490,5 +495,19 @@ function drawGuideArrow() {
   p.poly([[2, 6], [9, 6], [5.5, 10]], 'l');
   p.px(4, 1, 'i');
   p.px(4, 2, 'i');
+  return c;
+}
+
+/** Vầng hào quang tiên nhân. */
+function drawHalo() {
+  const [c, ctx] = canvas(12, 4);
+  const p = new Pen(ctx);
+  p.ellipse(6, 2, 5, 1, 'l', false);
+  p.hline(2, 9, 0, 'l');
+  p.hline(2, 9, 3, 'L');
+  p.px(1, 1, 'l');
+  p.px(10, 1, 'l');
+  p.px(1, 2, 'L');
+  p.px(10, 2, 'L');
   return c;
 }

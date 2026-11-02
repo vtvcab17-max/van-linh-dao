@@ -27,6 +27,9 @@ export const LOOKS: Look[] = [
   { name: 'Đảo Rêu Ngọc', grass: ['#5fae86', '#3a7d63', '#86cfa4', '#a6d86e'], sand: ['#e6d9a8', '#c4b37a', '#f3ead0'], shallow: '#4fbcc0', flowers: ['#5fd0e0', '#fbf3dc'], flowerRate: 0.06, rockRate: 0.06, shellRate: 0.06, coralRate: 0.06 },
 ];
 
+/** Mắt Bão: đảo đá đen giữa vùng bão của Thủy Tinh. */
+const STORM: Look = { name: 'Mắt Bão', grass: ['#3f4a5c', '#2a3242', '#56627a', '#1d2433'], sand: ['#5c6474', '#454c5a', '#7a8294'], shallow: '#24435e', flowers: [], flowerRate: 0, rockRate: 0.3, shellRate: 0, coralRate: 0 };
+
 /** Kiểu đất của đảo theo mã đảo. */
 export function lookOf(seed: number): Look {
   return LOOKS[seed % LOOKS.length];
@@ -196,7 +199,7 @@ export function drawSeaIsland(id: string, land: number, kind: MiniKind, tier = 1
   const [c, ctx] = canvas(S, S);
   const p = new Pen(ctx);
   const seed = hashStr(id);
-  const look = lookOf(seed);
+  const look = id === 'thuytinh' ? STORM : lookOf(seed);
   const r = mulberry32(hashStr(`mini:${id}`));
   const R = miniRadius(land);
   const harm = [1, 2, 3, 4, 5].map((k) => ({ k, a: (r() * 0.5 + 0.1) / k ** 0.7, ph: r() * Math.PI * 2 }));
@@ -325,6 +328,20 @@ function wildDecor(p: Pen, id: string, cx: number, cy: number, R: number) {
     p.ellipse(cx - 1, cy - 2, 5, 3, 'n');
     p.ellipse(cx, cy + 1, 3, 2, 'k');
     p.px(cx + 4, cy + 4, 'e');
+  } else if (id === 'thuytinh') {
+    // xoáy nước, sấm sét, cung điện san hô đen
+    for (let i = 0; i < 26; i++) {
+      const a = i * 0.55;
+      const rr = R * 1.15 + i * 0.35;
+      p.px(Math.round(cx + Math.cos(a) * rr), Math.round(cy + Math.sin(a) * rr * 0.78), i % 3 ? 'c' : 'i');
+    }
+    p.rect(cx - 3, cy - 6, 6, 6, 'V');
+    p.poly([[cx - 4, cy - 6], [cx, cy - 11], [cx + 4, cy - 6]], 'X');
+    p.px(cx, cy - 12, 'l');
+    p.rect(cx - 1, cy - 3, 2, 3, 'k');
+    p.line(cx + 7, cy - 16, cx + 5, cy - 11, 'l');
+    p.line(cx + 5, cy - 11, cx + 8, cy - 9, 'l');
+    p.line(cx - 8, cy - 15, cx - 10, cy - 10, 'l');
   } else if (id === 'trailhaitac') {
     p.poly([[cx - 6, cy + 3], [cx - 3, cy - 2], [cx, cy + 3]], 'F');
     p.poly([[cx + 1, cy + 3], [cx + 4, cy - 1], [cx + 7, cy + 3]], 'F');

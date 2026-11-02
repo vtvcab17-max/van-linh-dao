@@ -42,6 +42,8 @@ export interface BattleResult {
   events: BEvent[];
   a: BUnit[];
   b: BUnit[];
+  /** máu còn lại của bên 1 khi hết trận (tính sát thương lên boss) */
+  hpB?: number[];
 }
 
 const scale = (lv: number) => 1 + 0.12 * (lv - 1);
@@ -102,6 +104,16 @@ export interface TeamSpec {
   cuocTier: number;
   raoTier?: number; // có → thêm lũy tre chắn (khi phòng thủ)
   hero?: string; // tên chủ đảo (nhân vật "an" mang tên người chơi)
+  /** sức mạnh cộng thêm từ trang bị (0.1 = +10%) */
+  gear?: { atk: number; def: number; hp: number };
+}
+
+function applyGear(u: BUnit, g?: { atk: number; def: number; hp: number }) {
+  if (!g || u.wall) return u;
+  u.atk = Math.round(u.atk * (1 + g.atk));
+  u.def = Math.round(u.def * (1 + g.def));
+  u.maxHp = u.hp = Math.round(u.maxHp * (1 + g.hp));
+  return u;
 }
 
 export function teamFromSpec(spec: TeamSpec, side: 0 | 1): BUnit[] {
@@ -109,9 +121,16 @@ export function teamFromSpec(spec: TeamSpec, side: 0 | 1): BUnit[] {
   spec.comps.forEach((c, i) => {
     const bonus = c.k === 'an' ? EFFECTS.anAtkBonus[Math.max(0, spec.cuocTier - 1)] : 0;
     const base = c.k === 'an' && spec.hero ? { ...COMPANIONS.an, name: spec.hero } : COMPANIONS[c.k];
-    out.push(makeUnit(base, c.k, c.lv, side, i, bonus));
+    out.push(applyGear(makeUnit(base, c.k, c.lv, side, i, bonus), spec.gear));
   });
   if (spec.raoTier) out.push(makeWall(spec.raoTier, side, out.length));
+  return out;
+}
+
+/** Thủy Tinh (giữa hàng trước) và Thủy Binh hộ vệ. */
+export function teamFromBoss(form: UnitBase & { minion: UnitBase; minions: number }, side: 0 | 1): BUnit[] {
+  const out = [makeUnit(form, 'thuytinh', 1, side, 0)];
+  for (let i = 0; i < form.minions; i++) out.push(makeUnit(form.minion, 'thuybinh', 1, side, i + 1));
   return out;
 }
 
@@ -265,5 +284,5 @@ export function simulate(a: BUnit[], b: BUnit[], rng: Rng, maxRounds = 20): Batt
     }
   }
   const winner: 0 | 1 = alive(1).length === 0 && alive(0).length > 0 ? 0 : 1;
-  return { winner, rounds: round, events, a: snapA, b: snapB };
+  return { winner, rounds: round, events, a: snapA, b: snapB, hpB: all.filter((u) => u.side === 1).map((u) => u.hp) };
 }
