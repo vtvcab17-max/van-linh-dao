@@ -4,6 +4,7 @@ import type { Action, IslandPub, PlayerState, RaidEvent } from '../../../shared/
 import { logout, forgetSession, type Session } from '../login';
 import { NetBase } from './base';
 import type { BossWorld } from '../../../shared/boss';
+import type { FleetView, IsleOwner } from '../../../shared/world';
 import type { ChatMsg, Feedback, Telemetry } from './types';
 
 const TELE_EVERY = 5 * 60_000;
@@ -27,6 +28,8 @@ export class CloudflareNet extends NetBase {
   private rid = 0;
   private waits = new Map<number, (r: { ok: boolean; msg: string; data?: any }) => void>();
   private bossW: BossWorld | null = null;
+  private own: Record<string, IsleOwner> = {};
+  private fl: FleetView[] = [];
 
   constructor(
     private server: string,
@@ -125,6 +128,8 @@ export class CloudflareNet extends NetBase {
         this.chatList = (m.chat as ChatMsg[]) ?? [];
         this.onlineList = (m.online as { id: string; act: string }[]) ?? [];
         if (m.boss) this.bossW = m.boss as BossWorld;
+        this.own = (m.owners as Record<string, IsleOwner>) ?? {};
+        this.fl = (m.fleets as FleetView[]) ?? [];
         // nối lại giữa chừng: hành động chờ gửi đã bị server bỏ qua nên lấy trạng thái server làm chuẩn
         this.queue = this.queue.filter((s) => !s.startsWith('{"t":"a"'));
         this.flushQueue();
@@ -172,6 +177,14 @@ export class CloudflareNet extends NetBase {
         this.bossW = m.boss as BossWorld;
         this.emit('boss');
         return;
+      case 'owners':
+        this.own = (m.owners as Record<string, IsleOwner>) ?? {};
+        this.emit('owners');
+        return;
+      case 'fleets':
+        this.fl = (m.list as FleetView[]) ?? [];
+        this.emit('fleets');
+        return;
       case 'pong':
         this.clock(m.serverNow);
         return;
@@ -187,6 +200,13 @@ export class CloudflareNet extends NetBase {
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d?.error ?? `Lỗi ${r.status}`);
     return d;
+  }
+
+  owners() {
+    return this.own;
+  }
+  fleets() {
+    return this.fl;
   }
 
   bossWorld(s: PlayerState): BossWorld {

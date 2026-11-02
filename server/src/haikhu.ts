@@ -6,7 +6,9 @@ import { allBots } from '../../shared/bots';
 import { GAME } from '../../shared/data';
 import { apply, applyRaidAgainstMe, ascend, digest, migrate, newPlayer, publicOf, tick, type Action, type IslandPub, type PlayerState } from '../../shared/logic';
 import { ascendSlots, bossPoolMax, weekOf, type BossWorld } from '../../shared/boss';
-import { islandCell } from '../../shared/map';
+import { islandCell, worldFor } from '../../shared/map';
+import { pickSpawn } from '../../shared/world';
+import { setHome, type IsleDef } from '../../shared/logic';
 import { giveGood, haveGood, takeGood, goodLabel } from '../../shared/logic';
 import { bLevel, GUILD_COST, isGood, marketFee } from '../../shared/economy';
 import type { Cho, Mail } from './cho';
@@ -77,6 +79,8 @@ export class HaiKhu extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS raids (id TEXT PRIMARY KEY, target TEXT, t INTEGER, body TEXT, delivered INTEGER DEFAULT 0);
       CREATE TABLE IF NOT EXISTS feedback (n INTEGER PRIMARY KEY AUTOINCREMENT, player TEXT, t INTEGER, body TEXT);
       CREATE TABLE IF NOT EXISTS telemetry (player TEXT PRIMARY KEY, t INTEGER, body TEXT);
+      CREATE TABLE IF NOT EXISTS isle_owner (isle TEXT PRIMARY KEY, player TEXT, name TEXT, guild TEXT, don INTEGER, thap INTEGER, since INTEGER);
+      CREATE TABLE IF NOT EXISTS fleets (player TEXT PRIMARY KEY, body TEXT, ends INTEGER);
       CREATE TABLE IF NOT EXISTS boss (week INTEGER PRIMARY KEY, hp INTEGER, max INTEGER, slots INTEGER, done INTEGER, winners TEXT);
       CREATE TABLE IF NOT EXISTS boss_dmg (week INTEGER, player TEXT, name TEXT, dmg INTEGER, PRIMARY KEY (week, player));
     `);
@@ -236,9 +240,103 @@ export class HaiKhu extends DurableObject<Env> {
     this.broadcast({ t: 'info', msg: `Thủy Tinh đã bị cả Hải Khu hạ! Thiên Môn mở cho: ${names}.` });
   }
 
+  // ---------- hải đồ: chỗ đảo nhà, chủ quyền đảo, đoàn thuyền ----------
+  /** Người mới (hoặc dữ liệu cũ) chưa có chỗ trên hải đồ: chọn ô khởi đầu cách xa mọi người. */
+  private ensureHome(s: PlayerState) {
+    s.khu = this.khu || s.khu || '01';
+    if (s.home) return;
+    const w = worldFor(s.khu);
+    const taken = [...w.bots.values()];
+    for (const r of this.sql.exec<{ id: string; pub: string }>('SELECT id, pub FROM players WHERE pub IS NOT NULL').toArray()) {
+      if (r.id === s.id) continue;
+      const h = (this.cache.get(r.id)?.home ?? (JSON.parse(r.pub) as IslandPub).home) as { x: number; y: number } | undefined;
+      if (h) taken.push({ c: h.x, r: h.y });
+    }
+    const start = Number.parseInt(s.id.replace(/[^0-9a-z]/gi, '').slice(-6), 36) || 0;
+    const h = pickSpawn(w.spawns, taken, 8, start % w.spawns.length) ?? w.spawns[start % w.spawns.length];
+    s.seen = ''; // bỏ vùng tạm mở trước khi có chỗ thật
+    setHome(s, s.khu, { x: h.c, y: h.r });
+    this.touch(s);
+  }
+  owners(): Record<string, { p: string; n: string; g: string; don: number; thap: number }> {
+    const out: Record<string, { p: string; n: string; g: string; don: number; thap: number }> = {};
+    for (const r of this.sql.exec<{ isle: string; player: string; name: string; guild: string; don: number; thap: number }>('SELECT isle, player, name, guild, don, thap FROM isle_owner').toArray()) out[r.isle] = { p: r.player, n: r.name, g: r.guild ?? '', don: r.don, thap: r.thap };
+    return out;
+  }
+  private ownerDef(isle: string): IsleDef | undefined {
+    const r = this.sql.exec<{ player: string; name: string; don: number; thap: number }>('SELECT player, name, don, thap FROM isle_owner WHERE isle = ?', isle).toArray()[0];
+    return r ? { owner: r.player, ownerName: r.name, don: r.don, thap: r.thap } : undefined;
+  }
+  private writeOwner(s: PlayerState, isle: string) {
+    const o = s.isles.find((x) => x.id === isle);
+    if (!o) return;
+    this.sql.exec('INSERT INTO isle_owner (isle, player, name, guild, don, thap, since) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(isle) DO UPDATE SET player = excluded.player, name = excluded.name, guild = excluded.guild, don = excluded.don, thap = excluded.thap, since = excluded.since', isle, s.id, s.name, s.guild?.tag ?? '', o.don, o.thap, o.since);
+  }
+  /** Ghi sổ chủ quyền: thắng thì đảo về tay người thắng (người giữ cũ mất đảo), nhổ cờ thì xóa. */
+  private settleClaims(s: PlayerState) {
+    if (!s.claims?.length) return;
+    const changed: string[] = [];
+    for (const c of s.claims.splice(0)) {
+      const cur = this.ownerDef(c.isle);
+      if (!c.win) {
+        if (cur?.owner === s.id) this.sql.exec('DELETE FROM isle_owner WHERE isle = ?', c.isle);
+        changed.push(c.isle);
+        continue;
+      }
+      if (!s.isles.some((o) => o.id === c.isle)) continue;
+      if (cur && cur.owner !== s.id) {
+        const prev = this.load(cur.owner);
+        if (prev) {
+          tick(prev, Date.now());
+          prev.isles = prev.isles.filter((o) => o.id !== c.isle);
+          this.touch(prev);
+          const isle = worldFor(this.khu).isles.find((i) => i.id === c.isle);
+          this.sendTo(prev.id, { t: 'sync', state: prev, serverNow: Date.now(), msg: `${s.name} đã đánh chiếm ${isle?.name ?? 'một đảo'} của bạn!` });
+        }
+      }
+      this.writeOwner(s, c.isle);
+      changed.push(c.isle);
+    }
+    this.touch(s);
+    if (changed.length) this.broadcast({ t: 'owners', owners: this.owners() });
+  }
+  /** Đoàn thuyền đang đi trên biển (ai cũng thấy, chỉ đồng minh mới biết của ai). */
+  private saveFleet(s: PlayerState) {
+    const v = s.voyage;
+    if (!v) {
+      this.sql.exec('DELETE FROM fleets WHERE player = ?', s.id);
+      return;
+    }
+    const now = Date.now();
+    const real = (t: number) => now - (s.gt - t) / Math.max(1, s.speed);
+    const body = { id: v.id, k: v.kind, from: v.from ?? s.home, to: v.to, d: real(v.departAt), a: real(v.arriveAt), r: real(v.returnAt), p: s.id, n: s.name, g: s.guild?.id ?? '', t: Math.min(5, s.lv.thuyen.tier) };
+    this.sql.exec('INSERT INTO fleets (player, body, ends) VALUES (?, ?, ?) ON CONFLICT(player) DO UPDATE SET body = excluded.body, ends = excluded.ends', s.id, JSON.stringify(body), Math.round(body.r));
+  }
+  /** Danh sách đoàn thuyền gửi cho một người: tên chủ thuyền chỉ hiện với chính mình và cùng thương hội. */
+  fleetsFor(viewer: string, guild: string) {
+    this.sql.exec('DELETE FROM fleets WHERE ends < ?', Date.now() - 60_000);
+    return this.sql
+      .exec<{ body: string }>('SELECT body FROM fleets')
+      .toArray()
+      .map((r) => JSON.parse(r.body))
+      .map((f) => {
+        const ally = f.p === viewer || (guild && f.g === guild);
+        return { id: f.id, k: f.k, from: f.from, to: f.to, d: f.d, a: f.a, r: f.r, t: f.t, mine: f.p === viewer, who: ally ? f.n : '' };
+      });
+  }
+  private pushFleets() {
+    for (const ws of this.sockets()) {
+      const a = this.att(ws);
+      if (!a?.id) continue;
+      const g = this.cache.get(a.id)?.guild?.id ?? '';
+      this.send(ws, { t: 'fleets', list: this.fleetsFor(a.id, g) });
+    }
+  }
+
   /** Thuyền đột kích đã đánh xong → trừ thẳng vào đảo bị đánh và báo cho chủ đảo. */
   private settleRaids(s: PlayerState) {
     this.settleBoss(s);
+    this.settleClaims(s);
     if (!s.outbox.length) return;
     for (const ev of s.outbox.splice(0)) {
       if (ev.targetId.startsWith('bot-')) continue;
@@ -290,8 +388,10 @@ export class HaiKhu extends DurableObject<Env> {
       this.touch(s);
       this.flushSaves(true);
     }
+    this.ensureHome(s);
     tick(s, now);
     this.settleRaids(s);
+    this.saveFleet(s);
     const bw = this.bossWorld(now);
     s.thienMon = { week: bw.week, done: bw.done };
     // hàng, tiền từ chợ gửi tới lúc vắng nhà; thương hội
@@ -306,7 +406,7 @@ export class HaiKhu extends DurableObject<Env> {
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server, [id]);
     server.serializeAttachment({ id, name: s.name, act: 'vừa vào Hải Khu', win: now, n: 0 } satisfies Att);
-    this.send(server, { t: 'welcome', state: s, serverNow: Date.now(), islands: [...allBots(now), ...this.pubs().filter((p) => p.id !== id)], chat: this.chatTail(), online: this.online(), version: GAME.version, boss: bw });
+    this.send(server, { t: 'welcome', state: s, serverNow: Date.now(), islands: [...allBots(now), ...this.pubs().filter((p) => p.id !== id)], chat: this.chatTail(), online: this.online(), version: GAME.version, boss: bw, owners: this.owners(), fleets: this.fleetsFor(id, s.guild?.id ?? '') });
     // tin bị đột kích lúc vắng nhà
     const pending = this.sql.exec<{ id: string; body: string }>('SELECT id, body FROM raids WHERE target = ? AND delivered = 0', id).toArray();
     for (const r of pending) {
@@ -541,11 +641,22 @@ export class HaiKhu extends DurableObject<Env> {
       // server tự lấy thông tin đảo bị đánh và toạ độ thật, không tin dữ liệu gửi lên
       const target = this.pubOf(String(act.target?.id ?? ''));
       if (!target) return this.send(ws, { t: 'sync', state: s, serverNow: now, msg: 'Không tìm thấy đảo này.' });
-      action = { ...act, target, to: islandCell(target.id) };
+      action = { ...act, target, to: target.home ?? islandCell(target.id, this.khu) };
     }
+    // đánh đảo tự nhiên: server tự lấy sức giữ đảo của chủ hiện tại
+    if (act.t === 'sail' && act.kind === 'isle') action = { ...act, def: this.ownerDef(String(act.id)) };
     tick(s, t);
+    const voyBefore = s.voyage?.id ?? '';
     const o = apply(s, action);
     this.settleRaids(s);
+    if (o.ok && act.t === 'xayDao') {
+      this.writeOwner(s, act.id);
+      this.broadcast({ t: 'owners', owners: this.owners() });
+    }
+    if ((s.voyage?.id ?? '') !== voyBefore) {
+      this.saveFleet(s);
+      this.pushFleets();
+    }
     if (o.ok) {
       this.touch(s);
       void this.arm();
@@ -577,16 +688,23 @@ export class HaiKhu extends DurableObject<Env> {
     const now = Date.now();
     const ids = new Set(this.online().map((o) => o.id));
     let busy = false;
+    let fleetsChanged = false;
     // chỉ chạy luật cho người đang có thuyền ngoài biển hoặc công trình đang xây
     for (const id of ids) {
       const s = this.load(id);
       if (!s || (!s.voyage && !s.builds.length)) continue;
       busy = true;
       const before = `${s.voyage?.phase ?? '-'}:${s.builds.length}:${s.outbox.length}`;
+      const voy = s.voyage?.id ?? '';
       tick(s, now);
       this.settleRaids(s);
       if (`${s.voyage?.phase ?? '-'}:${s.builds.length}:${s.outbox.length}` !== before) this.touch(s);
+      if ((s.voyage?.id ?? '') !== voy) {
+        this.saveFleet(s);
+        fleetsChanged = true;
+      }
     }
+    if (fleetsChanged) this.pushFleets();
     if (this.changedPubs.size) {
       const list = [...this.changedPubs].map((id) => this.cache.get(id)).filter(Boolean).map((s) => publicOf(s!));
       this.changedPubs.clear();

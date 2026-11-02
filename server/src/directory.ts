@@ -1,7 +1,7 @@
 // Danh bạ người chơi: mỗi tài khoản thuộc một Hải Khu. Khu đầy thì tự mở khu mới.
 import { DurableObject } from 'cloudflare:workers';
 
-export const KHU_CAPACITY = 800; // số người đăng ký tối đa mỗi Hải Khu (khoảng 150–250 người online cùng lúc)
+export const KHU_CAPACITY = 150; // số người đăng ký tối đa mỗi Hải Khu: hải đồ rộng, mỗi người một vùng biển riêng
 
 export class Directory extends DurableObject {
   sql: SqlStorage;

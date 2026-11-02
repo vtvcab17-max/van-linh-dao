@@ -64,7 +64,7 @@ export const gearPower = (g: Partial<GearSet> | undefined) => {
 
 // ---------- Thủy Tinh ----------
 /** Mắt Bão: góc xa nhất của Hải Khu. */
-export const BOSS_CELL = { x: 37, y: 21 };
+export const BOSS_CELL = { x: 60, y: 40 };
 /** Hải trình qua vùng bão: chậm gấp nhiều lần đường thường. */
 export const BOSS_TRAVEL_MUL = 5;
 /** Điều kiện ra khơi đánh Thủy Tinh. */

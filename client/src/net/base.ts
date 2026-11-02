@@ -3,6 +3,7 @@ import { allBots, botChatsSince, BOTS } from '../../../shared/bots';
 import { publicOf, resolveRaid, type IslandPub, type PlayerState, type RaidEvent } from '../../../shared/logic';
 import { hashStr } from '../../../shared/rng';
 import { BOSS_POOL_MIN, weekOf, type BossWorld } from '../../../shared/boss';
+import type { FleetView, IsleOwner } from '../../../shared/world';
 import type { ChatMsg, Feedback, Net, NetEvent, NetMode, Telemetry } from './types';
 
 export const ls = {
@@ -44,6 +45,18 @@ export abstract class NetBase implements Net {
   protected onlineList: { id: string; act: string }[] = [];
   protected lastBotRaid = Date.now();
 
+  /** Bản chơi một mình: chủ đảo chỉ có mình. */
+  owners(): Record<string, IsleOwner> {
+    return {};
+  }
+  /** Bản chơi một mình: chỉ thấy thuyền của mình. */
+  fleets(s: PlayerState): FleetView[] {
+    const v = s.voyage;
+    if (!v) return [];
+    const now = Date.now();
+    const real = (t: number) => now - (s.gt - t) / Math.max(1, s.speed);
+    return [{ id: v.id, k: v.kind, from: v.from ?? { x: 0, y: 0 }, to: v.to, d: real(v.departAt), a: real(v.arriveAt), r: real(v.returnAt), t: s.lv.thuyen.tier, mine: true, who: s.name }];
+  }
   /** Bản chơi một mình: không có ai góp sức, máu chung chỉ trừ theo sát thương của mình. */
   bossWorld(s: PlayerState): BossWorld {
     const week = weekOf(Date.now());

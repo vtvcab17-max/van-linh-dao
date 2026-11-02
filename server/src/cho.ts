@@ -316,7 +316,7 @@ export class Cho extends DurableObject<Env> {
     this.sql.exec('DELETE FROM listings WHERE npc = 1');
     this.sql.exec('DELETE FROM orders WHERE npc = 1');
     const now = Date.now();
-    for (const rt of routesAt(period)) {
+    for (const rt of routesAt(period).filter((x) => !x.k)) {
       const m = rt.m;
       const r = mulberry32(hashStr(`npcmarket:${m.id}:${period}`));
       for (const g of m.goods) {

@@ -1,5 +1,6 @@
 import type { Action, IslandPub, PlayerState, RaidEvent } from '../../../shared/logic';
 import type { BossWorld } from '../../../shared/boss';
+import type { FleetView, IsleOwner } from '../../../shared/world';
 
 export interface ChatMsg {
   id: string;
@@ -36,7 +37,7 @@ export interface Telemetry {
 }
 
 export type NetMode = 'offline' | 'claude' | 'cloudflare';
-export type NetEvent = 'islands' | 'chat' | 'raid' | 'status' | 'sync' | 'raided' | 'notice' | 'boss';
+export type NetEvent = 'islands' | 'chat' | 'raid' | 'status' | 'sync' | 'raided' | 'notice' | 'boss' | 'owners' | 'fleets';
 
 export interface Net {
   mode: NetMode;
@@ -70,6 +71,10 @@ export interface Net {
   market?(op: string, args?: Record<string, unknown>): Promise<{ ok: boolean; msg: string; data?: any }>;
   /** Thủy Tinh tuần này: máu chung cả Hải Khu (bản chính thức do server gửi). */
   bossWorld(s: PlayerState): BossWorld;
+  /** Chủ các đảo tự nhiên trên hải đồ. */
+  owners(): Record<string, IsleOwner>;
+  /** Đoàn thuyền đang đi trên biển. */
+  fleets(s: PlayerState): FleetView[];
   /** Gọi API của server kèm phiên đăng nhập (chỉ bản chính thức). */
   api?(path: string, body?: Record<string, unknown>): Promise<any>;
 }

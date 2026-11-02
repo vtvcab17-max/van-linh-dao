@@ -36,7 +36,9 @@ import { hashStr, mulberry32, pick, rint, weighted, type Rng } from './rng';
 import { avatarFrom, cleanAvatar, type Avatar } from './avatar';
 import { LV_LABEL, ASCEND_REWARD, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, cleanGear, GEAR, GEAR_KEYS, gearBonus, gearPower, noGear, weekOf, type GearKey, type GearSet } from './boss';
 import { teamFromBoss } from './battle';
-import { islandCell } from './map';
+import { islandCell, worldFor } from './map';
+import { hexDist, hexLine, hexRange } from './hex';
+import { inWorld, isleById, lairById, WORLD_H, WORLD_W, type Isle } from './world';
 import { cleanDef } from './economy';
 import {
   DUP_FRAGS, FRAG_PER_GENERAL, GEN_IDS, GENERALS, LEG_IDS, LEG_WEAPONS, LT_BUY_DAILY, LT_BUY_PRICE, LT_SELL_PRICE, MAX_STAR, PITY, rollWheel, SPIN10_COST, SPIN_COST, starMult, ltDrop,
@@ -148,6 +150,16 @@ export interface PlayerState {
   manh: number;
   /** Vòng quay: số lần liền chưa ra đồ truyền thuyết (bảo hiểm), tổng lượt quay. */
   gacha: { pity: number; spins: number };
+  /** Hải Khu đang ở (server ghi). */
+  khu: string;
+  /** Ô đảo nhà trên hải đồ lục giác (server chọn khi vào lần đầu). */
+  home: { x: number; y: number } | null;
+  /** Vùng biển đã khám phá (bitset base64, mỗi ô một bit). */
+  seen: string;
+  /** Đảo tự nhiên đã cắm cờ chủ quyền. */
+  isles: OwnedIsle[];
+  /** Kết quả đánh đảo chờ server ghi sổ chủ quyền (server lấy ra rồi xóa). */
+  claims: { isle: string; win: boolean; at: number }[];
   /** Lượt quay đã mua (không đổi, không bán, không cho được). */
   luot: number;
   /** Đã đổi đồng vàng lấy Linh Thạch hôm nay. */
@@ -164,7 +176,9 @@ export interface Build {
 /** Một chuyến thuyền: đi (mất thời gian) → đánh khi cập đảo → về bến (mất thời gian) mới nhận chiến lợi phẩm. */
 export interface Voyage {
   id: string;
-  kind: 'wild' | 'island' | 'boss';
+  kind: 'wild' | 'island' | 'boss' | 'isle' | 'scout';
+  /** đảo tự nhiên đang có chủ: sức giữ đảo lúc ra khơi */
+  isleDef?: IsleDef;
   /** xuất phát từ đâu (đảo nhà hoặc cứ điểm chư hầu) */
   from?: { x: number; y: number };
   /** đánh chiếm thành chư hầu */
@@ -286,6 +300,11 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     gacha: { pity: 0, spins: 0 },
     ltDay: { day: 0, n: 0 },
     luot: 0,
+    khu: '01',
+    home: null,
+    seen: '',
+    isles: [],
+    claims: [],
     thienMon: { week: weekOf(now), done: false },
     asc: 0,
     thuongGioi: {},
@@ -305,7 +324,15 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
   kinds.forEach((kind, i) => s.nodes.push({ id: nid(s, 'n'), kind, x: shape.spots[i][0], y: shape.spots[i][1], readyAt: 0 }));
   // hòm đầu tiên dạt vào bờ ngay
   s.chests.push({ id: nid(s, 'c'), ci: 0, x: shape.spots[7][0], y: shape.spots[7][1] });
+  reveal(s, [homeCell(s)], homeVision(s));
   return s;
+}
+
+/** Server đặt chỗ đảo nhà trên hải đồ (lần đầu vào, hoặc dữ liệu cũ chưa có chỗ). */
+export function setHome(s: PlayerState, khu: string, cell: { x: number; y: number }) {
+  s.khu = khu;
+  s.home = { x: cell.x, y: cell.y };
+  reveal(s, [cell], homeVision(s));
 }
 
 /** Các ô luôn là đất lúc mới tới: chỗ của Nhà chính, Cuốc, Lũy tre và lối đi giữa chúng. */
@@ -563,14 +590,20 @@ export const buildSlots = (s: PlayerState) => (s.lv.leu.tier >= 3 ? 2 : 1) + Mat
 export const busySlots = (s: PlayerState) => s.builds.length + s.dinh.filter((d) => d.doneAt !== undefined).length;
 
 /** Ô của đảo mình trên hải đồ chung. */
-export const homeCell = (s: PlayerState) => islandCell(s.id);
+export const homeCell = (s: PlayerState) => s.home ?? islandCell(s.id, s.khu);
 /** Nơi thuyền có thể xuất phát: đảo nhà và các chư hầu còn hạn (cứ điểm). */
 export function bases(s: PlayerState): { x: number; y: number; name: string }[] {
-  return [{ ...homeCell(s), name: s.islandName }, ...s.chuHau.filter((v) => v.until > s.lastReal).map((v) => ({ ...v.cell, name: v.islandName }))];
+  const w = worldFor(s.khu);
+  const outposts = s.isles
+    .filter((o) => o.don > 0)
+    .map((o) => isleById(w, o.id))
+    .filter(Boolean)
+    .map((i) => ({ x: i!.c, y: i!.r, name: i!.name }));
+  return [{ ...homeCell(s), name: s.islandName }, ...s.chuHau.filter((v) => v.until > s.lastReal).map((v) => ({ ...v.cell, name: v.islandName })), ...outposts];
 }
 /** Cứ điểm gần đích nhất. */
 export function nearestBase(s: PlayerState, to: { x: number; y: number }) {
-  return bases(s).reduce((b, c) => (Math.hypot(c.x - to.x, c.y - to.y) < Math.hypot(b.x - to.x, b.y - to.y) ? c : b));
+  return bases(s).reduce((b, c) => (cellDist(c, to) < cellDist(b, to) ? c : b));
 }
 export function buildMs(lv: LvKey, fromTier: number): number {
   return Math.round(BUILD_MS[fromTier - 1] * BUILD_FACTOR[lv]);
@@ -607,7 +640,7 @@ function buildTick(s: PlayerState): string[] {
 
 export function sailMs(s: PlayerState, to: { x: number; y: number }, mul = 1): number {
   const from = nearestBase(s, to);
-  const dist = Math.max(1, Math.hypot(to.x - from.x, to.y - from.y));
+  const dist = Math.max(1, cellDist(from, to));
   return Math.round((dist * EFFECTS.sailSecPerCell[tierIdx(s, 'thuyen')] * 1000 * mul) / moodMult(s.lv.thuyen));
 }
 
@@ -698,13 +731,32 @@ function voyageTick(s: PlayerState): string[] {
         return notes;
       }
     } else if (v.kind === 'wild') {
-      const w = WILDS.find((x) => x.id === v.targetId)!;
+      const w = wildOf(s, v.targetId);
+      if (!w) {
+        s.voyage = null;
+        return notes;
+      }
       o = fightWild(s, w, true);
+      reveal(s, [v.to], 2);
+    } else if (v.kind === 'scout') {
+      const n = reveal(s, [v.to], 4);
+      o = { ok: true, msg: `Thám hiểm xong, mở thêm ${n} ô biển.`, gained: {} };
+      v.loot = {};
+      v.win = true;
+      v.phase = 've';
+      notes.push(`Thuyền đã tới ${v.targetName}: mở thêm ${n} ô biển.`);
+    } else if (v.kind === 'isle') {
+      const isle = isleById(worldFor(s.khu), v.targetId);
+      if (!isle) {
+        s.voyage = null;
+        return notes;
+      }
+      o = fightIsle(s, isle, v.isleDef);
     } else {
       o = raid(s, v.target!, true, !!v.conquer);
       if (o.event) s.outbox.push(o.event);
     }
-    if (v.kind !== 'boss') {
+    if (v.kind !== 'boss' && v.kind !== 'scout') {
       v.loot = o.gained ?? {};
       v.win = o.battle?.winner === 0;
       v.phase = 've';
@@ -733,6 +785,11 @@ export type Action =
   | { t: 'expand'; x: number; y: number }
   | { t: 'chest'; id: string }
   | { t: 'sail'; kind: 'wild'; id: string }
+  | { t: 'sail'; kind: 'isle'; id: string; def?: IsleDef }
+  | { t: 'sail'; kind: 'scout'; to: { x: number; y: number } }
+  | { t: 'thuDao'; id: string }
+  | { t: 'xayDao'; id: string; k: IsleBuild }
+  | { t: 'boDao'; id: string }
   | { t: 'sail'; kind: 'island'; target: IslandPub; to: { x: number; y: number }; conquer?: boolean }
   | { t: 'xay'; k: BKey; x: number; y: number }
   | { t: 'nang'; id: string }
@@ -928,14 +985,29 @@ export function apply(s: PlayerState, a: Action): Outcome {
         log(s, 'Thuyền vượt bão đi đánh Thủy Tinh.');
         return { ok: true, msg: `${LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1]} vượt bão ra Mắt Bão. Sống chết có số!` };
       }
+      let isleDef: IsleDef | undefined;
       if (a.kind === 'wild') {
-        const w = WILDS.find((x) => x.id === a.id);
+        const w = wildOf(s, a.id);
         if (!w) return fail('Không có đảo này.');
         const st = s.wilds[w.id];
         if (st && s.gt < st.readyAt) return fail('Quái chưa kéo về đảo này.');
-        to = { x: w.sx, y: w.sy };
+        to = wildCell(s, w.id);
         targetId = w.id;
         targetName = w.name;
+      } else if (a.kind === 'isle') {
+        const isle = isleById(worldFor(s.khu), a.id);
+        if (!isle) return fail('Không có đảo này.');
+        if (s.isles.some((o) => o.id === isle.id)) return fail('Đảo này đã cắm cờ của bạn.');
+        to = { x: isle.c, y: isle.r };
+        targetId = isle.id;
+        targetName = isSeen(s, isle.c, isle.r) || isle.kind !== 'bian' ? isle.name : 'Đảo Bí Ẩn';
+        if (a.def && a.def.owner !== s.id) isleDef = { owner: String(a.def.owner), ownerName: String(a.def.ownerName).slice(0, 24), don: Math.max(0, Math.min(3, Math.floor(a.def.don) || 0)), thap: Math.max(0, Math.min(3, Math.floor(a.def.thap) || 0)) };
+      } else if (a.kind === 'scout') {
+        const c = { x: Math.round(a.to.x), y: Math.round(a.to.y) };
+        if (!inWorld(c.x, c.y)) return fail('Ngoài hải đồ.');
+        to = c;
+        targetId = `scout:${c.x},${c.y}`;
+        targetName = `vùng biển (${c.x}, ${c.y})`;
       } else {
         const err = raidCheck(s, a.target) ?? (a.conquer ? conquerCheck(s, a.target) : null);
         if (err) return fail(err);
@@ -946,7 +1018,9 @@ export function apply(s: PlayerState, a: Action): Outcome {
       }
       const one = sailMs(s, to);
       const from = nearestBase(s, to);
-      s.voyage = { id: nid(s, 'v'), kind: a.kind, targetId, targetName, target, to, from: { x: from.x, y: from.y }, departAt: s.gt, arriveAt: s.gt + one, returnAt: s.gt + one * 2, phase: 'di', loot: {}, conquer: a.kind === 'island' && !!a.conquer };
+      s.voyage = { id: nid(s, 'v'), kind: a.kind, targetId, targetName, target, to, from: { x: from.x, y: from.y }, departAt: s.gt, arriveAt: s.gt + one, returnAt: s.gt + one * 2, phase: 'di', loot: {}, conquer: a.kind === 'island' && !!a.conquer, isleDef };
+      // đi tới đâu mở sương mù tới đó (dọc đường thấy được 1 ô hai bên)
+      reveal(s, voyagePath(from, to), 1);
       log(s, `Thuyền rời bến đi ${targetName}.`);
       return { ok: true, msg: `${LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1]} rời bến đi ${targetName}.` };
     }
@@ -1116,6 +1190,38 @@ export function apply(s: PlayerState, a: Action): Outcome {
       s.res.tien += n * LT_SELL_PRICE;
       return { ok: true, msg: `Bán ${n} Linh Thạch được ${n * LT_SELL_PRICE} đồng vàng.` };
     }
+    case 'thuDao': {
+      const o = s.isles.find((x) => x.id === a.id);
+      const isle = o && isleById(worldFor(s.khu), o.id);
+      if (!o || !isle) return fail('Đảo này không thuộc chủ quyền của bạn.');
+      const got = isleReady(isle, o, s.lastReal);
+      if (!Object.keys(got).length) return fail('Đảo chưa có gì để thu.');
+      o.last = s.lastReal;
+      const added = addRes(s, got);
+      return { ok: true, msg: `Thu hoạch ${isle.name}.`, gained: added };
+    }
+    case 'xayDao': {
+      const o = s.isles.find((x) => x.id === a.id);
+      const isle = o && isleById(worldFor(s.khu), o.id);
+      const b = ISLE_BUILD[a.k];
+      if (!o || !isle || !b) return fail('Đảo này không thuộc chủ quyền của bạn.');
+      const lvl = lordLevel(s);
+      if (lvl < isle.needLvl) return fail(`Cần cấp chúa đảo ${isle.needLvl} mới xây được trên ${isle.name}.`);
+      if (o[a.k] >= 3) return fail('Đã cấp cao nhất.');
+      const cost = b.cost(o[a.k] + 1, isle.lv);
+      if (!canPay(s, cost)) return fail('Chưa đủ vật liệu.');
+      pay(s, cost);
+      o[a.k]++;
+      if (a.k === 'thap') reveal(s, [{ x: isle.c, y: isle.r }], 3 + o.thap * 2);
+      return { ok: true, msg: `${b.name} trên ${isle.name} lên cấp ${o[a.k]}.` };
+    }
+    case 'boDao': {
+      const i = s.isles.findIndex((x) => x.id === a.id);
+      if (i < 0) return fail('Đảo này không thuộc chủ quyền của bạn.');
+      s.isles.splice(i, 1);
+      s.claims.push({ isle: a.id, win: false, at: s.lastReal });
+      return { ok: true, msg: 'Đã nhổ cờ, bỏ đảo.' };
+    }
     case 'speed': {
       s.speed = Math.max(1, Math.min(20, a.speed));
       return { ok: true, msg: s.speed > 1 ? `Tốc độ test x${s.speed}` : 'Tốc độ thường' };
@@ -1190,6 +1296,10 @@ export interface IslandPub {
   guild?: string;
   /** chủ tướng giữ đảo */
   gen?: { id: GenId; star: number; w: LegWeaponId | null };
+  /** ô đảo nhà trên hải đồ */
+  home?: { x: number; y: number };
+  /** cấp chúa đảo */
+  lvl?: number;
 }
 
 export function publicOf(s: PlayerState): IslandPub {
@@ -1222,6 +1332,8 @@ export function publicOf(s: PlayerState): IslandPub {
     vassals: s.chuHau.length,
     guild: s.guild?.tag,
     gen: teamSpec(s, true).gen,
+    home: s.home ?? undefined,
+    lvl: lordLevel(s),
   };
 }
 
@@ -1387,6 +1499,9 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   merged.boss = { ...fresh.boss, ...s.boss };
   if (!Array.isArray(merged.bossOut)) merged.bossOut = [];
   merged.gacha = { ...fresh.gacha, ...s.gacha };
+  if (!Array.isArray(merged.isles)) merged.isles = [];
+  if (!Array.isArray(merged.claims)) merged.claims = [];
+  if (typeof merged.seen !== 'string') merged.seen = '';
   merged.ltDay = { ...fresh.ltDay, ...s.ltDay };
   return merged;
 }
@@ -1524,4 +1639,172 @@ export function dropLT(s: PlayerState, kind: 'conquer' | 'bian' | 'wild' | 'ches
   const n = ltDrop(rngOf(s), kind);
   if (n > 0) s.res.lt += n;
   return n;
+}
+
+
+// ---------- hải đồ lục giác: khám phá, chủ quyền đảo ----------
+/** Đảo tự nhiên đã cắm cờ: công trình trên đảo và lần thu hoạch cuối. */
+export interface OwnedIsle {
+  id: string;
+  since: number;
+  /** lần thu sản lượng gần nhất (giờ thật) */
+  last: number;
+  /** Xưởng khai thác: +50% sản lượng mỗi cấp */
+  mo: number;
+  /** Đồn tiền tiêu: thành cứ điểm xuất phát, thêm lính giữ đảo */
+  don: number;
+  /** Tháp canh: nhìn xa hơn, thêm xạ thủ giữ đảo */
+  thap: number;
+}
+/** Sức giữ của một đảo đã có chủ (lấy lúc ra khơi). */
+export interface IsleDef {
+  owner: string;
+  ownerName: string;
+  don: number;
+  thap: number;
+}
+
+/** Khoảng cách hai ô trên hải đồ lục giác. */
+export const cellDist = (a: { x: number; y: number }, b: { x: number; y: number }) => hexDist({ c: a.x, r: a.y }, { c: b.x, r: b.y });
+
+/** Cấp chúa đảo 1..30 theo sức mạnh. */
+export const lordLevel = (s: PlayerState) => Math.max(1, Math.min(30, 1 + Math.floor((power(s) - 100) / 90)));
+/** Số đảo tự nhiên giữ được. */
+export const isleCap = (s: PlayerState) => 1 + Math.floor(lordLevel(s) / 3);
+
+// --- sương mù: bitset base64 ---
+const BITS = WORLD_W * WORLD_H;
+function seenBytes(s: PlayerState): Uint8Array {
+  const out = new Uint8Array(Math.ceil(BITS / 8));
+  if (!s.seen) return out;
+  try {
+    const bin = atob(s.seen);
+    for (let i = 0; i < Math.min(bin.length, out.length); i++) out[i] = bin.charCodeAt(i);
+  } catch {
+    /* dữ liệu hỏng: coi như chưa khám phá */
+  }
+  return out;
+}
+function seenSave(s: PlayerState, b: Uint8Array) {
+  let bin = '';
+  for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+  s.seen = btoa(bin);
+}
+export function isSeen(s: PlayerState, c: number, r: number, bytes?: Uint8Array): boolean {
+  if (!inWorld(c, r)) return false;
+  const b = bytes ?? seenBytes(s);
+  const i = r * WORLD_W + c;
+  return (b[i >> 3] & (1 << (i & 7))) !== 0;
+}
+export const seenOf = seenBytes;
+/** Mở sương mù quanh các ô (bán kính k). */
+export function reveal(s: PlayerState, cells: { x: number; y: number }[], k: number): number {
+  const b = seenBytes(s);
+  let n = 0;
+  for (const cell of cells)
+    for (const h of hexRange({ c: cell.x, r: cell.y }, k)) {
+      if (!inWorld(h.c, h.r)) continue;
+      const i = h.r * WORLD_W + h.c;
+      if (!(b[i >> 3] & (1 << (i & 7)))) {
+        b[i >> 3] |= 1 << (i & 7);
+        n++;
+      }
+    }
+  if (n) seenSave(s, b);
+  return n;
+}
+/** Tầm nhìn của đảo nhà theo tháp canh. */
+export const homeVision = (s: PlayerState) => 5 + bLevel(s.dinh, 'thapcanh');
+
+/** Ô của hang quái riêng quanh đảo nhà (đảo luyện quân của người mới). */
+const WILD_OFFSET: Record<string, [number, number]> = { baicua: [3, -2], ransua: [-4, 2], daokhi: [5, 4], vinhcanoc: [-6, -5], hangcuada: [8, -6], trailhaitac: [-10, 7] };
+export function wildCell(s: PlayerState, id: string): { x: number; y: number } {
+  const h = homeCell(s);
+  const o = WILD_OFFSET[id];
+  if (o) return { x: Math.max(1, Math.min(WORLD_W - 2, h.x + o[0])), y: Math.max(1, Math.min(WORLD_H - 2, h.y + o[1])) };
+  const l = lairById(worldFor(s.khu), id);
+  return l ? { x: l.sx, y: l.sy } : h;
+}
+/** Hang quái theo mã: hang riêng quanh nhà hoặc hang trên hải đồ chung. */
+export function wildOf(s: PlayerState, id: string) {
+  return WILDS.find((x) => x.id === id) ?? lairById(worldFor(s.khu), id);
+}
+
+/** Đội giữ một đảo tự nhiên: quái canh giữ, hoặc quân của chủ đảo (đồn, tháp) đứng cùng quái đã thuần. */
+export function isleGuard(isle: Isle, def?: IsleDef) {
+  const list = [...isle.guard];
+  if (def) for (let i = 0; i < def.don; i++) list.push(['haitac', isle.lv * 2 + 4]);
+  return list;
+}
+
+/** Điều kiện cắm cờ chủ quyền. */
+export function claimCheck(s: PlayerState, isle: Isle): string | null {
+  if (s.isles.some((o) => o.id === isle.id)) return null;
+  const lvl = lordLevel(s);
+  if (lvl < isle.needLvl) return `Cần cấp chúa đảo ${isle.needLvl} (bạn đang cấp ${lvl}).`;
+  if (s.isles.length >= isleCap(s)) return `Cấp ${lvl} chỉ giữ được ${isleCap(s)} đảo. Lên cấp để giữ thêm.`;
+  return null;
+}
+
+/** Sản lượng mỗi giờ của đảo đã cắm cờ. */
+export function isleYield(isle: Isle, o: OwnedIsle): Partial<Record<ResKey, number>> {
+  const out: Partial<Record<ResKey, number>> = {};
+  for (const [k, v] of Object.entries(isle.yields)) out[k as ResKey] = (v ?? 0) * (1 + 0.5 * o.mo);
+  return out;
+}
+/** Thu tối đa 12 giờ sản lượng mỗi lần. */
+export const ISLE_STORE_H = 12;
+export function isleReady(isle: Isle, o: OwnedIsle, now: number): Partial<Record<ResKey, number>> {
+  const h = Math.min(ISLE_STORE_H, Math.max(0, now - o.last) / 3600_000);
+  const out: Partial<Record<ResKey, number>> = {};
+  for (const [k, v] of Object.entries(isleYield(isle, o))) {
+    const n = Math.floor((v ?? 0) * h);
+    if (n > 0) out[k as ResKey] = n;
+  }
+  return out;
+}
+
+export type IsleBuild = 'mo' | 'don' | 'thap';
+export const ISLE_BUILD: Record<IsleBuild, { name: string; desc: string; cost: (lv: number, isleLv: number) => Partial<Record<ResKey, number>> }> = {
+  mo: { name: 'Xưởng Khai Thác', desc: 'Sản lượng đảo +50% mỗi cấp.', cost: (lv, il) => ({ go: 60 * lv * il, da: 40 * lv * il, tien: 150 * lv * il }) },
+  don: { name: 'Đồn Tiền Tiêu', desc: 'Đảo thành cứ điểm cho thuyền xuất phát; thêm lính giữ đảo.', cost: (lv, il) => ({ go: 80 * lv * il, da: 80 * lv * il, sat: 20 * lv * il }) },
+  thap: { name: 'Tháp Canh Đảo', desc: 'Nhìn xa thêm 2 ô quanh đảo mỗi cấp; thêm xạ thủ giữ đảo.', cost: (lv, il) => ({ go: 50 * lv * il, tre: 60 * lv * il, da: 30 * lv * il }) },
+};
+
+/** Đường đi (để vẽ và mở sương mù dọc đường). */
+export const voyagePath = (from: { x: number; y: number }, to: { x: number; y: number }) => hexLine({ c: from.x, r: from.y }, { c: to.x, r: to.y }).map((h) => ({ x: h.c, y: h.r }));
+
+/** Đánh quái giữ đảo tự nhiên; thắng thì cắm cờ chủ quyền (nếu đủ cấp, còn chỗ). */
+export function fightIsle(s: PlayerState, isle: Isle, def?: IsleDef): Outcome {
+  const spec = teamSpec(s, false);
+  const r = rngOf(s);
+  const guard = isleGuard(isle, def).map(([m, lv]) => [m, lv + (def ? def.thap * 2 : 0)] as [typeof m, number]);
+  const battle = simulate(teamFromSpec(spec, 0), teamFromMonsters(guard, 1), r);
+  s.stats.battles++;
+  const avgLv = guard.reduce((t, e) => t + e[1], 0) / guard.length;
+  const win = battle.winner === 0;
+  const ups = rewardComps(s, spec, Math.round((win ? 12 : 4) + 3 * avgLv));
+  reveal(s, [{ x: isle.c, y: isle.r }], 3);
+  if (!win) {
+    log(s, `Đánh ${isle.name} thất bại.`);
+    return { ok: true, msg: `${isle.name} giữ đảo thành công.`, battle, gained: {}, levelUps: ups };
+  }
+  s.stats.wins++;
+  // chiến lợi phẩm: 3 giờ sản lượng của đảo
+  const gain: Partial<Record<ResKey, number>> = {};
+  for (const [k, v] of Object.entries(isle.yields)) {
+    const n = Math.floor((v ?? 0) * 3);
+    if (n > 0) gain[k as ResKey] = n;
+  }
+  const lt = dropLT(s, isle.kind === 'bian' ? 'bian' : 'conquer');
+  const err = claimCheck(s, isle);
+  let msg = `Hạ quân giữ ${isle.name}!`;
+  if (!err) {
+    s.isles.push({ id: isle.id, since: s.lastReal, last: s.lastReal, mo: 0, don: 0, thap: 0 });
+    s.claims.push({ isle: isle.id, win: true, at: s.lastReal });
+    msg += ' Đã cắm cờ chủ quyền.';
+    log(s, `Cắm cờ chủ quyền ${isle.name}${def ? ` (giành từ ${def.ownerName})` : ''}.`);
+  } else msg += ` Chưa cắm cờ được: ${err}`;
+  if (lt) msg += ` Nhặt ${lt} Linh Thạch.`;
+  return { ok: true, msg, battle, gained: gain, levelUps: ups };
 }

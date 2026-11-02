@@ -21,6 +21,7 @@ import {
   type ResKey,
   type WildDef,
 } from '../../shared/data';
+import { cellDist, wildCell } from '../../shared/logic';
 import { bossCheck, busySlots, conquerCheck, craftCost, goodLabel, haveGood, homeCell, incomePerHour, nearestBase, fortName, shopPrice, buildMs, buildOf, buildSlots, canPay, currentQuest, dockPos, expandCost, landCap, landCount, LV_POS, newPlayer, power, publicOf, sailMs, storageCap, titleOf, xpForLevel, type IslandPub, type Outcome } from '../../shared/logic';
 import { drawLeu, drawMiniIsland, drawEmote } from './art/sprites';
 import { canvasUrl, iconUrl, lvCanvas, portraitUrl } from './art/textures';
@@ -31,6 +32,7 @@ import { hashStr } from '../../shared/rng';
 import { LV_LABEL, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, GEAR, GEAR_KEYS, gearBonus, noGear, weekEnd, weekOf, type GearKey, type GearSet } from '../../shared/boss';
 import { thuongGioiHtml } from './thuonggioi';
 import { openGenerals, openWheel } from './ui-gacha';
+import { openHex as openHexPanel, openMap } from './ui-sea';
 import {
   B_KEYS, BUILDINGS, DAY0, dayOf, GUILD_COST, guildLevel, ITEM_KEYS, ITEMS, marketFee, PORT_MULT, RARITY_COLOR, ROUTE_MS, routePeriod, routesNear, SHOP_BASE, shopSpecial, tollPerHour, tributePerHour, goodRarity, bLevel,
   type BKey, type ItemKey, type Route,
@@ -182,12 +184,26 @@ export class UI {
     this.runBattle(lb.o, lb.title, true);
   }
 
+  /** Chạm một ô trên hải đồ. */
+  openHex(c: number, r: number) {
+    openHexPanel(this, c, r);
+  }
+  myPub() {
+    return publicOf(this.store.s);
+  }
+  sailLinePublic(to: { x: number; y: number }, mul = 1) {
+    return this.sailLine(to, mul);
+  }
+  sailPublic(o: Outcome) {
+    return this.sail(o);
+  }
+
   private sailLine(to: { x: number; y: number }, mul = 1) {
     const s = this.store.s;
     const ms = sailMs(s, to, mul) / s.speed;
     const base = nearestBase(s, to);
-    const dist = Math.max(1, Math.hypot(to.x - base.x, to.y - base.y));
-    return `<div class="card"><small>Hải trình</small><p>Cách ${base.x === homeCell(s).x && base.y === homeCell(s).y ? 'đảo bạn' : `cứ điểm ${esc(base.name)}`} <b>${dist.toFixed(1).replace('.', ',')} hải lý</b>. ${esc(LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1])} đi mất <b>${hms(ms)}</b>, về mất <b>${hms(ms)}</b>.</p><p class="muted small">Xa hơn thì lâu hơn. Tiến hóa thuyền để đi nhanh hơn. Chiến lợi phẩm về tới bến mới nhận.</p></div>`;
+    const dist = Math.max(1, cellDist(to, base));
+    return `<div class="card"><small>Hải trình</small><p>Cách ${base.x === homeCell(s).x && base.y === homeCell(s).y ? 'đảo bạn' : `cứ điểm ${esc(base.name)}`} <b>${dist} hải lý</b>. ${esc(LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1])} đi mất <b>${hms(ms)}</b>, về mất <b>${hms(ms)}</b>.</p><p class="muted small">Xa hơn thì lâu hơn. Tiến hóa thuyền để đi nhanh hơn. Chiến lợi phẩm về tới bến mới nhận.</p></div>`;
   }
 
   private sail(o: Outcome) {
@@ -221,6 +237,7 @@ export class UI {
     $('#zIn').addEventListener('click', () => this.zoom(1));
     $('#zOut').addEventListener('click', () => this.zoom(-1));
     $('#zMode').addEventListener('click', () => (this.tab === 'island' ? this.goSea() : this.goIsland()));
+    $('#zMap').addEventListener('click', () => (this.tab === 'sea' ? openMap(this) : this.goSea()));
     $('#voyage').addEventListener('click', () => this.onVoyageChip());
     addEventListener('resize', () => setTimeout(() => this.updatePads(), 120));
     $('#btnSkip').addEventListener('click', () => (this.game.scene.getScene('battle') as BattleScene).skip());
@@ -785,7 +802,7 @@ export class UI {
         <p class="muted">Cấp ${w.level + bonus}${bonus ? ` (mạnh lên sau ${st!.wins} lần bị dọn)` : ''}</p>
         <div class="enemies">${w.enemies.map(([k, lv]) => `<div class="enemy"><img src="${portraitUrl(k)}" alt=""><span>${MONSTERS[k].name}</span><small>cấp ${lv + bonus} · ${SKILLS[MONSTERS[k].skill].name}</small></div>`).join('')}</div>
         <div class="card"><small>Phần thưởng</small><div class="costs">${costHtml(w.loot, { ...s.res, ...Object.fromEntries(RES_KEYS.map((k) => [k, 1e9])) })}${w.chest !== undefined ? ` <span class="cost" style="color:${CHESTS[w.chest].color}">+ có thể rơi ${CHESTS[w.chest].name}</span>` : ''}</div></div>
-        ${this.sailLine({ x: w.sx, y: w.sy })}
+        ${this.sailLine(wildCell(this.store.s, w.id))}
         ${this.sailButton(wait <= 0, `Quái kéo về sau ${secs(wait / s.speed)}`, 'Lên thuyền ra trận')}`;
     };
     const bind = (body: HTMLElement) => body.querySelector('#btnSail')?.addEventListener('click', () => this.sail(this.store.do({ t: 'sail', kind: 'wild', id: w.id })));
@@ -807,7 +824,7 @@ export class UI {
       .slice(0, 6)
       .map(([k, v]) => `<span class="cost"><img src="${iconUrl(k)}" alt="">~${Math.floor((v ?? 0) * 0.15)}</span>`)
       .join(' ');
-    const to = isMe ? { x: 0, y: 0 } : this.sea.cellOf(p.id);
+    const to = isMe ? homeCell(s) : this.sea.cellOf(p.id, p);
     const html = `
       <div class="lv-head"><img class="lv-img" src="${canvasUrl(`isl-${p.id}-${p.land}-${p.tiers.leu}`, () => drawSeaIsland(p.id, p.land, p.bot ? 'bot' : isMe ? 'me' : 'player', p.tiers.leu ?? 1), 2)}" alt="">
         <div><h3>${esc(p.islandName)}</h3><p class="owner"><img src="${avatarUrl(pubAvatar(p), 2, true)}" alt="">${esc(p.name)} · ${esc(p.title)}${p.bot ? ' · đảo máy' : online ? ' · đang online' : ''}</p>

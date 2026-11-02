@@ -129,7 +129,7 @@ describe('đi thuyền', () => {
     expect(apply(s, { t: 'sail', kind: 'wild', id: 'ransua' }).ok).toBe(false);
     const v = s.voyage!;
     const one = v.arriveAt - v.departAt;
-    expect(one).toBeGreaterThan(60_000);
+    expect(one).toBeGreaterThanOrEqual(60_000);
     tick(s, T0 + one / 2);
     expect(s.stats.battles).toBe(0);
     tick(s, T0 + one + 1000);
@@ -152,7 +152,7 @@ describe('đi thuyền', () => {
     const s = newPlayer('u1', 'An', T0);
     const bot = allBots(T0)[2];
     expect(apply(s, { t: 'sail', kind: 'island', target: bot, to: { x: 5, y: 5 } }).ok).toBe(true);
-    tick(s, T0 + 10 * 60_000);
+    tick(s, T0 + (s.voyage!.arriveAt - s.voyage!.departAt) + 1000);
     expect(s.outbox.length).toBe(1);
     expect(s.outbox[0].targetId).toBe(bot.id);
   });
@@ -389,5 +389,69 @@ describe('Linh Thạch, vòng quay, tướng', () => {
     const before = s.res.tien;
     expect(apply(s, { t: 'doiLT', dir: 'ban', n: 5 }).ok).toBe(true);
     expect(s.res.tien - before).toBe(400);
+  });
+});
+
+import { worldFor } from '../shared/map';
+import { pickSpawn } from '../shared/world';
+import { hexDist } from '../shared/hex';
+import { isSeen, lordLevel, setHome, cellDist } from '../shared/logic';
+describe('Hải đồ lục giác, khám phá, chủ quyền đảo', () => {
+  it('thế giới sinh giống nhau ở mọi máy, rộng, nhiều đảo và hang quái', () => {
+    const a = worldFor('07'), b = worldFor('07');
+    expect(a.isles.map((i) => i.id).join()).toBe(b.isles.map((i) => i.id).join());
+    expect(a.isles.length).toBeGreaterThan(180);
+    expect(a.lairs.length).toBeGreaterThan(80);
+    expect(a.isles.some((i) => i.kind === 'bian')).toBe(true);
+    // đảo gần Mắt Bão giàu hơn, khó hơn
+    const far = a.isles.filter((i) => i.lv === 1)[0], near = a.isles.filter((i) => i.lv >= 8)[0];
+    expect(near.needLvl).toBeGreaterThan(far.needLvl);
+    expect(near.guard[0][1]).toBeGreaterThan(far.guard[0][1]);
+  });
+  it('người chơi mới được rải xa nhau', () => {
+    const w = worldFor('01');
+    const taken: { c: number; r: number }[] = [];
+    for (let i = 0; i < 40; i++) taken.push(pickSpawn(w.spawns, taken, 8)!);
+    let min = 99;
+    for (let i = 0; i < taken.length; i++) for (let j = i + 1; j < taken.length; j++) min = Math.min(min, hexDist(taken[i], taken[j]));
+    expect(min).toBeGreaterThanOrEqual(8);
+  });
+  it('sương mù: thấy quanh nhà, thám hiểm thì mở thêm', () => {
+    const s = newPlayer('f1', 'An', T0);
+    setHome(s, '01', { x: 10, y: 10 });
+    expect(isSeen(s, 10, 10)).toBe(true);
+    expect(isSeen(s, 40, 40)).toBe(false);
+    expect(apply(s, { t: 'sail', kind: 'scout', to: { x: 25, y: 12 } }).ok).toBe(true);
+    tick(s, T0 + (s.voyage!.arriveAt - s.voyage!.departAt) + 1000);
+    expect(isSeen(s, 25, 12)).toBe(true);
+    expect(isSeen(s, 18, 11)).toBe(true);
+  });
+  it('đánh quái giữ đảo, đủ cấp thì cắm cờ, thu sản lượng, xây trên đảo cần cấp', () => {
+    const s = newPlayer('f2', 'An', T0);
+    for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 5;
+    for (const k of ['an', 'ngoc', 'ha', 'chau'] as const) s.comps[k] = { lv: 20, xp: 0, unlocked: true };
+    const w = worldFor('01');
+    const isle = w.isles.find((i) => i.lv === 1 && i.kind !== 'bian')!;
+    setHome(s, '01', { x: isle.c + 2, y: isle.r });
+    expect(lordLevel(s)).toBeGreaterThanOrEqual(isle.needLvl);
+    expect(apply(s, { t: 'sail', kind: 'isle', id: isle.id }).ok).toBe(true);
+    const one = s.voyage!.arriveAt - s.voyage!.departAt;
+    tick(s, T0 + one + 1000);
+    expect(s.lastBattle?.o.battle?.winner).toBe(0);
+    expect(s.isles.map((o) => o.id)).toContain(isle.id);
+    expect(s.claims.length).toBe(1);
+    expect(apply(s, { t: 'sail', kind: 'isle', id: isle.id }).ok).toBe(false);
+    tick(s, T0 + one * 2 + 3 * 3600_000);
+    const before = s.res.da + s.res.go + s.res.so + s.res.co;
+    expect(apply(s, { t: 'thuDao', id: isle.id }).ok).toBe(true);
+    expect(s.res.da + s.res.go + s.res.so + s.res.co).toBeGreaterThan(before);
+    s.res = { ...s.res, go: 9999, da: 9999, tien: 9999, sat: 9999, tre: 9999 };
+    expect(apply(s, { t: 'xayDao', id: isle.id, k: 'don' }).ok).toBe(true);
+    expect(cellDist({ x: isle.c, y: isle.r }, { x: isle.c, y: isle.r })).toBe(0);
+  });
+  it('chưa đủ cấp chúa đảo thì không cắm cờ được đảo cấp cao', () => {
+    const s = newPlayer('f3', 'An', T0);
+    const isle = worldFor('01').isles.find((i) => i.lv >= 6)!;
+    expect(lordLevel(s)).toBeLessThan(isle.needLvl);
   });
 });

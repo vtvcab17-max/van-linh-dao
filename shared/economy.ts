@@ -188,26 +188,37 @@ export const MERCHANTS: Merchant[] = [
 
 export interface Route {
   m: Merchant;
+  /** tuyến thứ mấy của thương hội này */
+  k?: number;
   pts: { x: number; y: number }[];
   /** thuế mỗi giờ cho đảo nằm sát tuyến (có Trạm thuế cấp 1) */
   value: number;
 }
 
-/** Tuyến buôn của một khung 6 giờ: mỗi thương hội NPC chọn 3–5 điểm ghé khác nhau. */
+/** Tuyến buôn của một khung 6 giờ: mỗi thương hội NPC chạy 3 tuyến, mỗi tuyến ghé 3–5 điểm khác nhau. */
+export const ROUTES_PER_MERCHANT = 3;
 export function routesAt(period: number): Route[] {
-  return MERCHANTS.map((m, i) => {
-    const r = mulberry32(hashStr(`route:${m.id}:${period}`));
-    const n = 3 + Math.floor(r() * 3);
-    const pts: { x: number; y: number }[] = [];
-    // vào từ một mép hải đồ, đi ngang qua giữa, ra mép khác
-    const side = (i + period) % 4;
-    const edge = (sd: number) =>
-      sd === 0 ? { x: 1, y: 2 + Math.floor(r() * (SEA_ROWS - 4)) } : sd === 1 ? { x: SEA_COLS - 2, y: 2 + Math.floor(r() * (SEA_ROWS - 4)) } : sd === 2 ? { x: 2 + Math.floor(r() * (SEA_COLS - 4)), y: 1 } : { x: 2 + Math.floor(r() * (SEA_COLS - 4)), y: SEA_ROWS - 2 };
-    pts.push(edge(side));
-    for (let k = 0; k < n - 2; k++) pts.push({ x: 4 + Math.floor(r() * (SEA_COLS - 8)), y: 3 + Math.floor(r() * (SEA_ROWS - 6)) });
-    pts.push(edge((side + 1 + Math.floor(r() * 2)) % 4));
-    return { m, pts, value: 18 + Math.floor(r() * 22) };
+  const out: Route[] = [];
+  MERCHANTS.forEach((m, i) => {
+    for (let k = 0; k < ROUTES_PER_MERCHANT; k++) {
+      const r = mulberry32(hashStr(`route:${m.id}:${k}:${period}`));
+      const n = 3 + Math.floor(r() * 3);
+      const pts: { x: number; y: number }[] = [];
+      // vào từ một mép hải đồ, đi ngang qua giữa, ra mép khác (tránh vùng bão ở tâm)
+      const side = (i + k + period) % 4;
+      const edge = (sd: number) =>
+        sd === 0 ? { x: 1, y: 2 + Math.floor(r() * (SEA_ROWS - 4)) } : sd === 1 ? { x: SEA_COLS - 2, y: 2 + Math.floor(r() * (SEA_ROWS - 4)) } : sd === 2 ? { x: 2 + Math.floor(r() * (SEA_COLS - 4)), y: 1 } : { x: 2 + Math.floor(r() * (SEA_COLS - 4)), y: SEA_ROWS - 2 };
+      pts.push(edge(side));
+      for (let q = 0; q < n - 2; q++) {
+        let p = { x: 4 + Math.floor(r() * (SEA_COLS - 8)), y: 3 + Math.floor(r() * (SEA_ROWS - 6)) };
+        if (Math.abs(p.x - SEA_COLS / 2) < 10 && Math.abs(p.y - SEA_ROWS / 2) < 8) p = { x: p.x < SEA_COLS / 2 ? p.x - 12 : p.x + 12, y: p.y };
+        pts.push(p);
+      }
+      pts.push(edge((side + 1 + Math.floor(r() * 2)) % 4));
+      out.push({ m, pts, value: 18 + Math.floor(r() * 22), k });
+    }
   });
+  return out;
 }
 
 function distSeg(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) {
