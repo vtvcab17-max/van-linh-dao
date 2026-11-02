@@ -10,3 +10,5 @@ build
 .apk-tools
 release.keystore
 server/.dev.vars
+.dev.vars
+.wrangler-dry

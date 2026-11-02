@@ -1,0 +1,43 @@
+# Vạn Linh Đảo — bản chính thức (web, đăng nhập Google) của Beta Holding.
+# Cloudflare tự build khi đẩy code lên nhánh main (Workers Builds):
+#   Build command:  npm run build
+#   Deploy command: npx wrangler deploy
+#   Root directory: /
+name = "van-linh-dao"
+main = "server/src/index.ts"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+# giữ các biến đặt trên trang Cloudflare (ví dụ GOOGLE_CLIENT_ID) khi đưa bản mới lên
+keep_vars = true
+
+# Bản web của game (Vite build ra thư mục dist) phục vụ cùng địa chỉ
+[assets]
+directory = "./dist"
+
+[vars]
+# "1" = bật nút "Đăng nhập thử" khi chạy local. Bản chính thức để "0".
+DEV_LOGIN = "0"
+# "1" = cho phép tăng tốc thời gian để test. Bản chính thức để "0".
+ALLOW_SPEED = "0"
+# GOOGLE_CLIENT_ID: đặt trên trang Cloudflare → Worker van-linh-dao → Settings → Variables and Secrets (xem README).
+# SESSION_SECRET: không bắt buộc; không đặt thì server tự tạo và giữ một khoá ngẫu nhiên.
+# ADMIN_TOKEN (Secret): mật khẩu xem thống kê, góp ý.
+
+[[durable_objects.bindings]]
+name = "HAI_KHU"
+class_name = "HaiKhu"
+
+[[durable_objects.bindings]]
+name = "DIRECTORY"
+class_name = "Directory"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["HaiKhu"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Directory"]
+
+[observability]
+enabled = true

@@ -17,10 +17,18 @@ function directory(env: Env) {
   return ns.get(ns.idFromName('main'));
 }
 
+let autoSecret = '';
+/** SESSION_SECRET đặt trên Cloudflare nếu có; không thì dùng khoá ngẫu nhiên server tự tạo và giữ. */
+async function sessionSecret(env: Env): Promise<string> {
+  if (env.SESSION_SECRET && env.SESSION_SECRET.length >= 16) return env.SESSION_SECRET;
+  if (!autoSecret) autoSecret = await directory(env).secret();
+  return autoSecret;
+}
+
 async function issue(env: Env, id: string, name: string) {
   const { khu } = await directory(env).assign(id, name);
   const exp = Date.now() + SESSION_DAYS * 86_400_000;
-  const session = await signSession({ id, name, khu, exp }, env.SESSION_SECRET ?? '');
+  const session = await signSession({ id, name, khu, exp }, await sessionSecret(env));
   return json({ session, id, name, khu, exp });
 }
 
@@ -54,7 +62,7 @@ export default {
     if (m) {
       const stub = env.HAI_KHU.get(env.HAI_KHU.idFromName(m[1]));
       if (m[2] === 'state') return stub.fetch(req);
-      const s = await verifySession(url.searchParams.get('session') ?? '', env.SESSION_SECRET ?? '');
+      const s = await verifySession(url.searchParams.get('session') ?? '', await sessionSecret(env));
       if (!s) return json({ error: 'Phiên đăng nhập hết hạn, hãy đăng nhập lại' }, 401);
       if (s.khu !== m[1]) return json({ error: 'Sai Hải Khu' }, 403);
       const headers = new Headers(req.headers);

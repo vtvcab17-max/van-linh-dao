@@ -27,6 +27,17 @@ export class Directory extends DurableObject {
     return { khu, isNew: true };
   }
 
+  /** Khoá ký phiên đăng nhập: tạo ngẫu nhiên một lần rồi giữ mãi (khi chưa đặt SESSION_SECRET). */
+  async secret(): Promise<string> {
+    let k = await this.ctx.storage.get<string>('sessionSecret');
+    if (!k) {
+      const b = crypto.getRandomValues(new Uint8Array(48));
+      k = btoa(String.fromCharCode(...b));
+      await this.ctx.storage.put('sessionSecret', k);
+    }
+    return k;
+  }
+
   async stats(): Promise<{ total: number; khu: { khu: string; n: number }[] }> {
     const khu = this.sql.exec<{ khu: string; n: number }>('SELECT khu, COUNT(*) AS n FROM members GROUP BY khu ORDER BY khu').toArray();
     return { total: khu.reduce((t, k) => t + k.n, 0), khu };

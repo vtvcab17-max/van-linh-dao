@@ -27,40 +27,39 @@ Có hai bản dùng chung một bộ code:
 | `shared/` | Luật chơi dùng chung cho client và server: dữ liệu, nhân vật (`avatar.ts`), hình đảo, trận đánh, đột kích, hải đồ (`map.ts`) |
 | `client/` | Game (Phaser 3 + TypeScript). Đồ họa pixel vẽ bằng code: `art/buildings.ts` (kiến trúc, thuyền), `art/avatar.ts` (nhân vật), `art/islands.ts` (đảo) |
 | `client/src/login.ts` | Đăng nhập Google cho bản chính thức |
-| `server/` | Cloudflare Worker + Durable Object: `Directory` (danh bạ, chia Hải Khu) và `HaiKhu` (giữ đảo, chạy luật chơi) |
+| `server/` | Cloudflare Worker + Durable Object: `Directory` (danh bạ, chia Hải Khu) và `HaiKhu` (giữ đảo, chạy luật chơi). Cấu hình ở `wrangler.toml` thư mục gốc |
 | `tests/` | Test logic và đăng nhập (vitest) |
 | `tools/` | Bot chơi thử, mô phỏng cân bằng, test server, bảng xem đồ họa (`tools/preview/`) |
 
 ## Bản chính thức: đưa lên web với đăng nhập Gmail
 
-### 1. Tạo mã đăng nhập Google (làm một lần)
+### 1. Nối repo với Cloudflare (đã làm)
+
+Cloudflare → Workers & Pages → Worker `van-linh-dao` → Settings → Build, nối với repo GitHub này:
+
+| Mục | Giá trị |
+| --- | --- |
+| Build command | `npm run build` |
+| Deploy command | `npx wrangler deploy` |
+| Root directory | `/` |
+
+Mỗi lần đẩy code lên nhánh `main`, Cloudflare tự build bản web chính thức và đưa server lên. Cấu hình server nằm ở `wrangler.toml` (thư mục gốc). Không cần khoá Cloudflare trong GitHub.
+
+### 2. Tạo mã đăng nhập Google (làm một lần)
 
 1. Vào [Google Cloud Console](https://console.cloud.google.com/), tạo dự án (ví dụ "Van Linh Dao").
 2. **APIs & Services → OAuth consent screen**: chọn External, tên ứng dụng "Vạn Linh Đảo", email hỗ trợ của Beta Holding. Không cần thêm quyền (scope) nào. Bấm Publish app.
 3. **APIs & Services → Credentials → Create credentials → OAuth client ID**, loại **Web application**.
-4. Ở **Authorized JavaScript origins** thêm địa chỉ game, ví dụ:
-   - `https://van-linh-dao.<tài-khoản>.workers.dev`
-   - tên miền riêng nếu có, ví dụ `https://vanlinhdao.vn`
-   - `http://localhost:8787` để thử trên máy
-5. Chép **Client ID** (dạng `xxxx.apps.googleusercontent.com`) vào `server/wrangler.toml` ở dòng `GOOGLE_CLIENT_ID`, hoặc đặt biến `GOOGLE_CLIENT_ID` trong GitHub → Settings → Variables.
+4. Ở **Authorized JavaScript origins** thêm địa chỉ game, ví dụ `https://van-linh-dao.<tên-miền-workers>.workers.dev` (và tên miền riêng nếu có, `http://localhost:8787` để thử trên máy).
+5. Chép **Client ID** (dạng `xxxx.apps.googleusercontent.com`).
+6. Cloudflare → Worker `van-linh-dao` → **Settings → Variables and Secrets → Add**: loại Text, tên `GOOGLE_CLIENT_ID`, dán Client ID → Deploy. (Hoặc ghi thẳng vào `[vars]` trong `wrangler.toml`.)
 
 Client ID không phải bí mật. Game chỉ nhận mã tài khoản Google và tên hiển thị; không đọc Gmail, không lưu email.
 
-### 2. Đặt bí mật cho server (làm một lần)
+### 3. Bí mật (tuỳ chọn)
 
-```bash
-cd server
-npx wrangler login
-npx wrangler secret put SESSION_SECRET   # dán một chuỗi ngẫu nhiên dài (ví dụ: openssl rand -base64 48)
-npx wrangler secret put ADMIN_TOKEN      # mật khẩu xem thống kê và góp ý
-```
-
-### 3. Đưa lên
-
-- Cách 1, tự động: đẩy code lên nhánh `main` trên GitHub. Thêm secret `CLOUDFLARE_API_TOKEN` (quyền "Edit Cloudflare Workers") và `CLOUDFLARE_ACCOUNT_ID`. Workflow **Deploy Cloudflare** chạy test, build bản web chính thức và đưa lên.
-- Cách 2, từ máy: `npm install && (cd server && npm install) && npm run server:deploy`.
-
-Game chạy ở `https://van-linh-dao.<tài-khoản>.workers.dev`.
+- `SESSION_SECRET`: không cần đặt; server tự tạo một khoá ngẫu nhiên lần đầu và giữ mãi. Muốn tự đặt thì thêm loại **Secret** cùng chỗ với bước 2.6.
+- `ADMIN_TOKEN` (Secret): mật khẩu xem thống kê và góp ý.
 
 ### 4. Quản lý
 
@@ -76,9 +75,8 @@ Máy người chơi chỉ gửi **hành động** (nhặt, cho ăn, tiến hóa,
 
 ```bash
 npm install && (cd server && npm install)
-npm run build:web
-printf 'SESSION_SECRET=chuoi-bi-mat-chi-de-thu-tren-may-123\nADMIN_TOKEN=thu\n' > server/.dev.vars
-cd server && npx wrangler dev --port 8787 --var DEV_LOGIN:1
+npm run build
+npx wrangler dev --port 8787 --var DEV_LOGIN:1
 # mở http://127.0.0.1:8787 → có ô "Đăng nhập thử" (không cần Google)
 npx tsx tools/server-test.mts http://127.0.0.1:8787   # 15 mục kiểm tra server
 ```
@@ -89,6 +87,7 @@ npx tsx tools/server-test.mts http://127.0.0.1:8787   # 15 mục kiểm tra serv
 
 ```bash
 npm run dev               # http://127.0.0.1:5173 (chơi trên máy, có đảo máy)
+npm run build:test        # bản web thử nghiệm (mở thẳng file dist/index.html)
 npm run build:artifact    # trang chơi thử trên Claude
 bash tools/build-apk.sh   # file APK (chơi trên máy), chỉ cần Java 17+
 ```

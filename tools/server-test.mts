@@ -1,5 +1,5 @@
 // Kiểm thử server bản chính thức (chạy local bằng `wrangler dev` có bật DEV_LOGIN=1):
-//   cd server && npx wrangler dev --port 8787 --var DEV_LOGIN:1
+//   npm run build && npx wrangler dev --port 8787 --var DEV_LOGIN:1
 //   npx tsx tools/server-test.mts http://127.0.0.1:8787
 import { apply, digest, migrate, tick, type Action, type PlayerState } from '../shared/logic';
 
