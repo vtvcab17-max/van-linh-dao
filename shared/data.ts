@@ -7,8 +7,8 @@ export const GAME = {
   tagline: 'Vạn vật đều có hồn. Lắng nghe, rồi sống sót.',
 };
 
-export type ResKey = 'co' | 'la' | 'tre' | 'go' | 'cui' | 'da' | 'sat' | 'so' | 'ngoc' | 'tien' | 'lt';
-export const RES_KEYS: ResKey[] = ['co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc', 'tien', 'lt'];
+export type ResKey = 'co' | 'la' | 'tre' | 'go' | 'cui' | 'da' | 'sat' | 'so' | 'ngoc' | 'tien' | 'lt' | 'thoc' | 'gao' | 'rau' | 'thit' | 'trung' | 'ca' | 'thaoduoc' | 'to' | 'luong' | 'duoc' | 'vai';
+export const RES_KEYS: ResKey[] = ['co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc', 'tien', 'lt', 'thoc', 'gao', 'rau', 'thit', 'trung', 'ca', 'thaoduoc', 'to', 'luong', 'duoc', 'vai'];
 export const FEEDABLE: ResKey[] = ['co', 'la', 'tre', 'go', 'cui', 'da', 'sat'];
 export const RES: Record<ResKey, { name: string; capped: boolean }> = {
   co: { name: 'Cỏ tranh', capped: true },
@@ -22,6 +22,17 @@ export const RES: Record<ResKey, { name: string; capped: boolean }> = {
   ngoc: { name: 'Ngọc Trai', capped: false },
   tien: { name: 'Đồng vàng', capped: false },
   lt: { name: 'Linh Thạch', capped: false },
+  thoc: { name: 'Thóc', capped: true },
+  gao: { name: 'Gạo', capped: true },
+  rau: { name: 'Rau', capped: true },
+  thit: { name: 'Thịt', capped: true },
+  trung: { name: 'Trứng', capped: true },
+  ca: { name: 'Cá', capped: true },
+  thaoduoc: { name: 'Thảo dược', capped: true },
+  to: { name: 'Tơ tằm', capped: true },
+  luong: { name: 'Lương khô', capped: true },
+  duoc: { name: 'Thuốc men', capped: true },
+  vai: { name: 'Vải buồm', capped: true },
 };
 
 export type NodeKind = 'grass' | 'palm' | 'bamboo' | 'rock' | 'scrap' | 'drift';

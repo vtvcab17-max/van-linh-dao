@@ -38,6 +38,10 @@ import { LV_LABEL, ASCEND_REWARD, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, 
 import { teamFromBoss } from './battle';
 import { islandCell, worldFor } from './map';
 import { hexDist, hexLine, hexRange } from './hex';
+import {
+  CROPS, cropProgress, GEAR_WEAR, HULL_WEAR, OVERRIPE_MS, PENS, PROCS, RATION_PER_HOUR, SICK_PER_HOUR, STORE_H, TECH_MAX, TECHS, WEATHER, regionOf, techCost, techMs, wearMult, weatherAt, windFactor,
+  type CropKey, type TechKey,
+} from './eco';
 import { inWorld, isleById, lairById, WORLD_H, WORLD_W, type Isle } from './world';
 import { cleanDef } from './economy';
 import {
@@ -150,6 +154,14 @@ export interface PlayerState {
   manh: number;
   /** Vòng quay: số lần liền chưa ra đồ truyền thuyết (bảo hiểm), tổng lượt quay. */
   gacha: { pity: number; spins: number };
+  /** Nghiên cứu đã xong ở học viện. */
+  tech: Partial<Record<TechKey, number>>;
+  /** Đang nghiên cứu (xong lúc end, giờ trong game). */
+  research: { k: TechKey; to: number; end: number } | null;
+  /** Độ bền trang bị theo loại (0..100). */
+  ben: Record<GearKey, number>;
+  /** Độ bền thân thuyền (0..100). */
+  vo: number;
   /** Hải Khu đang ở (server ghi). */
   khu: string;
   /** Ô đảo nhà trên hải đồ lục giác (server chọn khi vào lần đầu). */
@@ -177,6 +189,10 @@ export interface Build {
 export interface Voyage {
   id: string;
   kind: 'wild' | 'island' | 'boss' | 'isle' | 'scout';
+  /** lương mang theo (khẩu phần), cần cho cả chuyến, thuốc men mang theo */
+  food?: number;
+  need?: number;
+  duoc?: number;
   /** đảo tự nhiên đang có chủ: sức giữ đảo lúc ra khơi */
   isleDef?: IsleDef;
   /** xuất phát từ đâu (đảo nhà hoặc cứ điểm chư hầu) */
@@ -260,7 +276,7 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     lastReal: now,
     gt: 0,
     speed: 1,
-    res: { co: 10, la: 0, tre: 6, go: 0, cui: 0, da: 6, sat: 0, so: 20, ngoc: 0, tien: 50, lt: 0 },
+    res: { co: 10, la: 0, tre: 6, go: 0, cui: 0, da: 6, sat: 0, so: 20, ngoc: 0, tien: 50, lt: 0, thoc: 0, gao: 0, rau: 0, thit: 0, trung: 0, ca: 0, thaoduoc: 0, to: 0, luong: 20, duoc: 3, vai: 0 },
     land,
     nodes: [],
     lv: {
@@ -301,6 +317,10 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     ltDay: { day: 0, n: 0 },
     luot: 0,
     khu: '01',
+    tech: {},
+    research: null,
+    ben: { giao: 100, khien: 100, thuoc: 100, bua: 100 },
+    vo: 100,
     home: null,
     seen: '',
     isles: [],
@@ -464,10 +484,11 @@ export function teamSpec(s: PlayerState, defending: boolean): TeamSpec {
     raoTier: defending ? s.lv.rao.tier : undefined,
     hero: s.name,
     gear: (() => {
-      const g = gearBonus(s.kho);
-      g.atk += 0.05 * Math.min(3, s.bag.vayrong ?? 0);
+      const g = gearBonusWorn(s.kho, s.ben);
+      g.atk += 0.05 * Math.min(3, s.bag.vayrong ?? 0) + 0.04 * (s.tech.binhPhap ?? 0);
       return g;
     })(),
+    mod: defending ? undefined : battleMod,
     fort: defending ? defSpecOf(s.dinh) : undefined,
     gen: s.chuTuong && s.tuong[s.chuTuong] ? { id: s.chuTuong, star: s.tuong[s.chuTuong]!, w: s.deo && (s.vuKhi[s.deo] ?? 0) > 0 ? s.deo : null } : undefined,
   };
@@ -551,6 +572,7 @@ export function tick(s: PlayerState, now: number): string[] {
   // nhà cửa, thành trì xây xong
   for (const d of s.dinh)
     if (d.doneAt !== undefined && s.gt + dtReal * s.speed >= d.doneAt) {
+      if (!d.lv) d.last = now;
       d.lv = d.to ?? d.lv + 1;
       d.to = undefined;
       d.doneAt = undefined;
@@ -579,6 +601,11 @@ export function tick(s: PlayerState, now: number): string[] {
     } else {
       s.nextChestAt = s.gt + CHEST_INTERVAL_MS;
     }
+  }
+  if (s.research && s.gt >= s.research.end) {
+    s.tech[s.research.k] = s.research.to;
+    notes.push(`Học Viện nghiên cứu xong ${TECHS[s.research.k].name} cấp ${s.research.to}.`);
+    s.research = null;
   }
   notes.push(...buildTick(s));
   notes.push(...voyageTick(s));
@@ -641,7 +668,7 @@ function buildTick(s: PlayerState): string[] {
 export function sailMs(s: PlayerState, to: { x: number; y: number }, mul = 1): number {
   const from = nearestBase(s, to);
   const dist = Math.max(1, cellDist(from, to));
-  return Math.round((dist * EFFECTS.sailSecPerCell[tierIdx(s, 'thuyen')] * 1000 * mul) / moodMult(s.lv.thuyen));
+  return Math.round((dist * EFFECTS.sailSecPerCell[tierIdx(s, 'thuyen')] * 1000 * mul * sailWind(s, from, to)) / moodMult(s.lv.thuyen));
 }
 
 /** Điều kiện ra khơi đánh Thủy Tinh; trả về lý do nếu chưa được. */
@@ -713,9 +740,15 @@ function voyageTick(s: PlayerState): string[] {
   if (!v) return notes;
   if (v.phase === 'di' && s.gt >= v.arriveAt) {
     let o: Outcome;
+    // thời tiết nơi đánh, đói, bệnh trên đường: áp vào đội tấn công
+    const cond = v.kind === 'scout' ? null : voyageCondition(s, v);
+    battleMod = cond?.mod;
+    if (cond) notes.push(...cond.notes);
+    try {
     if (v.kind === 'boss') {
       const carry = cleanGear(v.carry);
       o = fightBoss(s, carry);
+      wearGear(s, carry);
       s.lastBattle = { title: 'Đại chiến Thủy Tinh', o, seen: false };
       if (!o.boss?.wiped) {
         // trụ được hết trận: rút về, trang bị theo thuyền về nhà
@@ -756,6 +789,10 @@ function voyageTick(s: PlayerState): string[] {
       o = raid(s, v.target!, true, !!v.conquer);
       if (o.event) s.outbox.push(o.event);
     }
+    } finally {
+      battleMod = undefined;
+    }
+    if (v.kind !== 'boss' && v.kind !== 'scout') wearGear(s, s.kho);
     if (v.kind !== 'boss' && v.kind !== 'scout') {
       v.loot = o.gained ?? {};
       v.win = o.battle?.winner === 0;
@@ -766,6 +803,7 @@ function voyageTick(s: PlayerState): string[] {
     }
   }
   if (v.phase === 've' && s.gt >= v.returnAt) {
+    voyageReturn(s, v);
     if (v.carry) for (const k of GEAR_KEYS) s.kho[k] = Math.min(GEAR[k].max, s.kho[k] + (v.carry[k] ?? 0));
     const got = addRes(s, v.loot);
     const txt = Object.keys(got).length ? `Thuyền về bến, chở về ${fmtLoot(got)}.` : 'Thuyền về bến tay không.';
@@ -790,6 +828,12 @@ export type Action =
   | { t: 'thuDao'; id: string }
   | { t: 'xayDao'; id: string; k: IsleBuild }
   | { t: 'boDao'; id: string }
+  | { t: 'trong'; id: string; k: CropKey }
+  | { t: 'gat'; id: string }
+  | { t: 'thuNT'; id: string }
+  | { t: 'hoc'; k: TechKey }
+  | { t: 'suaDo' }
+  | { t: 'suaThuyen' }
   | { t: 'sail'; kind: 'island'; target: IslandPub; to: { x: number; y: number }; conquer?: boolean }
   | { t: 'xay'; k: BKey; x: number; y: number }
   | { t: 'nang'; id: string }
@@ -981,7 +1025,9 @@ export function apply(s: PlayerState, a: Action): Outcome {
         const form = bossOf(weekOf(s.lastReal));
         const one = sailMs(s, BOSS_CELL, BOSS_TRAVEL_MUL);
         const bf = nearestBase(s, BOSS_CELL);
+        if (s.vo <= 0) return fail('Thuyền hư hỏng nặng. Sửa ở Bến Thuyền trước khi ra khơi.');
         s.voyage = { from: { x: bf.x, y: bf.y }, id: nid(s, 'v'), kind: 'boss', targetId: 'thuytinh', targetName: `Mắt Bão · ${form.name}`, to: { ...BOSS_CELL }, departAt: s.gt, arriveAt: s.gt + one, returnAt: s.gt + one * 2, phase: 'di', loot: {}, carry: want };
+        provision(s, s.voyage, one);
         log(s, 'Thuyền vượt bão đi đánh Thủy Tinh.');
         return { ok: true, msg: `${LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1]} vượt bão ra Mắt Bão. Sống chết có số!` };
       }
@@ -1016,11 +1062,13 @@ export function apply(s: PlayerState, a: Action): Outcome {
         targetName = a.target.islandName;
         target = a.target;
       }
+      if (s.vo <= 0) return fail('Thuyền hư hỏng nặng. Sửa ở Bến Thuyền trước khi ra khơi.');
       const one = sailMs(s, to);
       const from = nearestBase(s, to);
       s.voyage = { id: nid(s, 'v'), kind: a.kind, targetId, targetName, target, to, from: { x: from.x, y: from.y }, departAt: s.gt, arriveAt: s.gt + one, returnAt: s.gt + one * 2, phase: 'di', loot: {}, conquer: a.kind === 'island' && !!a.conquer, isleDef };
       // đi tới đâu mở sương mù tới đó (dọc đường thấy được 1 ô hai bên)
       reveal(s, voyagePath(from, to), 1);
+      provision(s, s.voyage, one);
       log(s, `Thuyền rời bến đi ${targetName}.`);
       return { ok: true, msg: `${LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1]} rời bến đi ${targetName}.` };
     }
@@ -1221,6 +1269,78 @@ export function apply(s: PlayerState, a: Action): Outcome {
       s.isles.splice(i, 1);
       s.claims.push({ isle: a.id, win: false, at: s.lastReal });
       return { ok: true, msg: 'Đã nhổ cờ, bỏ đảo.' };
+    }
+    case 'trong': {
+      const d = s.dinh.find((x) => x.id === a.id);
+      if (!d || d.lv < 1 || d.doneAt !== undefined) return fail('Ruộng chưa xây xong.');
+      if (!cropsFor(d.k).includes(a.k)) return fail('Không trồng được cây này ở đây.');
+      if (d.crop) return fail('Đang có cây trồng.');
+      const c = CROPS[a.k];
+      if (!canPay(s, c.seed)) return fail('Không đủ tiền mua giống.');
+      pay(s, c.seed);
+      d.crop = { k: a.k, at: s.lastReal };
+      return { ok: true, msg: `Đã trồng ${c.name}.` };
+    }
+    case 'gat': {
+      const d = s.dinh.find((x) => x.id === a.id);
+      const st = d && cropState(s, d);
+      if (!d || !st) return fail('Chưa trồng gì.');
+      if (!st.ripe) return fail(`Chưa chín (${Math.floor(st.p * 100)}%).`);
+      const got = addRes(s, { [st.out]: st.n });
+      d.crop = undefined;
+      return { ok: true, msg: `Thu hoạch ${st.n} ${RES[st.out].name}${st.over ? ' (để quá lâu, hỏng một nửa)' : st.storms ? ' (bão làm dập mất một phần)' : ''}.`, gained: got };
+    }
+    case 'thuNT': {
+      const d = s.dinh.find((x) => x.id === a.id);
+      if (!d || d.lv < 1) return fail('Công trình chưa xây xong.');
+      const pnd = pending(s, d);
+      if (!Object.values(pnd.give).some((v) => (v ?? 0) > 0)) return fail(Object.keys(pnd.take).length ? 'Thiếu nguyên liệu hoặc thức ăn.' : 'Chưa có gì để thu.');
+      for (const [k, v] of Object.entries(pnd.take)) s.res[k as ResKey] = Math.max(0, s.res[k as ResKey] - (v ?? 0));
+      const got = addRes(s, pnd.give);
+      d.last = s.lastReal;
+      return { ok: true, msg: `Thu ${BUILDINGS[d.k].names[Math.max(0, d.lv - 1)]}.`, gained: got };
+    }
+    case 'hoc': {
+      const T = TECHS[a.k];
+      const hv = bLevel(s.dinh, 'hocvien');
+      if (!T) return fail('Không có môn này.');
+      if (!hv) return fail('Cần xây Học Viện.');
+      if (s.research) return fail(`Đang nghiên cứu ${TECHS[s.research.k].name}.`);
+      const to = (s.tech[a.k] ?? 0) + 1;
+      if (to > TECH_MAX) return fail('Đã nghiên cứu tới cấp cao nhất.');
+      if (to > hv) return fail(`Cần Học Viện cấp ${to}.`);
+      const cost = techCost(to);
+      if (!canPay(s, cost)) return fail('Chưa đủ vật liệu.');
+      pay(s, cost);
+      s.research = { k: a.k, to, end: s.gt + techMs(to) };
+      return { ok: true, msg: `Bắt đầu nghiên cứu ${T.name} cấp ${to}.` };
+    }
+    case 'suaDo': {
+      if (!bLevel(s.dinh, 'xuongren')) return fail('Cần Lò Rèn để sửa trang bị.');
+      const k = 1 - 0.2 * (s.tech.renSat ?? 0);
+      const cost: Partial<Record<ResKey, number>> = {};
+      for (const g of GEAR_KEYS) {
+        const miss = (100 - s.ben[g]) * s.kho[g];
+        if (miss <= 0) continue;
+        cost.sat = (cost.sat ?? 0) + Math.ceil(miss * 0.35 * k);
+        cost.go = (cost.go ?? 0) + Math.ceil(miss * 0.25 * k);
+      }
+      if (!Object.keys(cost).length) return fail('Trang bị còn nguyên.');
+      if (!canPay(s, cost)) return fail('Chưa đủ sắt, gỗ để sửa.');
+      pay(s, cost);
+      for (const g of GEAR_KEYS) s.ben[g] = 100;
+      return { ok: true, msg: 'Lò rèn đã sửa xong toàn bộ trang bị.' };
+    }
+    case 'suaThuyen': {
+      if (!bLevel(s.dinh, 'benthuyen')) return fail('Cần Bến Thuyền để sửa thuyền.');
+      if (s.voyage) return fail('Thuyền đang ngoài khơi.');
+      const miss = 100 - s.vo;
+      if (miss <= 0) return fail('Thân thuyền còn nguyên.');
+      const cost = { go: Math.ceil(miss * 1.2 * s.lv.thuyen.tier), vai: Math.ceil(miss / 12) };
+      if (!canPay(s, cost)) return fail('Chưa đủ gỗ, vải buồm để sửa.');
+      pay(s, cost);
+      s.vo = 100;
+      return { ok: true, msg: 'Thuyền đã được sửa, vá buồm xong.' };
     }
     case 'speed': {
       s.speed = Math.max(1, Math.min(20, a.speed));
@@ -1502,6 +1622,9 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   if (!Array.isArray(merged.isles)) merged.isles = [];
   if (!Array.isArray(merged.claims)) merged.claims = [];
   if (typeof merged.seen !== 'string') merged.seen = '';
+  merged.ben = { ...fresh.ben, ...s.ben };
+  merged.tech = { ...s.tech };
+  if (typeof merged.vo !== 'number') merged.vo = 100;
   merged.ltDay = { ...fresh.ltDay, ...s.ltDay };
   return merged;
 }
@@ -1807,4 +1930,179 @@ export function fightIsle(s: PlayerState, isle: Isle, def?: IsleDef): Outcome {
   } else msg += ` Chưa cắm cờ được: ${err}`;
   if (lt) msg += ` Nhặt ${lt} Linh Thạch.`;
   return { ok: true, msg, battle, gained: gain, levelUps: ups };
+}
+
+
+// ---------- hệ sinh thái: thời tiết vào trận, lương, bệnh, độ bền, nông trại, học viện ----------
+/** Điều kiện của trận đang đánh (do chuyến thuyền đặt, chỉ áp vào bên tấn công). */
+let battleMod: TeamSpec['mod'] | undefined;
+
+/** Thưởng trang bị đã tính hao mòn. */
+export function gearBonusWorn(kho: GearSet, ben: Record<GearKey, number>) {
+  const worn = { ...kho };
+  for (const k of GEAR_KEYS) worn[k] = kho[k] * wearMult(ben?.[k] ?? 100);
+  return gearBonus(worn);
+}
+/** Trang bị mòn sau một trận. */
+function wearGear(s: PlayerState, keys: Partial<GearSet>) {
+  const k0 = 1 - 0.25 * (s.tech.renSat ?? 0);
+  for (const k of GEAR_KEYS) if ((keys[k] ?? 0) > 0) s.ben[k] = Math.max(0, Math.round((s.ben[k] - GEAR_WEAR * k0) * 10) / 10);
+}
+/** Giờ thật ứng với một mốc giờ trong game. */
+const realAt = (s: PlayerState, gt: number) => s.lastReal - (s.gt - gt) / Math.max(1, s.speed);
+/** Số người ra trận (để tính lương). */
+const teamSize = (s: PlayerState) => COMP_KEYS.filter((k) => s.comps[k].unlocked).length + (s.chuTuong ? 1 : 0);
+
+/** Lương thực cần cho cả chuyến đi về. */
+export function rationNeed(s: PlayerState, oneWayMs: number) {
+  const h = (oneWayMs * 2) / 3600_000;
+  return Math.ceil(h * teamSize(s) * RATION_PER_HOUR * (1 - 0.15 * (s.tech.quanLuong ?? 0)));
+}
+/** Xuất kho lương thực: lương khô trước, thiếu thì gạo (2 gạo = 1 khẩu phần), rồi cá, thịt. */
+function takeRations(s: PlayerState, need: number): number {
+  let got = 0;
+  const take = (k: ResKey, per: number) => {
+    if (got >= need) return;
+    const n = Math.min(s.res[k], Math.ceil((need - got) * per));
+    s.res[k] -= n;
+    got += Math.floor(n / per);
+  };
+  take('luong', 1);
+  take('gao', 2);
+  take('ca', 1);
+  take('thit', 1);
+  return got;
+}
+/** Thuốc mang theo: tối đa 2 liều mỗi người. */
+function takeMedicine(s: PlayerState): number {
+  const n = Math.min(s.res.duoc, teamSize(s) * 2);
+  s.res.duoc -= n;
+  return n;
+}
+
+/** Đi biển tới nơi: thời tiết, đói, bệnh tác động vào đội. Trả về điều kiện trận và lời kể. */
+function voyageCondition(s: PlayerState, v: Voyage): { mod: NonNullable<TeamSpec['mod']>; notes: string[] } {
+  const notes: string[] = [];
+  const tArr = realAt(s, v.arriveAt);
+  const wx = weatherAt(regionOf(v.to), tArr);
+  const W = WEATHER[wx.kind];
+  const mod = { atk: 1, hp: 1, front: W.front, back: W.back };
+  if (wx.kind !== 'may' && wx.kind !== 'nang') notes.push(`${W.icon} ${W.name} ở nơi đánh.`);
+  // đói: lương mang theo cho nửa đường đi
+  if (v.need) {
+    const fed = Math.min(1, (v.food ?? 0) / Math.max(1, v.need / 2));
+    if (fed < 1) {
+      mod.atk *= 0.7 + 0.3 * fed;
+      mod.hp *= 0.8 + 0.2 * fed;
+      notes.push(fed <= 0 ? 'Hết sạch lương: quân đói lả, đánh yếu hẳn.' : 'Thiếu lương: quân đói, đánh yếu đi.');
+    }
+  }
+  // bệnh trên biển
+  const hours = Math.max(0, (v.arriveAt - v.departAt) / 3600_000);
+  const p = SICK_PER_HOUR * W.sick * (1 - 0.2 * (s.tech.namDuoc ?? 0));
+  const r = rngOf(s);
+  let sick = 0;
+  for (let i = 0; i < Math.ceil(hours); i++) if (r() < p * Math.min(1, hours - i)) sick++;
+  if (sick) {
+    const per = 1 + (s.tech.namDuoc ?? 0);
+    const cured = Math.min(sick, (v.duoc ?? 0) * per);
+    v.duoc = Math.max(0, (v.duoc ?? 0) - Math.ceil(cured / per));
+    const left = sick - cured;
+    if (left) mod.hp *= Math.max(0.6, 1 - 0.08 * left);
+    notes.push(`${sick} người đổ bệnh trên biển${cured ? `, ${cured} được chữa bằng thuốc` : ''}${left ? `, ${left} còn ốm yếu` : ''}.`);
+  }
+  return { mod, notes };
+}
+
+/** Thuyền về bến: hao mòn thân thuyền theo thời tiết, trả lại lương và thuốc còn thừa. */
+function voyageReturn(s: PlayerState, v: Voyage) {
+  const wx = weatherAt(regionOf(v.to), realAt(s, v.arriveAt));
+  const k = (1 - 0.25 * (s.tech.dongTau ?? 0)) * (1 - 0.15 * bLevel(s.dinh, 'benthuyen'));
+  s.vo = Math.max(0, Math.round((s.vo - HULL_WEAR * WEATHER[wx.kind].wear * k) * 10) / 10);
+  const used = Math.ceil((v.need ?? 0) * 1);
+  const back = Math.max(0, (v.food ?? 0) - used);
+  if (back) s.res.luong += back;
+  if (v.duoc) s.res.duoc += v.duoc;
+}
+
+/** Thời gian đi biển có tính gió, la bàn, thân thuyền. */
+export function sailWind(s: PlayerState, from: { x: number; y: number }, to: { x: number; y: number }) {
+  const wx = weatherAt(regionOf(from), s.lastReal);
+  const lb = s.tech.laBan ?? 0;
+  return windFactor(from, to, wx, lb) * (1 - 0.08 * lb) * (s.vo < 30 ? 1.3 : 1);
+}
+
+// --- nông trại ---
+const PLOT_OF: Record<string, CropKey[]> = { ruong: ['lua'], vuon: ['rau', 'thaoduoc'], nuongdau: ['dau'] };
+export const cropsFor = (k: BKey) => PLOT_OF[k] ?? [];
+export function cropState(s: PlayerState, d: Dinh, now = s.lastReal) {
+  if (!d.crop) return null;
+  const c = CROPS[d.crop.k];
+  const { p, storms } = (() => {
+    const speedK = 1 + 0.15 * (s.tech.thuyLoi ?? 0);
+    return cropProgressCached(d.crop.k, d.crop.at, now, regionOf(homeCell(s)), speedK);
+  })();
+  const ripe = p >= 1;
+  const over = ripe && (now - d.crop.at) > c.ms * 1.6 + OVERRIPE_MS;
+  const yieldN = Math.round(c.per * Math.max(1, d.lv) * (1 + 0.2 * (s.tech.giongLua ?? 0)) * Math.max(0.4, Math.pow(0.85, storms)) * (over ? 0.5 : 1));
+  return { p: Math.min(1, p), ripe, over, storms, out: c.out, n: yieldN };
+}
+const cpCache = new Map<string, { p: number; storms: number }>();
+function cropProgressCached(k: CropKey, at: number, now: number, region: string, speedK: number) {
+  // làm tròn tới phút để khỏi tính lại liên tục
+  const key = `${k}:${at}:${Math.floor(now / 60_000)}:${region}:${speedK}`;
+  const hit = cpCache.get(key);
+  if (hit) return hit;
+  const v = cropProgress(k, at, Math.floor(now / 60_000) * 60_000, region, speedK);
+  if (cpCache.size > 400) cpCache.clear();
+  cpCache.set(key, v);
+  return v;
+}
+/** Sản phẩm đang chờ ở chuồng, ao, xưởng chế biến. */
+export function pending(s: PlayerState, d: Dinh, now = s.lastReal): { give: Partial<Record<ResKey, number>>; take: Partial<Record<ResKey, number>>; h: number } {
+  const h = Math.min(STORE_H, Math.max(0, now - (d.last ?? now)) / 3600_000);
+  const lv = Math.max(1, d.lv);
+  const give: Partial<Record<ResKey, number>> = {};
+  const take: Partial<Record<ResKey, number>> = {};
+  if (d.k === 'chuong' || d.k === 'aoca') {
+    const P = PENS[d.k];
+    const bonus = 1 + 0.2 * (s.tech.chanNuoi ?? 0);
+    let ratio = 1;
+    for (const [k, v] of Object.entries(P.feed)) {
+      const need = (v ?? 0) * lv * h;
+      if (need > 0) ratio = Math.min(ratio, s.res[k as ResKey] / need);
+    }
+    ratio = Math.max(0, Math.min(1, ratio));
+    for (const [k, v] of Object.entries(P.feed)) take[k as ResKey] = Math.ceil((v ?? 0) * lv * h * ratio);
+    for (const [k, v] of Object.entries(P.out)) give[k as ResKey] = Math.floor((v ?? 0) * lv * h * ratio * bonus);
+  } else if (d.k in PROCS) {
+    const P = PROCS[d.k as keyof typeof PROCS];
+    let batches = Math.floor(P.rate * lv * h);
+    for (const [k, v] of Object.entries(P.take)) batches = Math.min(batches, Math.floor(s.res[k as ResKey] / (v ?? 1)));
+    let one: ResKey | null = null;
+    if (P.takeOne) {
+      const avail = P.takeOne.keys.map((k) => ({ k, n: Math.floor(s.res[k] / P.takeOne!.n) })).sort((a, b) => b.n - a.n)[0];
+      one = avail.k;
+      batches = Math.min(batches, avail.n);
+    }
+    batches = Math.max(0, batches);
+    for (const [k, v] of Object.entries(P.take)) take[k as ResKey] = (v ?? 0) * batches;
+    if (one && P.takeOne) take[one] = (take[one] ?? 0) + P.takeOne.n * batches;
+    for (const [k, v] of Object.entries(P.give)) give[k as ResKey] = (v ?? 0) * batches;
+  }
+  return { give, take, h };
+}
+export const techLv = (s: PlayerState, k: TechKey) => s.tech[k] ?? 0;
+export { TECHS, TECH_MAX, techCost, techMs, CROPS, PENS, PROCS };
+
+/** Xuất lương và thuốc cho chuyến đi. */
+function provision(s: PlayerState, v: Voyage, oneWayMs: number) {
+  if (v.kind === 'scout') {
+    v.need = Math.ceil(rationNeed(s, oneWayMs) / Math.max(1, teamSize(s)));
+    v.food = takeRations(s, v.need);
+    return;
+  }
+  v.need = rationNeed(s, oneWayMs);
+  v.food = takeRations(s, v.need);
+  v.duoc = takeMedicine(s);
 }

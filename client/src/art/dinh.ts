@@ -265,6 +265,84 @@ export function drawDinh(k: BKey, lv: number): Canvas {
         for (const [x, y] of [[0, 4], [15, 3]]) p.px(x, y, 'l');
       }
       break;
+    case 'ruong': {
+      // ruộng nước: bờ đất, nước lấp lánh, mạ xanh theo hàng
+      p.rect(1, 13, 14, 9, '#8a5a32');
+      p.rect(2, 14, 12, 7, L === 1 ? '#5fa8c8' : '#4f9fbf');
+      for (let y = 15; y < 21; y += 2) for (let x = 3; x < 14; x += 2) { p.px(x, y, L >= 2 ? '#7cc45c' : '#a6d86e'); p.px(x, y - 1, '#4f9a45'); }
+      if (L >= 2) p.hline(2, 13, 17, '#8a5a32');
+      if (L === 3) { p.rect(12, 9, 3, 5, '#e8c56e'); p.px(13, 8, '#b98d3e'); }
+      p.hline(1, 14, 22, 'k');
+      break;
+    }
+    case 'vuon': {
+      p.rect(1, 14, 14, 8, '#7b4a2a');
+      for (let y = 15; y < 21; y += 3) { p.hline(2, 13, y, '#5c3620'); for (let x = 3; x < 14; x += 3) { p.px(x, y - 1, '#57a043'); p.px(x + 1, y - 1, '#86c95c'); p.px(x, y - 2, L >= 2 ? '#ef7c98' : '#86c95c'); } }
+      for (let x = 1; x <= 14; x += 2) p.vline(x, 12, 14, '#c98f55');
+      p.hline(1, 14, 12, '#9b6a3c');
+      if (L === 3) { p.ellipse(8, 9, 3, 2, '#57a043'); p.px(8, 8, '#f6d34d'); }
+      break;
+    }
+    case 'nuongdau':
+      for (const [x, y] of [[4, 14], [10, 13], [7, 18], [12, 19]]) { p.vline(x, y, y + 3, '#6a4326'); p.ellipse(x, y - 1, 3, 2, '#3f8a3a'); p.px(x - 1, y - 2, '#7cc45c'); if (L >= 2) p.px(x + 1, y, '#7a2e6a'); }
+      if (L === 3) { wall(p, 1, 5, 18, 21, '#ecd7b0'); roof(p, 0, 6, 15, 17, 'y', 'Y'); }
+      break;
+    case 'chuong':
+      wall(p, 2, 13, 15, 21, '#c99a62', '#a87a48');
+      roof(p, 1, 14, 10, 14, L >= 2 ? TILE_R : 'y', L >= 2 ? TILE_D : 'Y');
+      for (let x = 0; x <= 15; x += 2) p.vline(x, 19, 22, '#9b6a3c');
+      p.hline(0, 15, 20, '#c98f55');
+      p.rect(6, 21, 2, 1, '#fbf3dc'); p.px(6, 20, '#dc4a3e');
+      if (L >= 2) { p.rect(10, 21, 3, 1, '#ef9fae'); p.px(12, 20, '#ef9fae'); }
+      break;
+    case 'aoca':
+      p.ellipse(8, 17, 7, 4, '#9aa0a8');
+      p.ellipse(8, 17, 6, 3, L >= 2 ? '#3a90c2' : '#5fb6d6');
+      p.hline(5, 7, 16, '#a8e6f0'); p.px(10, 18, '#ec9640'); if (L >= 2) p.px(6, 18, '#f7f0e6');
+      if (L === 3) { p.ellipse(12, 15, 1, 1, '#57a043'); p.px(12, 14, '#ef7c98'); }
+      break;
+    case 'coixay':
+      wall(p, 3, 12, 15, 21, '#d6b26d', '#b98d3e');
+      roof(p, 2, 13, 9, 14, 'y', 'Y');
+      p.ellipse(8, 19, 2, 1, '#9aa0a8'); p.px(8, 18, '#4c4e58');
+      if (L === 3) { p.ellipse(14, 17, 2, 4, '#9b6a3c'); p.vline(14, 13, 21, '#6a4326'); p.hline(12, 15, 17, '#6a4326'); }
+      break;
+    case 'bep':
+      wall(p, 2, 13, 14, 21, '#c99a62', '#a87a48');
+      roof(p, 1, 14, 9, 13, L >= 2 ? TILE_R : 'y', L >= 2 ? TILE_D : 'Y');
+      p.rect(6, 17, 4, 4, '#2b201d'); p.rect(7, 19, 2, 2, '#ec9640');
+      p.vline(12, 4, 9, '#7b7e88');
+      for (const [x, y] of [[12, 2], [13, 1], [11, 0]]) p.px(x, y, '#dbe3ea');
+      break;
+    case 'nhathuoc':
+      wall(p, 2, 13, 14, 21, '#ecd7b0', '#cdb48a');
+      roof(p, 1, 14, 9, 13, L >= 2 ? TILE_R : 'y', L >= 2 ? TILE_D : 'Y');
+      p.rect(6, 16, 4, 6, 'K');
+      p.rect(3, 15, 2, 3, '#57a043'); p.rect(11, 15, 2, 3, '#57a043');
+      p.rect(6, 11, 4, 2, '#fbf3dc'); p.px(8, 11, '#dc4a3e'); p.px(7, 12, '#dc4a3e'); p.px(8, 12, '#dc4a3e'); p.px(9, 12, '#dc4a3e');
+      break;
+    case 'khungcui':
+      wall(p, 2, 13, 15, 21, '#c99a62');
+      roof(p, 1, 14, 10, 14, 'y', 'Y');
+      for (let x = 4; x <= 11; x++) p.vline(x, 16, 20, x % 2 ? '#f7f0e6' : '#ef7c98');
+      p.hline(3, 12, 16, '#6a4326'); p.hline(3, 12, 20, '#6a4326');
+      break;
+    case 'hocvien':
+      wall(p, 1, 14, 14, 21, '#ecd7b0', '#cdb48a');
+      for (const x of [1, 5, 10, 14]) p.vline(x, 14, 21, '#a8432f');
+      roof(p, 0, 15, 7, 13, L >= 2 ? '#3f8a96' : TILE_R, L >= 2 ? '#2c6470' : TILE_D, true);
+      p.rect(6, 16, 4, 6, 'K');
+      p.rect(5, 10, 6, 2, '#f6d34d'); p.hline(6, 9, 11, '#7a2e22');
+      if (L === 3) { p.px(8, 5, 'l'); p.px(8, 4, 'L'); }
+      break;
+    case 'benthuyen':
+      p.rect(0, 18, 16, 4, '#9b6a3c');
+      for (let x = 0; x < 16; x += 3) p.vline(x, 18, 21, '#6a4326');
+      for (const x of [1, 14]) p.vline(x, 10, 18, '#6a4326');
+      roof(p, 0, 15, 8, 11, 'y', 'Y');
+      p.line(3, 17, 12, 17, '#c98f55'); p.line(4, 16, 11, 16, '#c98f55'); p.px(12, 16, '#c98f55');
+      if (L >= 2) for (let x = 4; x <= 11; x += 2) p.vline(x, 13, 16, '#c98f55');
+      break;
   }
   return c;
 }

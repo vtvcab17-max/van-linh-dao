@@ -197,7 +197,7 @@ describe('Thủy Tinh, trang bị, phi thăng', () => {
     const s = newPlayer(id, 'Lan', WEEK0 + 1000);
     for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 5;
     for (const k of ['an', 'ngoc', 'ha', 'chau'] as const) s.comps[k] = { lv: 20, xp: 0, unlocked: true };
-    s.res = { co: 9999, la: 9999, tre: 9999, go: 9999, cui: 9999, da: 9999, sat: 9999, so: 9999, ngoc: 99, tien: 9999, lt: 0 };
+    s.res = { ...s.res, co: 9999, la: 9999, tre: 9999, go: 9999, cui: 9999, da: 9999, sat: 9999, so: 9999, ngoc: 99, tien: 9999, lt: 0 };
     return s;
   };
   it('chế tạo trang bị cần công trình đủ bậc và tài nguyên', () => {
@@ -272,7 +272,7 @@ describe('Kinh tế: nhà cửa, thuế, cửa hàng, thôn tính', () => {
     const s = newPlayer(id, 'Lan', T0);
     for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 4;
     for (const k of ['an', 'ngoc', 'ha', 'chau'] as const) s.comps[k] = { lv: 18, xp: 0, unlocked: true };
-    s.res = { co: 5000, la: 5000, tre: 5000, go: 5000, cui: 5000, da: 5000, sat: 5000, so: 5000, ngoc: 50, tien: 5000, lt: 0 };
+    s.res = { ...s.res, co: 5000, la: 5000, tre: 5000, go: 5000, cui: 5000, da: 5000, sat: 5000, so: 5000, ngoc: 50, tien: 5000, lt: 0 };
     return s;
   };
   const freeTile = (s: ReturnType<typeof rich>) => {
@@ -453,5 +453,88 @@ describe('Hải đồ lục giác, khám phá, chủ quyền đảo', () => {
     const s = newPlayer('f3', 'An', T0);
     const isle = worldFor('01').isles.find((i) => i.lv >= 6)!;
     expect(lordLevel(s)).toBeLessThan(isle.needLvl);
+  });
+});
+
+import { weatherAt, dayPhase, seasonOf, cropProgress, WX_MS } from '../shared/eco';
+import { cropState, pending } from '../shared/logic';
+describe('Hệ sinh thái thành bang', () => {
+  const farm = (id: string) => {
+    const s = newPlayer(id, 'Nông', T0);
+    for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 4;
+    s.res = { ...s.res, go: 9999, da: 9999, tre: 9999, co: 9999, la: 9999, sat: 9999, tien: 9999, thoc: 500, rau: 200, thaoduoc: 90, to: 40, gao: 100, ca: 20 };
+    return s;
+  };
+  const build = (s: ReturnType<typeof farm>, k: string, x: number, y: number) => {
+    s.dinh.push({ id: `t_${k}`, k: k as any, x, y, lv: 1, last: s.lastReal });
+    return s.dinh[s.dinh.length - 1];
+  };
+  it('thời tiết, ngày đêm, mùa: mọi máy ra giống nhau', () => {
+    expect(weatherAt('3,2', T0)).toEqual(weatherAt('3,2', T0 + 1000));
+    expect(dayPhase(T0).name).toBeTruthy();
+    expect(seasonOf(T0)).toBe(seasonOf(T0 + 3600_000));
+    const kinds = new Set<string>();
+    for (let i = 0; i < 200; i++) kinds.add(weatherAt('1,1', T0 + i * WX_MS).kind);
+    expect(kinds.size).toBeGreaterThanOrEqual(3);
+  });
+  it('trồng lúa, chờ chín, gặt ra thóc', () => {
+    const s = farm('e1');
+    const d = build(s, 'ruong', 1, 1);
+    expect(apply(s, { t: 'trong', id: d.id, k: 'rau' }).ok).toBe(false);
+    expect(apply(s, { t: 'trong', id: d.id, k: 'lua' }).ok).toBe(true);
+    expect(apply(s, { t: 'gat', id: d.id }).ok).toBe(false);
+    tick(s, T0 + 10 * 3600_000);
+    expect(cropState(s, d)!.ripe).toBe(true);
+    const before = s.res.thoc;
+    expect(apply(s, { t: 'gat', id: d.id }).ok).toBe(true);
+    expect(s.res.thoc).toBeGreaterThan(before);
+    expect(cropProgress('lua', T0, T0 + 3600_000, '0,0').p).toBeGreaterThan(0);
+  });
+  it('chuồng ăn thóc, rau ra trứng, thịt; cối xay ra gạo; bếp nấu lương; nhà thuốc ra thuốc', () => {
+    const s = farm('e2');
+    const ch = build(s, 'chuong', 1, 1), cx = build(s, 'coixay', 2, 1), bep = build(s, 'bep', 3, 1), nt = build(s, 'nhathuoc', 4, 1);
+    tick(s, T0 + 3 * 3600_000);
+    const th = s.res.thoc;
+    expect(apply(s, { t: 'thuNT', id: ch.id }).ok).toBe(true);
+    expect(s.res.trung).toBeGreaterThan(0);
+    expect(s.res.thoc).toBeLessThan(th);
+    expect(apply(s, { t: 'thuNT', id: cx.id }).ok).toBe(true);
+    expect(s.res.gao).toBeGreaterThan(100);
+    const l0 = s.res.luong;
+    expect(apply(s, { t: 'thuNT', id: bep.id }).ok).toBe(true);
+    expect(s.res.luong).toBeGreaterThan(l0);
+    expect(apply(s, { t: 'thuNT', id: nt.id }).ok).toBe(true);
+    expect(s.res.duoc).toBeGreaterThan(3);
+    expect(pending(s, ch).h).toBe(0);
+  });
+  it('học viện nghiên cứu mất thời gian, xong thì có tác dụng', () => {
+    const s = farm('e3');
+    expect(apply(s, { t: 'hoc', k: 'laBan' }).ok).toBe(false);
+    build(s, 'hocvien', 1, 1);
+    expect(apply(s, { t: 'hoc', k: 'laBan' }).ok).toBe(true);
+    expect(apply(s, { t: 'hoc', k: 'binhPhap' }).ok).toBe(false);
+    tick(s, T0 + 2 * 3600_000);
+    expect(s.tech.laBan).toBe(1);
+    expect(apply(s, { t: 'hoc', k: 'laBan' }).ok).toBe(false); // cần học viện cấp 2
+  });
+  it('đi biển tốn lương; thiếu lương thì đánh yếu; trang bị và thuyền mòn, sửa được', () => {
+    const s = farm('e4');
+    s.kho = { giao: 2, khien: 0, thuoc: 0, bua: 0 };
+    s.res.luong = 0; s.res.gao = 0; s.res.ca = 0; s.res.thit = 0;
+    expect(apply(s, { t: 'sail', kind: 'wild', id: 'trailhaitac' }).ok).toBe(true);
+    expect(s.voyage!.need).toBeGreaterThan(0);
+    expect(s.voyage!.food).toBe(0);
+    tick(s, T0 + (s.voyage!.returnAt - s.voyage!.departAt) + 2000);
+    expect(s.voyage).toBeNull();
+    expect(s.ben.giao).toBeLessThan(100);
+    expect(s.vo).toBeLessThan(100);
+    expect(apply(s, { t: 'suaDo' }).ok).toBe(false);
+    build(s, 'xuongren', 5, 5);
+    expect(apply(s, { t: 'suaDo' }).ok).toBe(true);
+    expect(s.ben.giao).toBe(100);
+    build(s, 'benthuyen', 6, 5);
+    s.res.vai = 50;
+    expect(apply(s, { t: 'suaThuyen' }).ok).toBe(true);
+    expect(s.vo).toBe(100);
   });
 });

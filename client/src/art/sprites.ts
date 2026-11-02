@@ -325,6 +325,17 @@ export function drawEmote(kind: 'vui' | 'doi' | 'doi_bung' | 'nghe'): Canvas {
 
 // ---------------- biểu tượng tài nguyên (cho HUD) ----------------
 const ICONS: Record<string, string[]> = {
+  thoc: ['....kk....', '...kyk.k..', '..kyYkyk..', '.kyYkyYk..', 'kyYkyYk...', '.kkyYk....', '...kk.....', '..........'],
+  gao: ['..kkkkk...', '.kwiwwwk..', 'kwiwwwwFk.', 'kwwwwwwFk.', '.kFFFFFk..', '..kkkkk...'],
+  rau: ['...kk.kk..', '..kAGkAGk.', '.kAGGkGGk.', '..kGGGGk..', '...kGGk...', '....kk....'],
+  thit: ['..kkkk....', '.keeEEk...', 'keeeeEEkk.', 'kEeeeEkfk.', '.kEEEk.kk.', '..kkk.....'],
+  trung: ['...kkk....', '..kwiwk...', '.kwiwwFk..', '.kwwwwFk..', '.kwwwFFk..', '..kkkkk...'],
+  ca: ['..........', '.kkk...k..', 'kxXxxk.kk.', 'kxkxxXkXk.', 'kxXxxk.kk.', '.kkk...k..'],
+  thaoduoc: ['....kk....', '...kGAk...', '..kGGGAk..', '...kGGk...', '..kTkk....', '..kk......'],
+  to: ['..kkkkk...', '.kfiffFk..', 'kfFfFfFfk.', 'kfffFfffk.', '.kfFffFk..', '..kkkkk...'],
+  luong: ['.kkkkkkk..', 'kYyyyyyYk.', 'kyYyyyYyk.', 'kyyYYYyyk.', 'kYyyyyyYk.', '.kkkkkkk..'],
+  duoc: ['...kkk....', '...kwk....', '..kxxxk...', '.kxeexXk..', '.kxeexXk..', '.kxxxXXk..', '..kkkkk...'],
+  vai: ['kkkkkkkk..', 'kfqfqfqk..', 'kqfqfqfk..', 'kfqfqfqk..', 'kqfqfqfk..', 'kkkkkkkk..'],
   lt: ['...kkk....', '..kxxXk...', '.kxcxxXk..', 'kxcxxxxXk.', '.kxxxxXk..', '..kxxXk...', '...kXk....', '....k.....'],
   tien: ['..kkkkk...', '.kllllLk..', 'kllkkklLk.', 'klkLLLklk.', 'klkLLLklk.', 'kllkkklLk.', '.kLlllLk..', '..kkkkk...'],
   co: ['...g.g....', '..gG.Gg...', '.gyGgGyg..', '..GgGgG...', '.kYYYYYk..', '..kYYYk...', '..kyyyk...', '...kkk....'],

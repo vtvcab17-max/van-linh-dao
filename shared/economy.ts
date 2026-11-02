@@ -6,6 +6,7 @@
 //   → tiền đồng → cửa hàng NPC, chợ thế giới, đấu giá → vật phẩm hiếm, trang bị
 //   → đánh chiếm đảo khác thành chư hầu (cống nạp, chia thuế, làm cứ điểm cho thuyền) và đánh Thủy Tinh.
 import type { LvKey, ResKey } from './data';
+import type { CropKey } from './eco';
 import { hashStr, mulberry32 } from './rng';
 import { GEAR, GEAR_KEYS, type GearKey } from './boss';
 import { SEA_COLS, SEA_ROWS } from './mapsize';
@@ -55,7 +56,7 @@ export function goodRarity(g: string): Rarity {
 export function isGood(g: unknown): g is GoodKey {
   if (typeof g !== 'string') return false;
   if (g.startsWith('g_')) return GEAR_KEYS.includes(g.slice(2) as GearKey);
-  return g in ITEMS || ['co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc'].includes(g);
+  return g in ITEMS || ['co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc', 'thoc', 'gao', 'rau', 'thit', 'trung', 'ca', 'thaoduoc', 'to', 'luong', 'duoc', 'vai'].includes(g);
 }
 
 // ======================= CỬA HÀNG NPC =======================
@@ -98,13 +99,13 @@ export const DAY0 = Date.UTC(2026, 10, 1, 17, 0, 0); // 00:00 02/11/2026 giờ V
 export const dayOf = (now: number) => Math.floor((now - DAY0) / 86_400_000);
 
 // ======================= CÔNG TRÌNH =======================
-export type BKey = 'nhadan' | 'khothoc' | 'cho' | 'tramthue' | 'thapcanh' | 'tuong' | 'donbinh' | 'xuongren' | 'den';
-export const B_KEYS: BKey[] = ['nhadan', 'khothoc', 'cho', 'tramthue', 'thapcanh', 'tuong', 'donbinh', 'xuongren', 'den'];
+export type BKey = 'nhadan' | 'khothoc' | 'cho' | 'tramthue' | 'thapcanh' | 'tuong' | 'donbinh' | 'xuongren' | 'den' | 'ruong' | 'vuon' | 'nuongdau' | 'chuong' | 'aoca' | 'coixay' | 'bep' | 'nhathuoc' | 'khungcui' | 'hocvien' | 'benthuyen';
+export const B_KEYS: BKey[] = ['nhadan', 'khothoc', 'cho', 'tramthue', 'thapcanh', 'tuong', 'donbinh', 'xuongren', 'den', 'ruong', 'vuon', 'nuongdau', 'chuong', 'aoca', 'coixay', 'bep', 'nhathuoc', 'khungcui', 'hocvien', 'benthuyen'];
 
 export interface BDef {
   names: [string, string, string];
   desc: string;
-  group: 'nhà cửa' | 'kinh tế' | 'thành trì';
+  group: 'nhà cửa' | 'kinh tế' | 'thành trì' | 'nông trại' | 'chế biến' | 'học thuật';
   max: number;
   /** cần Nhà chính bậc mấy */
   needLeu: number;
@@ -123,6 +124,17 @@ export const BUILDINGS: Record<BKey, BDef> = {
   tuong: { names: ['Tường Rào Đất', 'Tường Đá Ong', 'Thành Gạch Vồ'], desc: 'Giữ đảo: Lũy tre chắn thêm 150 máu mỗi cấp.', group: 'thành trì', max: 8, needLeu: 2, cost: [{ da: 40, co: 20 }, { da: 100, go: 40 }, { da: 220, sat: 40 }], ms: [3 * M, 20 * M, 90 * M] },
   donbinh: { names: ['Trại Lính', 'Đồn Binh', 'Thủy Trại'], desc: 'Giữ đảo: thêm một lính đồn. Cần có để đánh chiếm đảo khác; cấp càng cao giữ được càng nhiều chư hầu.', group: 'thành trì', max: 2, needLeu: 3, cost: [{ go: 120, da: 80, sat: 30 }, { go: 240, da: 180, sat: 80 }, { go: 480, da: 360, sat: 200, ngoc: 3 }], ms: [15 * M, 90 * M, 5 * 60 * M] },
   xuongren: { names: ['Lò Rèn', 'Xưởng Rèn', 'Lò Đúc Đồng'], desc: 'Chế tạo trang bị rẻ hơn 10% mỗi cấp.', group: 'kinh tế', max: 1, needLeu: 2, cost: [{ da: 80, sat: 40 }, { da: 160, sat: 100 }, { da: 300, sat: 240, ngoc: 2 }], ms: [10 * M, 60 * M, 3 * 60 * M] },
+  ruong: { names: ['Ruộng Lúa', 'Ruộng Bậc Thang', 'Đồng Lúa Thẳng Cánh'], desc: 'Cấy lúa: 4 giờ ra thóc. Mưa lúa lớn nhanh, bão dập lúa, mùa đông chậm.', group: 'nông trại', max: 6, needLeu: 1, cost: [{ go: 20, co: 20 }, { go: 60, da: 30, tre: 30 }, { go: 150, da: 100, sat: 20 }], ms: [2 * M, 15 * M, 60 * M] },
+  vuon: { names: ['Vườn Rau', 'Vườn Thuốc Nam', 'Vườn Ngự Uyển'], desc: 'Trồng rau muống (45 phút) hoặc thảo dược (2 giờ) để làm thuốc.', group: 'nông trại', max: 4, needLeu: 1, cost: [{ go: 15, tre: 20 }, { go: 50, tre: 50 }, { go: 120, da: 60, tre: 120 }], ms: [2 * M, 12 * M, 45 * M] },
+  nuongdau: { names: ['Nương Dâu', 'Bãi Dâu Tằm', 'Làng Tơ Lụa'], desc: 'Trồng dâu nuôi tằm: 3 giờ ra tơ để dệt vải buồm.', group: 'nông trại', max: 2, needLeu: 2, cost: [{ go: 40, tre: 40 }, { go: 90, tre: 90, da: 30 }, { go: 200, tre: 200, da: 80 }], ms: [5 * M, 25 * M, 90 * M] },
+  chuong: { names: ['Chuồng Gà', 'Chuồng Lợn Gà', 'Trang Trại Chăn Nuôi'], desc: 'Ra trứng và thịt mỗi giờ; ăn thóc và rau lúc bạn ghé thu.', group: 'nông trại', max: 3, needLeu: 1, cost: [{ go: 40, tre: 30 }, { go: 100, tre: 80, da: 30 }, { go: 220, da: 120, sat: 30 }], ms: [3 * M, 20 * M, 75 * M] },
+  aoca: { names: ['Ao Cá', 'Đầm Cá', 'Hồ Cá Chép'], desc: 'Nuôi cá: ra cá mỗi giờ, không cần cho ăn.', group: 'nông trại', max: 2, needLeu: 1, cost: [{ da: 30, co: 20 }, { da: 80, go: 40 }, { da: 200, go: 100 }], ms: [3 * M, 20 * M, 75 * M] },
+  coixay: { names: ['Cối Xay Tay', 'Cối Giã Gạo', 'Cối Xay Nước'], desc: 'Xay thóc thành gạo (4 thóc → 3 gạo).', group: 'chế biến', max: 1, needLeu: 1, cost: [{ go: 40, da: 40 }, { go: 100, da: 100 }, { go: 220, da: 220, sat: 40 }], ms: [5 * M, 25 * M, 90 * M] },
+  bep: { names: ['Bếp Lương', 'Lò Nấu Quân Lương', 'Đại Trù Phòng'], desc: 'Nấu lương khô cho quân đi biển (2 gạo + 1 thịt/cá/trứng → 3 lương).', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, da: 40 }, { go: 140, da: 100 }, { go: 300, da: 220, sat: 60 }], ms: [8 * M, 30 * M, 2 * 60 * M] },
+  nhathuoc: { names: ['Trạm Thuốc', 'Nhà Thuốc Nam', 'Y Viện'], desc: 'Bào chế thuốc men (3 thảo dược → 1 thuốc) chữa bệnh trên biển.', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, la: 60 }, { go: 140, la: 120, da: 60 }, { go: 300, da: 200, ngoc: 2 }], ms: [8 * M, 30 * M, 2 * 60 * M] },
+  khungcui: { names: ['Khung Cửi', 'Xưởng Dệt', 'Phường Tơ Lụa'], desc: 'Dệt tơ thành vải buồm (2 tơ → 1 vải) để vá buồm, sửa thuyền.', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, tre: 60 }, { go: 140, tre: 140 }, { go: 300, tre: 300, sat: 40 }], ms: [8 * M, 30 * M, 2 * 60 * M] },
+  hocvien: { names: ['Trường Làng', 'Học Viện', 'Quốc Tử Giám'], desc: 'Nghiên cứu nông nghiệp, hàng hải, quân sự, y học. Cấp học viện là cấp nghiên cứu cao nhất.', group: 'học thuật', max: 1, needLeu: 2, cost: [{ go: 100, da: 80, tien: 200 }, { go: 240, da: 200, tien: 800 }, { go: 500, da: 400, ngoc: 3, tien: 2500 }], ms: [15 * M, 90 * M, 5 * 60 * M] },
+  benthuyen: { names: ['Bến Thuyền', 'Xưởng Đóng Tàu', 'Thủy Xưởng'], desc: 'Sửa thân thuyền, vá buồm. Cấp càng cao thuyền càng bền.', group: 'học thuật', max: 1, needLeu: 2, cost: [{ go: 120, tre: 80 }, { go: 260, tre: 160, sat: 40 }, { go: 520, da: 200, sat: 120, vai: 20 }], ms: [10 * M, 60 * M, 3 * 60 * M] },
   den: { names: ['Miếu Thổ Thần', 'Đền Sơn Tinh', 'Đền Hùng Thu Nhỏ'], desc: 'Linh vật đói chậm hơn 15% mỗi cấp; đánh Thủy Tinh +5% công mỗi cấp.', group: 'nhà cửa', max: 1, needLeu: 3, cost: [{ go: 100, da: 100, so: 60 }, { go: 200, da: 200, so: 200 }, { go: 400, da: 400, so: 500, ngoc: 4 }], ms: [20 * M, 2 * 60 * M, 6 * 60 * M] },
 };
 
@@ -133,6 +145,10 @@ export interface Dinh {
   y: number;
   /** cấp đã xong (0 = đang xây lần đầu) */
   lv: number;
+  /** cây đang trồng (ruộng, vườn, nương dâu) */
+  crop?: { k: CropKey; at: number };
+  /** lần thu gần nhất (chuồng, ao, xưởng chế biến) — giờ thật */
+  last?: number;
   /** đang xây lên cấp này, xong lúc doneAt (giờ trong game) */
   to?: number;
   doneAt?: number;

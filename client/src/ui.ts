@@ -33,6 +33,7 @@ import { LV_LABEL, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, GEAR, GEAR_KEYS
 import { thuongGioiHtml } from './thuonggioi';
 import { openGenerals, openWheel } from './ui-gacha';
 import { openHex as openHexPanel, openMap } from './ui-sea';
+import { dinhClick, dinhExtra, openKho, openWeather, renderWxFx, supplyLine, wxChip } from './ui-eco';
 import {
   B_KEYS, BUILDINGS, DAY0, dayOf, GUILD_COST, guildLevel, ITEM_KEYS, ITEMS, marketFee, PORT_MULT, RARITY_COLOR, ROUTE_MS, routePeriod, routesNear, SHOP_BASE, shopSpecial, tollPerHour, tributePerHour, goodRarity, bLevel,
   type BKey, type ItemKey, type Route,
@@ -203,7 +204,7 @@ export class UI {
     const ms = sailMs(s, to, mul) / s.speed;
     const base = nearestBase(s, to);
     const dist = Math.max(1, cellDist(to, base));
-    return `<div class="card"><small>Hải trình</small><p>Cách ${base.x === homeCell(s).x && base.y === homeCell(s).y ? 'đảo bạn' : `cứ điểm ${esc(base.name)}`} <b>${dist} hải lý</b>. ${esc(LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1])} đi mất <b>${hms(ms)}</b>, về mất <b>${hms(ms)}</b>.</p><p class="muted small">Xa hơn thì lâu hơn. Tiến hóa thuyền để đi nhanh hơn. Chiến lợi phẩm về tới bến mới nhận.</p></div>`;
+    return `<div class="card"><small>Hải trình</small><p>Cách ${base.x === homeCell(s).x && base.y === homeCell(s).y ? 'đảo bạn' : `cứ điểm ${esc(base.name)}`} <b>${dist} hải lý</b>. ${esc(LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1])} đi mất <b>${hms(ms)}</b>, về mất <b>${hms(ms)}</b>.</p><p class="muted small">Xa hơn thì lâu hơn. Tiến hóa thuyền để đi nhanh hơn. Chiến lợi phẩm về tới bến mới nhận.</p></div>${supplyLine(s, sailMs(s, to, mul))}`;
   }
 
   private sail(o: Outcome) {
@@ -221,7 +222,8 @@ export class UI {
     $('#btnSettings').addEventListener('click', () => this.openSettings());
     $('#meAv').addEventListener('click', () => this.openAvatar());
     $('#btnWheel').addEventListener('click', () => openWheel(this));
-    $('#res').addEventListener('click', (e) => (e.target as HTMLElement).closest('[data-k="lt"]') && openWheel(this));
+    $('#res').addEventListener('click', (e) => ((e.target as HTMLElement).closest('[data-k="lt"]') ? openWheel(this) : openKho(this)));
+    $('#wxChip').addEventListener('click', () => openWeather(this));
     $('#btnTuong').addEventListener('click', () => openGenerals(this));
     $('#btnBuild').addEventListener('click', () => (this.island.placing ? this.island.setPlacing(null) : this.openBuildMenu()));
     $('#income').addEventListener('click', () => this.openCho('linh'));
@@ -260,6 +262,9 @@ export class UI {
     this.store.on('tick', () => {
       this.renderVoyage();
       this.renderRes();
+      const now = this.store.now();
+      $('#wxChip').textContent = wxChip(this.store.s, now);
+      renderWxFx(this.store.s, now);
       this.sheetRefresh?.();
       if (this.perfOn) this.renderPerf();
     });
@@ -335,7 +340,7 @@ export class UI {
     const s = this.store.s;
     const cap = storageCap(s);
     const el = $('#res');
-    const show: ResKey[] = ['lt', 'tien', 'co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc'];
+    const show: ResKey[] = ['lt', 'tien', 'co', 'la', 'tre', 'go', 'da', 'sat', 'luong', 'so', 'ngoc'];
     if (el.childElementCount !== show.length) {
       el.innerHTML = show.map((k) => `<span class="r" data-k="${k}" title="${RES[k].name}"><img src="${iconUrl(k)}" alt="${RES[k].name}"><b></b></span>`).join('');
     }
@@ -1015,8 +1020,9 @@ export class UI {
   openBuildMenu() {
     const draw = () => {
       const s = this.store.s;
-      const groups: Record<string, BKey[]> = { 'Nhà cửa': [], 'Kinh tế': [], 'Thành trì': [] };
-      for (const k of B_KEYS) groups[BUILDINGS[k].group === 'nhà cửa' ? 'Nhà cửa' : BUILDINGS[k].group === 'kinh tế' ? 'Kinh tế' : 'Thành trì'].push(k);
+      const groups: Record<string, BKey[]> = { 'Nhà cửa': [], 'Nông trại': [], 'Chế biến': [], 'Kinh tế': [], 'Học thuật': [], 'Thành trì': [] };
+      const G: Record<string, string> = { 'nhà cửa': 'Nhà cửa', 'nông trại': 'Nông trại', 'chế biến': 'Chế biến', 'kinh tế': 'Kinh tế', 'học thuật': 'Học thuật', 'thành trì': 'Thành trì' };
+      for (const k of B_KEYS) groups[G[BUILDINGS[k].group]].push(k);
       const row = (k: BKey) => {
         const b = BUILDINGS[k];
         const have = s.dinh.filter((d) => d.k === k).length;
@@ -1060,6 +1066,7 @@ export class UI {
         <button class="primary wide" id="btnUp" ${canPay(s, b.cost[d.lv]) && busySlots(s) < buildSlots(s) ? '' : 'disabled'}>${busySlots(s) >= buildSlots(s) ? 'Thợ đang bận hết' : 'Nâng cấp'}</button></div>` : '';
       return `<div class="lv-head"><img class="lv-img" src="${canvasUrl(`dinh-ui-${d.k}-${lv}`, () => drawDinh(d.k, lv), 4)}" alt=""><div><h3>${b.names[lv - 1]}</h3><p class="tier">Cấp ${d.lv || 0}/3${busy ? ` · đang xây lên cấp ${d.to}` : ''}</p><p class="muted">${b.desc}</p></div></div>
         ${busy ? `<div class="card"><small>Đang xây</small><p>Còn <b>${hms(left / s.speed)}</b></p></div>` : ''}
+        ${dinhExtra(this, d)}
         ${next}
         <button class="wide" id="btnPha">${armed ? 'Chắc chắn dỡ? Bấm lần nữa' : 'Dỡ bỏ (thu lại 30% vật liệu)'}</button>`;
     };
@@ -1067,6 +1074,11 @@ export class UI {
       body.addEventListener('click', (e) => {
         const t = (e.target as HTMLElement).closest('button');
         if (!t) return;
+        const dd = this.store.s.dinh.find((x) => x.id === id);
+        if (dd && dinhClick(this, dd, t)) {
+          body.innerHTML = draw();
+          return;
+        }
         if (t.id === 'btnUp') {
           const o = this.store.do({ t: 'nang', id });
           this.toast(o.msg, o.ok ? 'gold' : 'bad');

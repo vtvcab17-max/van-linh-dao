@@ -113,6 +113,8 @@ export interface TeamSpec {
   fort?: { thap: number[]; don: number[]; tuongHp: number };
   /** chủ tướng ra trận cùng đội */
   gen?: { id: GenId; star: number; w: LegWeaponId | null };
+  /** điều kiện trận: lương, bệnh, thời tiết (nhân vào công/máu theo hàng) */
+  mod?: { atk: number; hp: number; front: number; back: number };
 }
 
 const THAP: UnitBase = { name: 'Xạ Thủ Tháp Canh', hp: 70, atk: 15, def: 6, spd: 9, skill: 'samset', row: 'back' };
@@ -126,7 +128,17 @@ function applyGear(u: BUnit, g?: { atk: number; def: number; hp: number }) {
   return u;
 }
 
+function applyMod(u: BUnit, m?: TeamSpec['mod']) {
+  if (!m || u.wall) return u;
+  u.atk = Math.max(1, Math.round(u.atk * m.atk * (u.row === 'back' ? m.back : m.front)));
+  u.maxHp = u.hp = Math.max(1, Math.round(u.maxHp * m.hp));
+  return u;
+}
+
 export function teamFromSpec(spec: TeamSpec, side: 0 | 1): BUnit[] {
+  return teamFromSpec0(spec, side).map((u) => applyMod(u, spec.mod));
+}
+function teamFromSpec0(spec: TeamSpec, side: 0 | 1): BUnit[] {
   const out: BUnit[] = [];
   spec.comps.forEach((c, i) => {
     const bonus = c.k === 'an' ? EFFECTS.anAtkBonus[Math.max(0, spec.cuocTier - 1)] : 0;
