@@ -1,5 +1,5 @@
 # Mỗi lần đẩy code lên nhánh main: chạy test rồi đưa server + bản web chính thức (đăng nhập Google) lên Cloudflare.
-# Cần 2 secret trong GitHub: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+# Cần secret trong GitHub: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID (tuỳ chọn SESSION_SECRET, ADMIN_TOKEN)
 # Tuỳ chọn biến (Variables) GOOGLE_CLIENT_ID nếu không ghi thẳng trong server/wrangler.toml
 name: Deploy Cloudflare
 on:
@@ -23,12 +23,30 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          GCID: ${{ vars.GOOGLE_CLIENT_ID }}
+          GCID: ${{ vars.GOOGLE_CLIENT_ID || secrets.GOOGLE_CLIENT_ID }}
+          SS: ${{ secrets.SESSION_SECRET }}
+          AT: ${{ secrets.ADMIN_TOKEN }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
-            echo "::warning::Chưa có secret CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID nên bỏ qua bước đưa lên Cloudflare (test và build vẫn chạy)."
+          has() { if [ -n "$1" ]; then echo "có"; else echo "CHƯA CÓ"; fi; }
+          echo "Kiểm tra cấu hình (chỉ báo có/không, không in giá trị):"
+          echo "  CLOUDFLARE_API_TOKEN : $(has "$CLOUDFLARE_API_TOKEN")"
+          echo "  CLOUDFLARE_ACCOUNT_ID: $(has "$CLOUDFLARE_ACCOUNT_ID")"
+          echo "  GOOGLE_CLIENT_ID     : $(has "$GCID")"
+          echo "  SESSION_SECRET       : $(has "$SS") (không có thì server tự tạo một lần)"
+          echo "  ADMIN_TOKEN          : $(has "$AT")"
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning::Chưa có secret CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID trong Settings → Secrets and variables → Actions → Repository secrets, nên bỏ qua bước đưa lên Cloudflare."
             exit 0
           fi
+          if [ -z "$GCID" ]; then echo "::warning::Chưa có GOOGLE_CLIENT_ID: game lên được nhưng nút đăng nhập Google sẽ báo lỗi."; fi
           EXTRA=""
           if [ -n "$GCID" ]; then EXTRA="--var GOOGLE_CLIENT_ID:$GCID"; fi
           npx wrangler deploy $EXTRA
+          # bí mật ký phiên đăng nhập: lấy từ GitHub nếu có, không thì tự tạo ngẫu nhiên đúng một lần (không in ra)
+          if [ -n "$SS" ]; then
+            printf '%s' "$SS" | npx wrangler secret put SESSION_SECRET
+          elif ! npx wrangler secret list 2>/dev/null | grep -q SESSION_SECRET; then
+            openssl rand -base64 48 | tr -d '\n' | npx wrangler secret put SESSION_SECRET
+            echo "Đã tự tạo SESSION_SECRET ngẫu nhiên."
+          fi
+          if [ -n "$AT" ]; then printf '%s' "$AT" | npx wrangler secret put ADMIN_TOKEN; fi
