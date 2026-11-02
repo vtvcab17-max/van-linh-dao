@@ -154,6 +154,8 @@ export interface PlayerState {
   manh: number;
   /** Vòng quay: số lần liền chưa ra đồ truyền thuyết (bảo hiểm), tổng lượt quay. */
   gacha: { pity: number; spins: number };
+  /** Khiên bảo hộ tới lúc này (giờ thật): không ai đột kích, đánh chiếm, thám thính được. */
+  shield: number;
   /** Nghiên cứu đã xong ở học viện. */
   tech: Partial<Record<TechKey, number>>;
   /** Đang nghiên cứu (xong lúc end, giờ trong game). */
@@ -317,6 +319,7 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     ltDay: { day: 0, n: 0 },
     luot: 0,
     khu: '01',
+    shield: now + 24 * 3600_000, // người mới được che chở 24 giờ
     tech: {},
     research: null,
     ben: { giao: 100, khien: 100, thuoc: 100, bua: 100 },
@@ -1047,6 +1050,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
         to = { x: isle.c, y: isle.r };
         targetId = isle.id;
         targetName = isSeen(s, isle.c, isle.r) || isle.kind !== 'bian' ? isle.name : 'Đảo Bí Ẩn';
+        if (a.def && a.def.owner !== s.id) s.shield = 0;
         if (a.def && a.def.owner !== s.id) isleDef = { owner: String(a.def.owner), ownerName: String(a.def.ownerName).slice(0, 24), don: Math.max(0, Math.min(3, Math.floor(a.def.don) || 0)), thap: Math.max(0, Math.min(3, Math.floor(a.def.thap) || 0)) };
       } else if (a.kind === 'scout') {
         const c = { x: Math.round(a.to.x), y: Math.round(a.to.y) };
@@ -1057,6 +1061,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
       } else {
         const err = raidCheck(s, a.target) ?? (a.conquer ? conquerCheck(s, a.target) : null);
         if (err) return fail(err);
+        s.shield = 0; // ra quân đánh người khác thì khiên vỡ
         to = { x: Math.round(a.to.x), y: Math.round(a.to.y) };
         targetId = a.target.id;
         targetName = a.target.islandName;
@@ -1135,6 +1140,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
       if ((s.bag[a.item] ?? 0) < 1) return fail('Trong túi không còn.');
       if (a.item === 'haido' && !s.voyage) return fail('Thuyền đang ở bến, chưa cần hải đồ.');
       if (a.item === 'lenhbai' && s.slotsBonus >= 2) return fail('Đã có đủ 2 Lệnh Bài.');
+      if (a.item === 'khien8' && s.shield - s.lastReal > 16 * 3600_000) return fail('Khiên chỉ cộng dồn tối đa 24 giờ.');
       s.bag[a.item] = (s.bag[a.item] ?? 0) - 1;
       if (a.item === 'banhchung') for (const k of LV_KEYS) s.lv[k].hunger = 0;
       if (a.item === 'ruounep')
@@ -1152,6 +1158,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
       if (a.item === 'goquy') addRes(s, { go: 150, cui: 80 });
       if (a.item === 'ngoctraiden') addRes(s, { ngoc: 4 });
       if (a.item === 'lenhbai') s.slotsBonus++;
+      if (a.item === 'khien8') s.shield = Math.max(s.shield, s.lastReal) + 8 * 3600_000;
       return { ok: true, msg: `Đã dùng ${it.name}.` };
     }
     case 'craft': {
@@ -1418,6 +1425,8 @@ export interface IslandPub {
   gen?: { id: GenId; star: number; w: LegWeaponId | null };
   /** ô đảo nhà trên hải đồ */
   home?: { x: number; y: number };
+  /** khiên bảo hộ tới lúc này: ẩn bên trong đảo */
+  shield?: number;
   /** cấp chúa đảo */
   lvl?: number;
 }
@@ -1430,16 +1439,18 @@ export function publicOf(s: PlayerState): IslandPub {
     const v = Math.max(0, s.res[k] - prot);
     if (v > 0) lootable[k] = v;
   }
+  const shielded = (s.shield ?? 0) > s.lastReal;
   return {
     id: s.id,
     name: s.name,
     islandName: s.islandName,
+    shield: shielded ? s.shield : undefined,
     power: power(s),
     title: titleFor(s),
     land: landCount(s),
     tiers: { leu: s.lv.leu.tier, cuoc: s.lv.cuoc.tier, rao: s.lv.rao.tier, thuyen: s.lv.thuyen.tier },
-    team: teamSpec(s, false).comps,
-    lootable,
+    team: shielded ? [] : teamSpec(s, false).comps,
+    lootable: shielded ? {} : lootable,
     updatedAt: Date.now(),
     avatar: s.avatar,
     gear: { ...s.kho },
@@ -1509,6 +1520,7 @@ export function raidCheck(s: PlayerState, target: IslandPub): string | null {
   if ((s.raidCd[target.id] ?? 0) > s.gt) return 'Vừa đột kích đảo này rồi, để họ nghỉ một chút.';
   if (s.lv.leu.tier < 2 && !target.bot) return 'Nâng Nhà chính lên bậc 2 để mở đột kích người chơi.';
   if (target.tiers.leu < 2 && !target.bot) return 'Đảo này còn được Rùa Vàng che chở vì chủ đảo mới tới.';
+  if (!target.bot && (target.shield ?? 0) > s.lastReal) return 'Đảo đang có khiên bảo hộ.';
   return null;
 }
 
@@ -1588,6 +1600,8 @@ export function applyRaidAgainstMe(s: PlayerState, ev: RaidEvent): string | null
     }
   }
   s.stats.robbed++;
+  // vừa bị cướp: được che chở 2 giờ cho khỏi bị đánh hội đồng
+  s.shield = Math.max(s.shield ?? 0, s.lastReal + 2 * 3600_000);
   if (ev.liberate) s.chuHau = s.chuHau.filter((v) => v.id !== ev.attackerId);
   if (ev.conquer) s.chuQuan = { id: ev.attackerId, name: ev.attackerName, islandName: ev.attackerIsland ?? ev.attackerName, until: ev.until ?? s.lastReal + VASSAL_MS };
   const text = ev.liberate
@@ -1623,6 +1637,7 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   if (!Array.isArray(merged.claims)) merged.claims = [];
   if (typeof merged.seen !== 'string') merged.seen = '';
   merged.ben = { ...fresh.ben, ...s.ben };
+  if (typeof merged.shield !== 'number') merged.shield = 0;
   merged.tech = { ...s.tech };
   if (typeof merged.vo !== 'number') merged.vo = 100;
   merged.ltDay = { ...fresh.ltDay, ...s.ltDay };
@@ -2105,4 +2120,43 @@ function provision(s: PlayerState, v: Voyage, oneWayMs: number) {
   v.need = rationNeed(s, oneWayMs);
   v.food = takeRations(s, v.need);
   v.duoc = takeMedicine(s);
+}
+
+/** Báo cáo thám thính: bên trong một đảo (chỉ khi không có khiên). */
+export interface ScoutReport {
+  id: string;
+  name: string;
+  islandName: string;
+  at: number;
+  land: string;
+  dinh: { k: BKey; lv: number; x: number; y: number }[];
+  tiers: Record<LvKey, number>;
+  team: { k: CompKey; lv: number }[];
+  gen?: { id: GenId; star: number; w: LegWeaponId | null };
+  res: Partial<Record<ResKey, number>>;
+  gear: GearSet;
+  lvl: number;
+  isles: number;
+  vo: number;
+}
+export const SCOUT_COST = 80;
+export function scoutReport(s: PlayerState): ScoutReport {
+  const res: Partial<Record<ResKey, number>> = {};
+  for (const k of RES_KEYS) if (s.res[k] > 0 && k !== 'lt') res[k] = s.res[k];
+  return {
+    id: s.id,
+    name: s.name,
+    islandName: s.islandName,
+    at: s.lastReal,
+    land: s.land,
+    dinh: s.dinh.filter((d) => d.lv > 0).map((d) => ({ k: d.k, lv: d.lv, x: d.x, y: d.y })),
+    tiers: { leu: s.lv.leu.tier, cuoc: s.lv.cuoc.tier, rao: s.lv.rao.tier, thuyen: s.lv.thuyen.tier },
+    team: teamSpec(s, true).comps,
+    gen: teamSpec(s, true).gen,
+    res,
+    gear: { ...s.kho },
+    lvl: lordLevel(s),
+    isles: s.isles.length,
+    vo: s.vo,
+  };
 }

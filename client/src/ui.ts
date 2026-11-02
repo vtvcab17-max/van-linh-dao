@@ -34,6 +34,7 @@ import { thuongGioiHtml } from './thuonggioi';
 import { openGenerals, openWheel } from './ui-gacha';
 import { openHex as openHexPanel, openMap } from './ui-sea';
 import { addFriend, openFriends } from './ui-social';
+import { openScout } from './ui-scout';
 import { dinhClick, dinhExtra, openKho, openWeather, renderWxFx, supplyLine, wxChip } from './ui-eco';
 import {
   B_KEYS, BUILDINGS, DAY0, dayOf, GUILD_COST, guildLevel, ITEM_KEYS, ITEMS, marketFee, PORT_MULT, RARITY_COLOR, ROUTE_MS, routePeriod, routesNear, SHOP_BASE, shopSpecial, tollPerHour, tributePerHour, goodRarity, bLevel,
@@ -314,7 +315,7 @@ export class UI {
     const s = this.store.s;
     const p = power(s);
     $('#islandName').textContent = s.islandName;
-    $('#title').textContent = `${titleOf(p)} · ${p} sức mạnh`;
+    $('#title').textContent = `${titleOf(p)} · ${p} sức mạnh${(s.shield ?? 0) > this.store.now() ? ' · 🛡' : ''}`;
     const inc = incomePerHour(s, this.store.now());
     $('#income').textContent = `${inc.total >= 0 ? '+' : ''}${Math.round(inc.total)} đồng/giờ`;
     const vb = $('#vassal');
@@ -844,7 +845,8 @@ export class UI {
       <div class="stats"><span>${LINH_VAT.leu.tiers[(p.tiers.leu ?? 1) - 1]}</span><span>${LINH_VAT.cuoc.tiers[(p.tiers.cuoc ?? 1) - 1]}</span><span>${LINH_VAT.rao.tiers[(p.tiers.rao ?? 1) - 1]}</span><span>${LINH_VAT.thuyen.tiers[(p.tiers.thuyen ?? 1) - 1]}</span></div>
       <div class="enemies">${p.team.map((t) => `<div class="enemy"><img src="${t.k === 'an' ? avatarUrl(pubAvatar(p), 3) : portraitUrl(t.k)}" alt=""><span>${t.k === 'an' ? esc(p.name) : COMPANIONS[t.k].name}</span><small>cấp ${t.lv}</small></div>`).join('')}</div>
       ${isMe ? `<p class="hint">Người khác thấy đảo bạn như thế này. Phần tài nguyên dưới mức được bảo vệ của Nhà chính không bị cướp.</p><button class="wide" id="btnHome">Phóng vào đảo</button>` : `
-        ${p.bot || !this.store.net.market ? '' : `<div class="row"><button type="button" id="btnFriend">Kết bạn</button><span class="muted small">ID: ${esc(p.id)} · (${to.x}, ${to.y})</span></div>`}
+        ${p.bot || !this.store.net.market ? '' : `<div class="row"><button type="button" id="btnFriend">Kết bạn</button><button type="button" id="btnScout" ${(p.shield ?? 0) > this.store.now() ? 'disabled' : ''}>Thám thính (80 đồng)</button><span class="muted small">ID: ${esc(p.id)} · (${to.x}, ${to.y})</span></div>`}
+        ${(p.shield ?? 0) > this.store.now() ? `<div class="card"><small>🛡 Khiên bảo hộ</small><p>Còn <b>${hms(p.shield! - this.store.now())}</b>. Không đột kích, đánh chiếm, thám thính được; bên trong đảo bị che.</p></div>` : ''}
         <div class="card"><small>Nếu thắng, chở về khoảng</small><div class="costs">${lootPreview || 'Đảo này nghèo quá, chẳng có gì để lấy.'}</div></div>
         <p class="muted small">So sức: bạn ${me.power} · họ ${p.power}${p.fort ? ` · thành trì: ${['Đảo Trống', 'Xóm Đảo', 'Làng Lũy', 'Đồn Lũy', 'Thành Trì', 'Kinh Thành'][p.fort]}` : ''}${p.guild ? ` · hội [${esc(p.guild)}]` : ''}</p>
         ${p.lord ? `<p class="hint">Đảo này đang là chư hầu của ${p.lord.id === s.id ? '<b>bạn</b>' : esc(p.lord.name)}.</p>` : ''}
@@ -859,6 +861,7 @@ export class UI {
     this.openSheet('island', isMe ? 'Đảo của bạn' : 'Đảo láng giềng', html, (body) => {
       body.querySelector('#btnHome')?.addEventListener('click', () => this.goIsland());
       body.querySelector('#btnFriend')?.addEventListener('click', () => void addFriend(this, p.id, p.name));
+      body.querySelector('#btnScout')?.addEventListener('click', () => void openScout(this, p));
       body.querySelector('#btnSail')?.addEventListener('click', () => {
         const o = this.store.do({ t: 'sail', kind: 'island', target: p, to });
         if (o.ok) this.store.net.setActivity(`đang chèo thuyền tới ${p.islandName}`);

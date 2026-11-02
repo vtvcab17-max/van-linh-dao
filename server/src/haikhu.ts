@@ -8,7 +8,7 @@ import { apply, applyRaidAgainstMe, ascend, digest, migrate, newPlayer, publicOf
 import { ascendSlots, bossPoolMax, weekOf, type BossWorld } from '../../shared/boss';
 import { islandCell, worldFor } from '../../shared/map';
 import { pickSpawn } from '../../shared/world';
-import { setHome, type IsleDef } from '../../shared/logic';
+import { scoutReport, SCOUT_COST, setHome, type IsleDef } from '../../shared/logic';
 import { giveGood, haveGood, takeGood, goodLabel } from '../../shared/logic';
 import { bLevel, GUILD_COST, isGood, marketFee } from '../../shared/economy';
 import type { Cho, Mail } from './cho';
@@ -54,6 +54,7 @@ export class HaiKhu extends DurableObject<Env> {
   private changedPubs = new Set<string>();
   private onlineDirty = false;
   private lastSave = 0;
+  private scoutCd = new Map<string, number>();
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -626,6 +627,23 @@ export class HaiKhu extends DurableObject<Env> {
           }
           s.guild = await cho.memberOf(s.id);
           return reply(r.ok, r.msg, r.data, true);
+        }
+        // ---- thám thính: xem bên trong đảo người khác (không có khiên) ----
+        case 'scout': {
+          const id = String(m.id ?? '');
+          if (id.startsWith('bot-')) return reply(false, 'Đảo máy không cần thám thính.');
+          if (id === s.id) return reply(false, 'Đây là đảo của bạn.');
+          const last = this.scoutCd.get(s.id) ?? 0;
+          if (Date.now() - last < 20_000) return reply(false, 'Thám tử vừa đi, chờ chút.');
+          const t = this.load(id);
+          if (!t) return reply(false, 'Không tìm thấy đảo này ở Hải Khu.');
+          tick(t, Date.now());
+          if ((t.shield ?? 0) > Date.now()) return reply(false, `Đảo đang có khiên bảo hộ, thám tử không lọt vào được.`);
+          if (s.res.tien < SCOUT_COST) return reply(false, `Thám thính tốn ${SCOUT_COST} đồng vàng.`);
+          s.res.tien -= SCOUT_COST;
+          this.scoutCd.set(s.id, Date.now());
+          this.touch(s);
+          return reply(true, '', scoutReport(t), true);
         }
         // ---- bạn bè, nhắn riêng, liên minh ----
         case 'fAdd': {

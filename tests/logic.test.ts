@@ -538,3 +538,29 @@ describe('Hệ sinh thái thành bang', () => {
     expect(s.vo).toBe(100);
   });
 });
+
+import { raidCheck, scoutReport } from '../shared/logic';
+describe('Khiên bảo hộ, thám thính', () => {
+  it('người mới có khiên 24 giờ: không bị đột kích, bên trong đảo bị che', () => {
+    const a = newPlayer('k1', 'A', T0), b = newPlayer('k2', 'B', T0);
+    for (const s of [a, b]) for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 3;
+    expect(raidCheck(a, publicOf(b))).toMatch(/khiên/);
+    expect(publicOf(b).team.length).toBe(0);
+    tick(b, T0 + 25 * 3600_000);
+    tick(a, T0 + 25 * 3600_000);
+    expect(raidCheck(a, publicOf(b))).toBeNull();
+    expect(publicOf(b).team.length).toBeGreaterThan(0);
+    expect(scoutReport(b).land.length).toBe(576);
+  });
+  it('ra quân đánh người khác thì khiên vỡ; dùng Khiên Bảo Hộ 8 giờ', () => {
+    const a = newPlayer('k3', 'A', T0), b = newPlayer('k4', 'B', T0);
+    for (const s of [a, b]) for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 3;
+    b.shield = 0;
+    expect(a.shield).toBeGreaterThan(T0);
+    expect(apply(a, { t: 'sail', kind: 'island', target: publicOf(b), to: { x: 5, y: 5 } }).ok).toBe(true);
+    expect(a.shield).toBe(0);
+    b.bag.khien8 = 1;
+    expect(apply(b, { t: 'dung', item: 'khien8' }).ok).toBe(true);
+    expect(b.shield).toBeGreaterThan(b.lastReal + 7 * 3600_000);
+  });
+});
