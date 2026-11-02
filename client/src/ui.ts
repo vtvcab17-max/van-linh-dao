@@ -884,9 +884,12 @@ export class UI {
     $('#battleTitle').textContent = title;
     $('#nav').classList.add('dim');
     $('#zoombar').hidden = true;
+    $('#btnSkip').hidden = !!o.pvp;
+    $('#battleTitle').textContent = o.pvp ? `${title} · trận người chơi, không tua` : title;
     const data: BattleData = {
       battle: o.battle!,
       title,
+      pvp: !!o.pvp,
       onDone: () => {
         this.game.scene.stop('battle');
         this.game.scene.wake(from);

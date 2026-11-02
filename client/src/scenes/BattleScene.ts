@@ -1,3 +1,5 @@
+// Trận đánh trên bàn cờ ô vuông: mỗi tướng/đồng đội dẫn một toán lính, xông qua từng ô chém nhau.
+// Trận giữa hai người chơi phải xem hết (không tua, không bỏ qua); đánh quái thì được tua.
 import Phaser from 'phaser';
 import { SKILLS } from '../../../shared/data';
 import type { BattleResult, BEvent, BUnit } from '../../../shared/battle';
@@ -8,34 +10,47 @@ import { pubAvatar } from '../ui';
 import type { Store } from '../store';
 import { zoomFor } from './IslandScene';
 import type { UI } from '../ui';
+import { drawUnit, GENERALS as GEN_LOOKS, TROOPS } from '../art2/units';
 
-interface UnitView {
+interface Squad {
   u: BUnit;
   img: Phaser.GameObjects.Image;
+  men: Phaser.GameObjects.Image[];
   bar: Phaser.GameObjects.Graphics;
   hp: number;
   x: number;
   y: number;
+  col: number;
+  row: number;
 }
 
 export interface BattleData {
   battle: BattleResult;
   title: string;
+  /** trận giữa hai người chơi: không cho tua, không bỏ qua */
+  pvp?: boolean;
   onDone: () => void;
 }
 
+const COLS = 12;
+const ROWS = 5;
+/** lính đi theo từng loại chỉ huy */
+const MEN: Record<string, string> = { an: 'danbinh', ngoc: 'khien', ha: 'cung', chau: 'no', don: 'khien', thap: 'cung', giong: 'khien', sontinh: 'khien', lac: 'thuy', auco: 'cung', caolo: 'no', nuthuy: 'thuy', nghiaquan: 'riu', ngudan: 'thuy', thaylang: 'cung' };
+
 export class BattleScene extends Phaser.Scene {
-  private views = new Map<string, UnitView>();
+  private views = new Map<string, Squad>();
   private data0!: BattleData;
   private idx = 0;
   private speed = 1;
   private done = false;
   private W = 240;
   private H = 135;
-  private res = 1;
   private ui!: UI;
   private rs = 1;
   private z = 3;
+  private cell = 18;
+  private ox = 0;
+  private oy = 0;
 
   constructor() {
     super('battle');
@@ -60,44 +75,97 @@ export class BattleScene extends Phaser.Scene {
     this.W = Math.ceil(this.scale.width / z);
     this.H = Math.ceil(this.scale.height / z);
     cam.centerOn(this.W / 2, this.H / 2);
-    this.res = z * rs * (window.devicePixelRatio || 1);
     const bgKey = `bbg-${this.W}x${this.H}`;
     ensureTex(this, bgKey, () => drawBattleBg(this.W, this.H));
     this.add.image(0, 0, bgKey).setOrigin(0).setScale(1 / HD);
+    // bàn cờ: ô sáng tối xen kẽ, vừa khung nhìn
+    this.cell = Math.max(14, Math.min(22, Math.floor((this.W - 16) / COLS)));
+    this.ox = Math.round((this.W - this.cell * COLS) / 2);
+    this.oy = Math.round(this.H * 0.6 - (this.cell * ROWS) / 2 + 8);
+    const g = this.add.graphics().setDepth(1);
+    g.fillStyle(0x3d2b2b, 0.35).fillRect(this.ox - 2, this.oy - 2, this.cell * COLS + 4, this.cell * ROWS + 4);
+    for (let r = 0; r < ROWS; r++)
+      for (let c = 0; c < COLS; c++) {
+        g.fillStyle((r + c) % 2 ? 0xf6ebc6 : 0xe9d9a8, 1).fillRect(this.ox + c * this.cell, this.oy + r * this.cell, this.cell, this.cell);
+      }
+    // vạch giữa hai bên
+    g.fillStyle(0xc9a46a, 0.6).fillRect(this.ox + (COLS / 2) * this.cell - 1, this.oy, 2, this.cell * ROWS);
     const b = this.data0.battle;
     this.layout(b.a, 0);
     this.layout(b.b, 1);
-    this.input.on('pointerup', () => (this.speed = this.speed === 1 ? 3 : 1));
-    this.time.delayedCall(450, () => this.next());
+    if (!this.data0.pvp) this.input.on('pointerup', () => (this.speed = this.speed === 1 ? 3 : 1));
+    this.time.delayedCall(500, () => this.next());
   }
 
   skip() {
+    if (this.data0?.pvp) return this.ui.toast('Trận giữa người chơi phải xem hết, không bỏ qua được.', 'muted');
     this.speed = 50;
   }
 
+  private cellXY(col: number, row: number) {
+    return { x: this.ox + col * this.cell + this.cell / 2, y: this.oy + row * this.cell + this.cell - 1 };
+  }
+
+  private texFor(u: BUnit, side: 0 | 1): string {
+    if (u.key === 'an') return this.heroTex(u, side);
+    const gl = GEN_LOOKS.find((x) => x.id === u.key);
+    if (gl) return ensureTex(this, `gen-${gl.id}`, () => drawUnit(gl.look));
+    return `ch-${u.key}`;
+  }
+  private menTex(u: BUnit): string | null {
+    if (u.wall) return null;
+    const t = MEN[u.key];
+    if (t) {
+      const def = TROOPS.find((x) => x.id === t)!;
+      return ensureTex(this, `troop-${t}`, () => drawUnit(def.look));
+    }
+    return this.textures.exists(`ch-${u.key}`) ? `ch-${u.key}` : null;
+  }
+
   private layout(units: BUnit[], side: 0 | 1) {
-    const mid = this.W / 2;
-    const groundY = Math.round(this.H * 0.62);
-    const front = units.filter((u) => u.row === 'front');
+    const front = units.filter((u) => u.row === 'front' && !u.wall);
     const back = units.filter((u) => u.row === 'back');
-    const place = (list: BUnit[], dx: number) =>
+    const walls = units.filter((u) => u.wall);
+    // cột theo bên: bên mình ở trái, bên địch ở phải
+    const colOf = (lane: 'front' | 'back' | 'wall') => (side === 0 ? { front: 4, back: 2, wall: 5 }[lane] : { front: 7, back: 9, wall: 6 }[lane]);
+    const place = (list: BUnit[], lane: 'front' | 'back' | 'wall') =>
       list.forEach((u, i) => {
-        const x = Math.round(mid + (side === 0 ? -dx : dx));
-        const y = Math.round(groundY + 14 + i * 20 - (list.length - 1) * 10);
-        const key = u.key === 'an' ? this.heroTex(u, side) : u.key === 'cuada' ? 'ch-cuada' : `ch-${u.key}`;
-        const img = this.add.image(x, y, key).setOrigin(0.5, 1).setDepth(y).setScale(1 / HD);
+        const row = Math.max(0, Math.min(ROWS - 1, Math.round((ROWS - 1) / 2 + (i - (list.length - 1) / 2) * (list.length > 3 ? 1 : 1.5))));
+        const col = colOf(lane);
+        const { x, y } = this.cellXY(col, row);
+        const img = this.add.image(x, y, this.texFor(u, side)).setOrigin(0.5, 1).setDepth(y + 2).setScale(this.fit(this.texFor(u, side), 1.25));
         if (side === 1 && !u.wall) img.setFlipX(true);
-        const bar = this.add.graphics().setDepth(1000);
-        const v: UnitView = { u, img, bar, hp: u.hp, x, y };
+        const men: Phaser.GameObjects.Image[] = [];
+        const mt = this.menTex(u);
+        if (mt) {
+          const n = u.key in MEN ? 3 : 2;
+          for (let k = 0; k < n; k++) {
+            const dc = side === 0 ? -1 : 1;
+            const mx = x + dc * (this.cell * 0.55 + (k % 2) * this.cell * 0.45);
+            const my = y + (k - 1) * Math.round(this.cell * 0.32);
+            const m = this.add.image(mx, my, mt).setOrigin(0.5, 1).setDepth(my).setScale(this.fit(mt, 0.85));
+            if (side === 1) m.setFlipX(true);
+            this.tweens.add({ targets: m, y: my - 1, duration: 420 + k * 90, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+            men.push(m);
+          }
+        }
+        const bar = this.add.graphics().setDepth(2000);
+        const v: Squad = { u, img, men, bar, hp: u.hp, x, y, col, row };
         this.views.set(u.id, v);
         this.drawBar(v);
         this.tweens.add({ targets: img, y: y - 1, duration: 500 + i * 70, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       });
-    place(front, Math.min(40, this.W * 0.16));
-    place(back, Math.min(78, this.W * 0.3));
+    place(front, 'front');
+    place(back, 'back');
+    place(walls, 'wall');
   }
 
-  /** Chủ đảo ra trận bằng đúng nhân vật người chơi đã chỉnh (bên mình và bên đảo bị đánh). */
+  /** Thu phóng hình để vừa ô (cao khoảng k ô). */
+  private fit(key: string, k: number) {
+    const h = this.textures.get(key).getSourceImage().height || 32;
+    return Math.min(1 / HD, (this.cell * k) / h);
+  }
+
   private heroTex(u: BUnit, side: 0 | 1): string {
     const store = this.registry.get('store') as Store;
     if (side === 0) return avatarTex(this, store.s.avatar);
@@ -105,14 +173,19 @@ export class BattleScene extends Phaser.Scene {
     return avatarTex(this, p ? pubAvatar(p) : avatarFrom(u.name));
   }
 
-  private drawBar(v: UnitView) {
+  private drawBar(v: Squad) {
     const w = 16;
     const x = v.x - w / 2;
     const y = v.y - v.img.displayHeight - 4;
     v.bar.clear();
-    v.bar.fillStyle(0x1d1b2a, 1).fillRect(x - 1, y - 1, w + 2, 4);
+    v.bar.fillStyle(0x3d2b2b, 1).fillRect(x - 1, y - 1, w + 2, 4);
     const pct = Math.max(0, v.hp / v.u.maxHp);
-    v.bar.fillStyle(pct > 0.5 ? 0x7cc35a : pct > 0.25 ? 0xf6d34d : 0xdc4a3e, 1).fillRect(x, y, Math.round(w * pct), 2);
+    v.bar.fillStyle(v.u.side === 0 ? 0x4fd06a : 0xf0554a, 1).fillRect(x, y, Math.round(w * pct), 2);
+    // lính ngã dần theo máu của toán
+    const alive = Math.ceil(pct * v.men.length);
+    v.men.forEach((m, i) => {
+      if (i >= alive && m.visible && m.alpha > 0.5) this.tweens.add({ targets: m, alpha: 0, angle: v.u.side === 0 ? -90 : 90, duration: 300, onComplete: () => m.setVisible(false) });
+    });
   }
 
   private pop(x: number, y: number, text: string, color: string, size = 10) {
@@ -128,6 +201,38 @@ export class BattleScene extends Phaser.Scene {
     this.time.delayedCall(Math.max(10, wait / this.speed), () => this.next());
   }
 
+  /** Vệt chém hình cung. */
+  private slash(x: number, y: number, dir: number) {
+    const g = this.add.graphics().setDepth(2100);
+    g.lineStyle(2, 0xffffff, 1);
+    g.beginPath();
+    g.arc(x - dir * 2, y, 7, dir > 0 ? -1.2 : Math.PI - 1.2, dir > 0 ? 1.2 : Math.PI + 1.2);
+    g.strokePath();
+    g.lineStyle(1, 0x9fd4ff, 1);
+    g.beginPath();
+    g.arc(x - dir * 3, y, 5, dir > 0 ? -1 : Math.PI - 1, dir > 0 ? 1 : Math.PI + 1);
+    g.strokePath();
+    this.tweens.add({ targets: g, alpha: 0, duration: 220, onComplete: () => g.destroy() });
+  }
+  /** Mũi tên bay từ hàng sau. */
+  private arrow(a: Squad, t: Squad) {
+    const g = this.add.graphics().setDepth(2100);
+    const p = { k: 0 };
+    const ax = a.x, ay = a.y - 8, bx = t.x, by = t.y - 8;
+    this.tweens.add({
+      targets: p,
+      k: 1,
+      duration: 220 / Math.min(this.speed, 3),
+      onUpdate: () => {
+        g.clear();
+        const x = ax + (bx - ax) * p.k, y = ay + (by - ay) * p.k - Math.sin(p.k * Math.PI) * 10;
+        g.lineStyle(1, 0x6c4229, 1).lineBetween(x - 4 * Math.sign(bx - ax), y + 1, x, y);
+        g.fillStyle(0xeef1f5, 1).fillRect(x, y, 1, 1);
+      },
+      onComplete: () => g.destroy(),
+    });
+  }
+
   private play(ev: BEvent): number {
     const a = this.views.get(ev.a);
     if (!a) return 0;
@@ -136,23 +241,42 @@ export class BattleScene extends Phaser.Scene {
       case 'hit':
       case 'skill': {
         if (ev.s) this.pop(a.x, a.y - a.img.displayHeight - 6, SKILLS[ev.s].name, '#f6d34d', 9);
-        this.tweens.add({ targets: a.img, x: a.x + 10 * dir, duration: 90 / Math.min(this.speed, 3), yoyo: true });
-        (ev.t ?? []).forEach((tid, i) => {
-          const t = this.views.get(tid);
-          if (!t) return;
+        const targets = (ev.t ?? []).map((id) => this.views.get(id)).filter(Boolean) as Squad[];
+        const t0 = targets[0];
+        const ranged = a.u.row === 'back';
+        const sp = Math.min(this.speed, 3);
+        if (t0 && !ranged) {
+          // cả toán xông qua từng ô tới sát mục tiêu rồi quay về
+          const tx = t0.x - dir * this.cell, ty = t0.y;
+          const go = 220 / sp;
+          this.tweens.add({ targets: a.img, x: tx, y: ty, duration: go, yoyo: true, hold: 120 / sp, ease: 'Quad.easeOut' });
+          a.men.forEach((m, k) => {
+            if (!m.visible) return;
+            const mx0 = m.x, my0 = m.y;
+            this.tweens.add({ targets: m, x: tx - dir * (6 + k * 3), y: ty + (k - 1) * 4, duration: go + k * 30, yoyo: true, hold: 100 / sp, ease: 'Quad.easeOut', onComplete: () => m.setPosition(mx0, my0) });
+          });
+          this.time.delayedCall(go, () => targets.forEach((t) => this.slash(t.x - dir * 4, t.y - 8, dir)));
+        } else if (t0) {
+          targets.forEach((t) => this.arrow(a, t));
+          a.men.forEach((m) => m.visible && targets.forEach((t) => this.time.delayedCall(60, () => this.arrow({ ...a, x: m.x, y: m.y } as Squad, t))));
+        }
+        const hitAt = ranged ? 220 / sp : 230 / sp;
+        targets.forEach((t, i) => {
           if (ev.s === 'samset') {
             const g = this.add.graphics().setDepth(1500);
             g.lineStyle(1, 0xf6d34d, 1).lineBetween(a.x, a.y - 10, t.x, t.y - 8);
             this.time.delayedCall(160, () => g.destroy());
           }
-          t.hp = Math.max(0, t.hp - (ev.v?.[i] ?? 0));
-          this.drawBar(t);
-          t.img.setTintFill(0xffffff);
-          this.time.delayedCall(70, () => t.img.clearTint());
-          this.tweens.add({ targets: t.img, x: t.x + 2 * dir, duration: 40, yoyo: true, repeat: 1 });
-          this.pop(t.x, t.y - t.img.displayHeight, `${ev.crit ? 'BẠO ' : ''}-${ev.v?.[i] ?? 0}`, ev.crit ? '#ff9b3a' : '#ffffff', ev.crit ? 12 : 10);
+          this.time.delayedCall(hitAt, () => {
+            t.hp = Math.max(0, t.hp - (ev.v?.[i] ?? 0));
+            this.drawBar(t);
+            t.img.setTintFill(0xffffff);
+            this.time.delayedCall(70, () => t.img.clearTint());
+            this.tweens.add({ targets: t.img, x: t.x + 2 * dir, duration: 40, yoyo: true, repeat: 1 });
+            this.pop(t.x, t.y - t.img.displayHeight, `${ev.crit ? 'BẠO ' : ''}-${ev.v?.[i] ?? 0}`, ev.crit ? '#ff9b3a' : '#ff6a55', ev.crit ? 12 : 10);
+          });
         });
-        return 420;
+        return 620;
       }
       case 'thorns': {
         const t = this.views.get(ev.t?.[0] ?? '');

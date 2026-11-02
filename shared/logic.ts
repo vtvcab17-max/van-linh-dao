@@ -869,6 +869,8 @@ export interface Outcome {
   boss?: { dmg: number; win: boolean; wiped?: boolean; form: string };
   /** kết quả vòng quay */
   spin?: SpinResult[];
+  /** trận giữa hai người chơi (xem lại không được tua) */
+  pvp?: boolean;
   item?: ItemKey;
 }
 
@@ -1570,6 +1572,7 @@ export function raid(s: PlayerState, target: IslandPub, holdLoot = false, conque
     ok: true,
     msg: win ? `Đột kích thành công ${target.islandName}!` : `${target.islandName} giữ đảo thành công.`,
     battle,
+    pvp: !target.bot,
     gained: got,
     levelUps: ups,
     quest: q ?? undefined,
@@ -1925,7 +1928,7 @@ export function fightIsle(s: PlayerState, isle: Isle, def?: IsleDef): Outcome {
   reveal(s, [{ x: isle.c, y: isle.r }], 3);
   if (!win) {
     log(s, `Đánh ${isle.name} thất bại.`);
-    return { ok: true, msg: `${isle.name} giữ đảo thành công.`, battle, gained: {}, levelUps: ups };
+    return { ok: true, msg: `${isle.name} giữ đảo thành công.`, battle, gained: {}, levelUps: ups, pvp: !!def };
   }
   s.stats.wins++;
   // chiến lợi phẩm: 3 giờ sản lượng của đảo
@@ -1944,7 +1947,7 @@ export function fightIsle(s: PlayerState, isle: Isle, def?: IsleDef): Outcome {
     log(s, `Cắm cờ chủ quyền ${isle.name}${def ? ` (giành từ ${def.ownerName})` : ''}.`);
   } else msg += ` Chưa cắm cờ được: ${err}`;
   if (lt) msg += ` Nhặt ${lt} Linh Thạch.`;
-  return { ok: true, msg, battle, gained: gain, levelUps: ups };
+  return { ok: true, msg, battle, gained: gain, levelUps: ups, pvp: !!def };
 }
 
 
