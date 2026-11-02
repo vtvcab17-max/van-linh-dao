@@ -3,7 +3,7 @@
 export const GAME = {
   name: 'Vạn Linh Đảo',
   studio: 'Beta Holding',
-  version: '0.2.0',
+  version: '0.3.0',
   tagline: 'Vạn vật đều có hồn. Lắng nghe, rồi sống sót.',
 };
 

@@ -7,7 +7,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&family=VT323&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&family=Handjet:wght@700;900&family=VT323&display=swap">
 <style>
 /* Bố cục: canvas pixel tràn màn hình; HUD sơn mài viền vàng nổi ở trên và dưới như một khay sơn mài */
 :root {
@@ -256,7 +256,7 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 .blabel span { display: block; height: 100%; background: var(--gold); }
 .build-box { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px dashed var(--gold); border-radius: 5px; }
 #maplabels { position: fixed; left: 0; top: 0; z-index: 5; pointer-events: none; will-change: transform; }
-.ml { position: absolute; left: 0; top: 0; text-align: center; white-space: nowrap; font: 19px/1 var(--font-pixel); text-shadow: 2px 0 var(--ink), -2px 0 var(--ink), 0 2px var(--ink), 0 -2px var(--ink); }
+.ml { position: absolute; left: 0; top: 0; text-align: center; white-space: nowrap; font: 900 19px/1 'Handjet', var(--font-pixel); text-shadow: 2px 0 var(--ink), -2px 0 var(--ink), 0 2px var(--ink), 0 -2px var(--ink); }
 .ml small { display: block; font-size: 15px; color: var(--paper); }
 
 #splash { position: fixed; inset: 0; z-index: 100; background: radial-gradient(circle at 50% 38%, var(--lacquer-3), var(--lacquer) 62%, #12090a); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; padding-left: var(--gut-l); padding-right: var(--gut-r); transition: opacity .5s; }
@@ -338,6 +338,8 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 .mk-search, .mk-form { display: flex; gap: 6px; flex-wrap: wrap; } .mk-search input[name=q] { flex: 1; min-width: 140px; } .mk-form select { width: auto; flex: 1; }
 .stack select { background: var(--ink); border: 2px solid var(--gold-dim); border-radius: 5px; padding: 8px; color: var(--paper); }
 .gear.special { background: linear-gradient(90deg, rgba(232,184,79,.18), transparent); border-radius: 5px; } .tag { color: var(--gold); font: 14px var(--font-pixel); }
+/* hạm đội */
+.ship { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,.08); } .ship .row { flex-wrap: wrap; gap: 4px; } .ship button { font-size: 12px; }
 /* thám thính */
 .scout-map { display: block; width: 100%; max-height: 42vh; object-fit: contain; image-rendering: pixelated; border-radius: 6px; border: 2px solid var(--gold); background: #3a90c2; }
 /* bạn bè */

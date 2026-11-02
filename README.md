@@ -61,25 +61,83 @@ Chế tạo từ tài nguyên, cần công trình đủ bậc. Trang bị cất 
 
 ## Thủy Tinh và phi thăng
 
-**Thủy Tinh** là boss cuối, ngự ở **Mắt Bão**, góc xa nhất của Hải Khu.
+**Thủy Tinh** là trùm chung của cả Hải Khu, ngự ở **Mắt Bão** giữa hải đồ.
 
-- **Siêu mạnh**: 3.900 – 4.500 máu, có 2–3 Thủy Binh hộ vệ. Đội giữa game không gây nổi 10% máu; chỉ đội gần tối đa, trang bị đầy đủ mới hạ được.
-- **Mỗi tuần một dạng**, hồi sinh lúc **thứ Hai 00:00** (giờ Việt Nam):
-  - **Hồng Thủy**: đánh cả đội.
-  - **Bão Tố**: đánh liên hoàn.
-  - **Thủy Quái Vương**: phản đòn.
-  - **Hải Long**: phun độc.
-- **Điều kiện**: Nhà chính bậc 3+, thuyền bậc 3+. Hải trình qua vùng bão chậm gấp 5 lần đường thường.
-- **Mang trang bị lên thuyền**: chỉ trang bị mang theo mới có tác dụng ở Mắt Bão. Trong lúc thuyền đi, đảo nhà yếu hơn khi bị đột kích.
-- **Thắng**:
-  - Phi thăng, danh hiệu Tiên Nhân, vầng hào quang trên đầu nhân vật.
-  - Nhận 600 sò, 12 ngọc, mở cổng Thượng Giới.
-  - Trang bị theo thuyền về nhà.
-- **Thua**:
-  - Mất **toàn bộ trang bị mang theo**.
-  - **Thuyền bị đánh chìm**, về lại Thuyền Thúng, phải xây lại từ đầu.
+- **Không ai hạ được một mình**. Mỗi trận Thủy Tinh có máu, công, thủ gấp nhiều lần đội mạnh nhất. Mọi người cùng góp sát thương vào **máu chung cả tuần** (tối thiểu 300.000, tăng theo số người chơi).
+- **Mỗi tuần một dạng**, hồi sinh lúc **thứ Hai 00:00** (giờ Việt Nam): Hồng Thủy (đánh cả đội), Bão Tố (đánh liên hoàn), Thủy Quái Vương (phản đòn), Hải Long (phun độc).
+- **Điều kiện**: Nhà chính bậc 5, thuyền bậc 5. Hải trình qua vùng bão chậm gấp 5 lần đường thường.
+- **Mang trang bị lên thuyền**: chỉ trang bị mang theo mới có tác dụng ở Mắt Bão.
+- **Trụ được hết trận**: sát thương được cộng vào máu chung, thuyền và trang bị rút về nhà.
+- **Bị diệt sạch**: mất **toàn bộ trang bị mang theo**, **thuyền bị đánh chìm** về lại Thuyền Thúng.
+- **Phi thăng cực hiếm**: khi máu chung về 0, **Thiên Môn** chỉ mở cho người góp sát thương nhiều nhất (chưa từng phi thăng). Mỗi tuần **tối đa 3 người mỗi Hải Khu** và **không quá 5%** số người đang chơi. Người được chọn thành Tiên Nhân, nhận 600 sò, 12 ngọc, 100 Linh Thạch, một bảo vật, mở cổng Thượng Giới.
 
-Mọi thứ nối với nhau: tài nguyên → công trình → trang bị và đồng đội → đánh đảo, đột kích → Thủy Tinh. Thua Thủy Tinh thì phải quay lại vòng chơi để xây lại thuyền và rèn lại trang bị.
+## Hải đồ lục giác
+
+Mỗi Hải Khu là một thế giới **120 × 80 ô lục giác** sinh theo mã Hải Khu (máy nào cũng ra giống nhau).
+
+- **Vùng biển cấp 1–10**: vành ngoài lặng sóng (cấp 1), càng vào gần Mắt Bão càng giàu, càng nguy hiểm (cấp 10).
+- **Địa hình**: biển, biển sâu, bãi cạn (đi chậm), rạn đá ngầm (không đi qua được), vùng bão quanh Mắt Bão.
+- **~240 đảo tự nhiên**: Đảo Rừng, Đảo Đá, Đảo Quặng, Đảo Ngọc Trai, Đảo Dừa và **Đảo Bí Ẩn** (hiện "???", giàu gấp đôi, quái canh giữ mạnh nhất).
+- **~120 hang quái**: sào huyệt hải tặc, hang thủy quái, bãi cua gai, rạn sứa lửa, đảo khỉ đá. Mỗi người còn có 6 bãi luyện quân riêng quanh nhà.
+- **Rải xa nhau**: server chọn chỗ cho người mới ở vành ngoài, cách người khác ít nhất 8 ô. Mỗi Hải Khu tối đa 150 người.
+- **Sương mù**: chỉ thấy quanh đảo nhà (tháp canh nhìn xa hơn). Đi thuyền, thám hiểm, cắm cờ thì mở thêm.
+- **Đoàn thuyền**: ai cũng thấy thuyền đang chạy trên biển, nhưng chỉ thuyền của mình, cùng thương hội và hội đồng minh mới biết là của ai; còn lại là "Thuyền lạ".
+- **Bản đồ thu nhỏ**: nút **Hải đồ** xem cả thế giới, tìm theo toạ độ (vd `34,20`), tên đảo, tên người chơi hoặc ID.
+
+## Chủ quyền đảo
+
+1. Ra khơi đánh quái canh giữ một đảo tự nhiên.
+2. Thắng và **đủ cấp chúa đảo** thì **cắm cờ chủ quyền**. Cấp chúa đảo (1–30) tính theo sức mạnh; đảo cấp càng cao cần cấp chúa đảo càng cao.
+3. Đảo đã cắm cờ sinh tài nguyên mỗi giờ (giữ tối đa 12 giờ, nhớ ghé thu).
+4. Xây trên đảo (cần đủ cấp chúa đảo): **Xưởng Khai Thác** (+50% sản lượng mỗi cấp), **Đồn Tiền Tiêu** (thành cứ điểm cho thuyền xuất phát, thêm lính giữ đảo), **Tháp Canh Đảo** (nhìn xa hơn, quái giữ đảo mạnh hơn).
+5. Giữ được **1 + cấp chúa đảo / 3** đảo. Người khác đánh thắng quân giữ đảo thì giành mất đảo.
+
+## Tướng, Linh Thạch và Vòng Quay Vạn Linh
+
+- **Linh Thạch** kiếm trong game: chiếm đảo (30% cơ hội 1–3 viên), đảo bí ẩn (60%, 3–8 viên), hang quái, hòm quý, phi thăng.
+- **Vòng Quay Vạn Linh**: 50 Linh Thạch một lần, 450 cho 10 lần. Tỉ lệ từng giải công khai ngay trên vòng quay. **Bảo hiểm**: 60 lần chưa ra đồ truyền thuyết thì lần thứ 60 chắc chắn ra.
+- **9 tướng** từ truyền thuyết Việt: Thánh Gióng, Sơn Tinh, Lạc Long Quân (truyền thuyết), Âu Cơ, Cao Lỗ (sử thi), Nữ Tướng Hải Âu, Thủ Lĩnh Nghĩa Quân, Lão Ngư Mắt Bão, Thầy Lang Đảo (hiếm). Ra trùng thì lên sao (tối đa 5★, mỗi sao +20% chỉ số), đủ sao đổi mảnh; 80 mảnh ghép một tướng truyền thuyết. **Chủ tướng** ra trận và giữ đảo.
+- **4 vũ khí truyền thuyết** đeo cho chủ tướng: Nỏ Thần Kim Quy, Roi Sắt Phù Đổng, Đinh Ba Lạc Long, Gậy Thần Tản Viên (hợp tướng thì hiệu lực gấp rưỡi).
+- **Đổi Linh Thạch**: 150 đồng vàng = 1 Linh Thạch (tối đa 20/ngày); bán lại 1 Linh Thạch = 80 đồng vàng.
+- **Gói lượt quay**: mua bằng chuyển khoản VietQR, SePay báo tự động. Lượt quay chỉ dùng để quay, không đổi, không bán, không tặng được. Chỉ mở khi điền `NAP_BANK_ID`, `NAP_BANK_ACC`, `NAP_BANK_NAME`, `NAP_WEBHOOK_KEY` trong cài đặt Cloudflare. Quản trị xác nhận tay hoặc tặng lượt qua `POST /admin/nap`.
+
+## Hệ sinh thái thành bang
+
+- **Khí hậu**: một ngày trong game dài 2 giờ thật (có ngày, đêm), 4 mùa mỗi mùa 7 ngày, thời tiết đổi mỗi 40 phút theo vùng biển: nắng, nhiều mây, mưa, giông, sương mù, bão; gió có hướng và sức.
+- **Thời tiết vào mọi thứ**: mưa làm lúa lớn nhanh nhưng dây cung ướt (đánh xa yếu 20%); bão dập lúa, thuyền hư nặng, dễ mắc bệnh; xuôi gió thuyền đi nhanh, ngược gió chậm; mùa hạ nắng gắt lính cận chiến mau mệt.
+- **Nông trại**: Ruộng Lúa (4 giờ ra thóc), Vườn Rau/Thuốc (rau muống 45 phút, thảo dược 2 giờ), Nương Dâu (3 giờ ra tơ), Chuồng Gà Lợn (ăn thóc, rau; ra trứng, thịt), Ao Cá. Chín để quá 8 giờ hỏng một nửa.
+- **Chế biến**: Cối Xay (thóc → gạo), Bếp Lương (gạo + thịt/cá/trứng → lương khô), Nhà Thuốc (thảo dược → thuốc men), Khung Cửi (tơ → vải buồm).
+- **Học Viện**: 9 môn — Giống lúa mới, Thủy lợi, Chăn nuôi, La bàn, Đóng tàu, Rèn sắt, Quân lương, Nam dược, Binh pháp (3 cấp mỗi môn).
+- **Hậu cần khi ra khơi**: mỗi người ăn 1 khẩu phần mỗi giờ trên biển (lương khô, thiếu thì gạo, cá, thịt). Thiếu lương thì quân đói, đánh yếu. Ở biển lâu dễ mắc bệnh (say sóng, sốt rét, hoại huyết, kiết lỵ); thuốc men mang theo chữa bệnh.
+- **Độ bền**: trang bị mòn sau mỗi trận (sửa ở Lò Rèn); thân thuyền mòn mỗi chuyến, bão mòn nhanh (sửa ở Bến Thuyền bằng gỗ và vải buồm). Dưới 40% chỉ còn nửa tác dụng; thuyền dưới 30% đi chậm, hỏng hẳn thì không ra khơi được.
+- Nông sản, lương, thuốc, vải đều cất vào **Kho** và bán được ở chợ.
+
+## Hạm đội
+
+- **Xưởng Đóng Tàu** (Bến Thuyền) cấp 1–3 giữ được 1–3 thuyền chiến: **Ghe Chiến** (nhẹ, xông lên đầu), **Thuyền Buồm Chiến** (bắn xa), **Chiến Hạm Lâu Thuyền** (đánh cả hàng).
+- Lắp vũ khí: **Nỏ Lớn** (+30% công), **Máy Bắn Đá** (ném trúng cả hàng), **Mũi Đâm Bọc Đồng** (+25% công, húc lên đầu).
+- Thuyền chiến theo thuyền chính ra trận, giữ bến khi ở nhà, mòn sau mỗi trận (mòn hết thì chìm).
+
+## Trận đánh
+
+- Hai bên dàn quân trên **bàn cờ 12 × 5 ô**. Mỗi đồng đội, tướng dẫn một toán lính chibi (khiên mây, cung thủ, nỏ thủ, lính rìu, thủy binh); thuyền chiến ra trận cùng.
+- Cận chiến: cả toán xông qua từng ô tới sát địch rồi chém; hàng sau bắn tên. Lính trong toán ngã dần theo máu.
+- **Trận giữa hai người chơi** (đột kích, giành đảo có chủ) phải xem hết, **không tua, không bỏ qua**. Đánh quái thì tua được.
+
+## Bạn bè, nhắn riêng, liên minh
+
+- Kết bạn bằng ID (xem trong Cài đặt) hoặc bấm "Kết bạn" ở bảng đảo người khác. Nhắn riêng giữa bạn bè, xuyên Hải Khu.
+- **Liên minh thương hội**: hội trưởng mời, hội bên kia đồng ý; tối đa 3 đồng minh. Đồng minh thấy tên thuyền và lãnh thổ của nhau (xanh dương) trên hải đồ.
+
+## Khiên bảo hộ và thám thính
+
+- Người mới có **khiên 24 giờ**; vừa bị cướp được khiên 2 giờ; **Khiên Bảo Hộ 8 giờ** bán ở cửa hàng (cộng dồn tối đa 24 giờ).
+- Đảo có khiên: không ai đột kích, đánh chiếm hay thám thính được; bên trong đảo bị che. Ra quân đánh người khác thì khiên vỡ.
+- **Thám thính** (80 đồng vàng): xem bản đồ bên trong đảo người khác (nhà, công trình, linh vật), đội giữ đảo, chủ tướng, trang bị và kho.
+
+## Lưu ý pháp lý
+
+Nghị định 147/2024/NĐ-CP cấm người chơi mua bán vật phẩm ảo với nhau; từ 01/7/2026 có mức phạt. Game có thu tiền thật cần giấy phép phát hành G1. Nên hỏi bên tư vấn pháp lý trước khi bật bán gói lượt quay và chợ giữa người chơi khi phát hành chính thức ở Việt Nam.
 
 ## Nhà cửa và thành trì
 
@@ -177,7 +235,7 @@ Người đã phi thăng có quyền vào Thượng Giới. Phần này **đang 
 
 | Thư mục | Nội dung |
 | --- | --- |
-| `shared/` | Luật chơi dùng chung client và server: dữ liệu, trận đánh, đột kích, `economy.ts` (công trình, tuyến buôn, vật phẩm, chư hầu), `boss.ts` (Thủy Tinh, trang bị), `avatar.ts`, `map.ts`, `thuonggioi.ts` |
+| `shared/` | Luật chơi dùng chung client và server: dữ liệu, trận đánh, đột kích, `economy.ts` (công trình, tuyến buôn, vật phẩm, chư hầu), `world.ts` + `hex.ts` (hải đồ lục giác), `eco.ts` (khí hậu, nông trại, học viện), `navy.ts` (hạm đội), `gacha.ts` (tướng, Linh Thạch, vòng quay), `boss.ts` (Thủy Tinh, trang bị), `avatar.ts`, `map.ts`, `thuonggioi.ts` |
 | `client/` | Game (Phaser 3 + TypeScript). Đồ họa trong `client/src/art/`, trailer trong `client/src/trailer.ts` |
 | `server/` | Cloudflare Worker + Durable Object: `Directory` (chia Hải Khu), `HaiKhu` (giữ đảo, chạy luật chơi) và `Cho` (chợ thế giới, đấu giá, thương hội) |
 | `tests/` | Test luật chơi, Thủy Tinh, đăng nhập (vitest) |
@@ -231,6 +289,8 @@ npm run build
 npx wrangler dev --port 8787 --var DEV_LOGIN:1
 # mở http://127.0.0.1:8787 → có ô "Đăng nhập thử" (không cần Google)
 npx tsx tools/server-test.mts http://127.0.0.1:8787   # 15 mục kiểm tra server
+npx tsx tools/market-test.mts http://127.0.0.1:8787   # chợ, đấu giá, thương hội
+npx tsx tools/social-test.mts http://127.0.0.1:8787   # kết bạn, nhắn riêng
 ```
 
 `DEV_LOGIN` luôn để `"0"` trên bản thật.

@@ -38,6 +38,7 @@ import { LV_LABEL, ASCEND_REWARD, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, 
 import { teamFromBoss } from './battle';
 import { islandCell, worldFor } from './map';
 import { hexDist, hexLine, hexRange } from './hex';
+import { cleanShips, fleetCap, SHIP_WEAR, SHIPS, WEAPONS, type Ship, type ShipKind, type ShipWeapon } from './navy';
 import {
   CROPS, cropProgress, GEAR_WEAR, HULL_WEAR, OVERRIPE_MS, PENS, PROCS, RATION_PER_HOUR, SICK_PER_HOUR, STORE_H, TECH_MAX, TECHS, WEATHER, regionOf, techCost, techMs, wearMult, weatherAt, windFactor,
   type CropKey, type TechKey,
@@ -154,6 +155,8 @@ export interface PlayerState {
   manh: number;
   /** Vòng quay: số lần liền chưa ra đồ truyền thuyết (bảo hiểm), tổng lượt quay. */
   gacha: { pity: number; spins: number };
+  /** Hạm đội: thuyền chiến đóng thêm ở Xưởng Đóng Tàu. */
+  fleet: Ship[];
   /** Khiên bảo hộ tới lúc này (giờ thật): không ai đột kích, đánh chiếm, thám thính được. */
   shield: number;
   /** Nghiên cứu đã xong ở học viện. */
@@ -320,6 +323,7 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     luot: 0,
     khu: '01',
     shield: now + 24 * 3600_000, // người mới được che chở 24 giờ
+    fleet: [],
     tech: {},
     research: null,
     ben: { giao: 100, khien: 100, thuoc: 100, bua: 100 },
@@ -493,6 +497,7 @@ export function teamSpec(s: PlayerState, defending: boolean): TeamSpec {
     })(),
     mod: defending ? undefined : battleMod,
     fort: defending ? defSpecOf(s.dinh) : undefined,
+    ships: s.fleet.filter((x) => x.vo > 0).map((x) => ({ k: x.k, w: { ...x.w }, vo: x.vo })),
     gen: s.chuTuong && s.tuong[s.chuTuong] ? { id: s.chuTuong, star: s.tuong[s.chuTuong]!, w: s.deo && (s.vuKhi[s.deo] ?? 0) > 0 ? s.deo : null } : undefined,
   };
 }
@@ -796,6 +801,7 @@ function voyageTick(s: PlayerState): string[] {
       battleMod = undefined;
     }
     if (v.kind !== 'boss' && v.kind !== 'scout') wearGear(s, s.kho);
+    if (v.kind !== 'scout') wearFleet(s);
     if (v.kind !== 'boss' && v.kind !== 'scout') {
       v.loot = o.gained ?? {};
       v.win = o.battle?.winner === 0;
@@ -837,6 +843,9 @@ export type Action =
   | { t: 'hoc'; k: TechKey }
   | { t: 'suaDo' }
   | { t: 'suaThuyen' }
+  | { t: 'dongTau'; k: ShipKind }
+  | { t: 'lapVK'; id: string; w: ShipWeapon }
+  | { t: 'phaTau'; id: string }
   | { t: 'sail'; kind: 'island'; target: IslandPub; to: { x: number; y: number }; conquer?: boolean }
   | { t: 'xay'; k: BKey; x: number; y: number }
   | { t: 'nang'; id: string }
@@ -1343,13 +1352,41 @@ export function apply(s: PlayerState, a: Action): Outcome {
     case 'suaThuyen': {
       if (!bLevel(s.dinh, 'benthuyen')) return fail('Cần Bến Thuyền để sửa thuyền.');
       if (s.voyage) return fail('Thuyền đang ngoài khơi.');
-      const miss = 100 - s.vo;
-      if (miss <= 0) return fail('Thân thuyền còn nguyên.');
-      const cost = { go: Math.ceil(miss * 1.2 * s.lv.thuyen.tier), vai: Math.ceil(miss / 12) };
+      const cost = repairCost(s);
+      if (!cost) return fail('Thuyền còn nguyên.');
       if (!canPay(s, cost)) return fail('Chưa đủ gỗ, vải buồm để sửa.');
       pay(s, cost);
       s.vo = 100;
-      return { ok: true, msg: 'Thuyền đã được sửa, vá buồm xong.' };
+      for (const sh of s.fleet) sh.vo = 100;
+      return { ok: true, msg: 'Thuyền và hạm đội đã được sửa, vá buồm xong.' };
+    }
+    case 'dongTau': {
+      const d = SHIPS[a.k];
+      const bt = bLevel(s.dinh, 'benthuyen');
+      if (!d) return fail('Không có loại thuyền này.');
+      if (bt < d.need) return fail(`Cần Xưởng Đóng Tàu cấp ${d.need}.`);
+      if (s.fleet.length >= fleetCap(bt)) return fail(`Xưởng cấp ${bt} chỉ giữ được ${fleetCap(bt)} thuyền chiến.`);
+      if (!canPay(s, d.cost)) return fail('Chưa đủ vật liệu đóng thuyền.');
+      pay(s, d.cost);
+      s.fleet.push({ id: nid(s, 't'), k: a.k, w: {}, vo: 100 });
+      return { ok: true, msg: `Hạ thủy ${d.name}!` };
+    }
+    case 'lapVK': {
+      const sh = s.fleet.find((x) => x.id === a.id);
+      const W = WEAPONS[a.w];
+      if (!sh || !W) return fail('Không có thuyền này.');
+      if (sh.w[a.w]) return fail('Đã lắp rồi.');
+      if (Object.values(sh.w).filter(Boolean).length >= (sh.k === 'chien' ? 3 : sh.k === 'buom' ? 2 : 1)) return fail('Thuyền này không còn chỗ lắp vũ khí.');
+      if (!canPay(s, W.cost)) return fail('Chưa đủ vật liệu.');
+      pay(s, W.cost);
+      sh.w[a.w] = true;
+      return { ok: true, msg: `Lắp ${W.name} lên ${SHIPS[sh.k].name}.` };
+    }
+    case 'phaTau': {
+      const i = s.fleet.findIndex((x) => x.id === a.id);
+      if (i < 0) return fail('Không có thuyền này.');
+      s.fleet.splice(i, 1);
+      return { ok: true, msg: 'Đã tháo dỡ thuyền.' };
     }
     case 'speed': {
       s.speed = Math.max(1, Math.min(20, a.speed));
@@ -1427,6 +1464,8 @@ export interface IslandPub {
   gen?: { id: GenId; star: number; w: LegWeaponId | null };
   /** ô đảo nhà trên hải đồ */
   home?: { x: number; y: number };
+  /** thuyền chiến giữ bến */
+  ships?: { k: ShipKind; w: Partial<Record<ShipWeapon, boolean>>; vo: number }[];
   /** khiên bảo hộ tới lúc này: ẩn bên trong đảo */
   shield?: number;
   /** cấp chúa đảo */
@@ -1467,6 +1506,7 @@ export function publicOf(s: PlayerState): IslandPub {
     gen: teamSpec(s, true).gen,
     home: s.home ?? undefined,
     lvl: lordLevel(s),
+    ships: shielded ? undefined : s.fleet.filter((x) => x.vo > 0).map((x) => ({ k: x.k, w: { ...x.w }, vo: x.vo })),
   };
 }
 
@@ -1495,7 +1535,7 @@ export function raidSeed(attackerId: string, targetId: string, n: number) {
 /** Tính trận đột kích từ hai bản công khai — server dùng đúng hàm này để kiểm lại. */
 export function resolveRaid(att: TeamSpec, target: IslandPub, seed: number): { battle: BattleResult; loot: Partial<Record<ResKey, number>> } {
   const r = mulberry32(seed);
-  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear), fort: target.bot ? undefined : cleanDef(target.def), gen: cleanGen(target.gen) };
+  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear), fort: target.bot ? undefined : cleanDef(target.def), gen: cleanGen(target.gen), ships: target.bot ? undefined : cleanShips(target.ships) };
   const battle = simulate(teamFromSpec(att, 0), teamFromSpec(defSpec, 1), r);
   const loot: Partial<Record<ResKey, number>> = {};
   if (battle.winner === 0) {
@@ -1641,6 +1681,7 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   if (typeof merged.seen !== 'string') merged.seen = '';
   merged.ben = { ...fresh.ben, ...s.ben };
   if (typeof merged.shield !== 'number') merged.shield = 0;
+  if (!Array.isArray(merged.fleet)) merged.fleet = [];
   merged.tech = { ...s.tech };
   if (typeof merged.vo !== 'number') merged.vo = 100;
   merged.ltDay = { ...fresh.ltDay, ...s.ltDay };
@@ -1969,7 +2010,7 @@ function wearGear(s: PlayerState, keys: Partial<GearSet>) {
 /** Giờ thật ứng với một mốc giờ trong game. */
 const realAt = (s: PlayerState, gt: number) => s.lastReal - (s.gt - gt) / Math.max(1, s.speed);
 /** Số người ra trận (để tính lương). */
-const teamSize = (s: PlayerState) => COMP_KEYS.filter((k) => s.comps[k].unlocked).length + (s.chuTuong ? 1 : 0);
+const teamSize = (s: PlayerState) => COMP_KEYS.filter((k) => s.comps[k].unlocked).length + (s.chuTuong ? 1 : 0) + s.fleet.length * 2;
 
 /** Lương thực cần cho cả chuyến đi về. */
 export function rationNeed(s: PlayerState, oneWayMs: number) {
@@ -2162,4 +2203,23 @@ export function scoutReport(s: PlayerState): ScoutReport {
     isles: s.isles.length,
     vo: s.vo,
   };
+}
+
+// ---------- hạm đội ----------
+/** Chi phí sửa thuyền chính và các thuyền chiến. */
+export function repairCost(s: PlayerState): Partial<Record<ResKey, number>> | null {
+  let miss = 100 - s.vo;
+  for (const sh of s.fleet) miss += (100 - sh.vo) * (sh.k === 'chien' ? 3 : sh.k === 'buom' ? 2 : 1);
+  if (miss <= 0) return null;
+  return { go: Math.ceil(miss * 1.2 * s.lv.thuyen.tier), vai: Math.ceil(miss / 12) };
+}
+/** Thuyền chiến mòn sau trận; mòn hết thì chìm. */
+function wearFleet(s: PlayerState) {
+  const k = 1 - 0.25 * (s.tech.dongTau ?? 0);
+  for (const sh of s.fleet) sh.vo = Math.max(0, Math.round((sh.vo - SHIP_WEAR * k) * 10) / 10);
+  const sunk = s.fleet.filter((x) => x.vo <= 0);
+  if (sunk.length) {
+    s.fleet = s.fleet.filter((x) => x.vo > 0);
+    log(s, `${sunk.map((x) => SHIPS[x.k].name).join(', ')} hư hỏng nặng, đã chìm.`);
+  }
 }

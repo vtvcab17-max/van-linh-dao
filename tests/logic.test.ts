@@ -564,3 +564,25 @@ describe('Khiên bảo hộ, thám thính', () => {
     expect(b.shield).toBeGreaterThan(b.lastReal + 7 * 3600_000);
   });
 });
+
+describe('Hạm đội', () => {
+  it('đóng thuyền chiến cần Xưởng Đóng Tàu, lắp vũ khí, theo đội ra trận, mòn và sửa được', () => {
+    const s = newPlayer('n1', 'Thủy', T0);
+    for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 4;
+    s.res = { ...s.res, go: 9999, tre: 9999, sat: 9999, vai: 999, da: 9999, tien: 9999 };
+    expect(apply(s, { t: 'dongTau', k: 'ghe' }).ok).toBe(false);
+    s.dinh.push({ id: 'bt', k: 'benthuyen', x: 1, y: 1, lv: 2 });
+    expect(apply(s, { t: 'dongTau', k: 'chien' }).ok).toBe(false);
+    expect(apply(s, { t: 'dongTau', k: 'buom' }).ok).toBe(true);
+    const id = s.fleet[0].id;
+    expect(apply(s, { t: 'lapVK', id, w: 'no' }).ok).toBe(true);
+    expect(apply(s, { t: 'lapVK', id, w: 'no' }).ok).toBe(false);
+    expect(teamSpec(s, false).ships?.length).toBe(1);
+    expect(publicOf(s).ships).toBeUndefined(); // người mới có khiên: che hạm đội
+    apply(s, { t: 'sail', kind: 'wild', id: 'baicua' });
+    tick(s, T0 + (s.voyage!.returnAt - s.voyage!.departAt) + 2000);
+    expect(s.fleet[0].vo).toBeLessThan(100);
+    expect(apply(s, { t: 'suaThuyen' }).ok).toBe(true);
+    expect(s.fleet[0].vo).toBe(100);
+  });
+});

@@ -77,6 +77,7 @@ export class IslandScene extends Phaser.Scene {
     });
     this.water = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setDepth(-20).setScale(Q);
     this.expandGfx = this.add.graphics().setDepth(5000);
+    this.gridGfx = this.add.graphics().setDepth(1);
     this.placeGfx = this.add.graphics().setDepth(5001);
     for (const k of LV_KEYS) {
       const p = LV_POS[k];
@@ -403,6 +404,20 @@ export class IslandScene extends Phaser.Scene {
     return this.expandMode;
   }
 
+  /** Lưới ô nhạt trên đất (kiểu bàn cờ) cho dễ thấy từng ô. */
+  private gridGfx!: Phaser.GameObjects.Graphics;
+  private drawGrid() {
+    const g = this.gridGfx;
+    g.clear();
+    const s = this.store.s;
+    for (let y = 0; y < GRID; y++)
+      for (let x = 0; x < GRID; x++) {
+        if (!isLand(s, x, y)) continue;
+        const inner = isLand(s, x + 1, y) && isLand(s, x - 1, y) && isLand(s, x, y + 1) && isLand(s, x, y - 1);
+        if (!inner) continue;
+        g.fillStyle((x + y) % 2 ? 0xffffe6 : 0x285014, (x + y) % 2 ? 0.08 : 0.05).fillRect(wx(x), wx(y), T, T);
+      }
+  }
   private drawExpand() {
     const g = this.expandGfx;
     g.clear();
@@ -514,6 +529,7 @@ export class IslandScene extends Phaser.Scene {
       this.landKey = s.land;
       this.updateBounds(s);
       this.drawExpand();
+      this.drawGrid();
       this.placeRua(s);
     }
     const avKey = avatarTex(this, s.avatar);

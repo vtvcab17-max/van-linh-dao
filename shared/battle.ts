@@ -1,5 +1,6 @@
 // Mô phỏng trận đánh tự động theo lượt. Thuần logic, có hạt giống → server tính lại được y hệt.
 import { COMPANIONS, EFFECTS, LINH_VAT, MONSTERS, type CompKey, type MonsterKey, type SkillKey, type UnitBase } from './data';
+import { shipUnit, type ShipKind, type ShipWeapon } from './navy';
 import { GENERALS, generalUnit, type GenId, type LegWeaponId } from './gacha';
 import type { Rng } from './rng';
 
@@ -113,6 +114,8 @@ export interface TeamSpec {
   fort?: { thap: number[]; don: number[]; tuongHp: number };
   /** chủ tướng ra trận cùng đội */
   gen?: { id: GenId; star: number; w: LegWeaponId | null };
+  /** thuyền chiến theo đội */
+  ships?: { k: ShipKind; w: Partial<Record<ShipWeapon, boolean>>; vo: number }[];
   /** điều kiện trận: lương, bệnh, thời tiết (nhân vào công/máu theo hàng) */
   mod?: { atk: number; hp: number; front: number; back: number };
 }
@@ -145,6 +148,7 @@ function teamFromSpec0(spec: TeamSpec, side: 0 | 1): BUnit[] {
     const base = c.k === 'an' && spec.hero ? { ...COMPANIONS.an, name: spec.hero } : COMPANIONS[c.k];
     out.push(applyGear(makeUnit(base, c.k, c.lv, side, i, bonus), spec.gear));
   });
+  for (const sh of spec.ships ?? []) out.push(applyGear(makeUnit(shipUnit({ id: '', ...sh }), `tau-${sh.k}${sh.w.no ? 'n' : ''}${sh.w.da ? 'd' : ''}${sh.w.dam ? 'm' : ''}`, 1, side, out.length), spec.gear));
   if (spec.gen && GENERALS[spec.gen.id]) out.push(applyGear(makeUnit(generalUnit(spec.gen.id, spec.gen.star, spec.gen.w), spec.gen.id, 1, side, out.length), spec.gear));
   if (spec.fort) {
     for (const lv of spec.fort.don.slice(0, 2)) out.push(makeUnit(DON, 'don', 1 + (lv - 1) * 6, side, out.length));

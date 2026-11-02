@@ -5,6 +5,8 @@ import { CROPS, dayPhase, GAME_DAY_MS, regionOf, seasonOf, TECH_KEYS, TECH_MAX, 
 import { RES, RES_KEYS, type ResKey } from '../../shared/data';
 import { GEAR, GEAR_KEYS } from '../../shared/boss';
 import { bLevel, type Dinh } from '../../shared/economy';
+import { fleetCap, SHIP_KINDS, SHIPS, WEAPON_KEYS, WEAPONS, type ShipKind, type ShipWeapon } from '../../shared/navy';
+import { repairCost } from '../../shared/logic';
 import { iconUrl } from './art/textures';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -61,9 +63,22 @@ export function dinhExtra(ui: UI, d: Dinh): string {
     return `${r ? `<div class="card"><small>Đang nghiên cứu</small><p><b>${TECHS[r.k].name}</b> cấp ${r.to} · còn ${hm((r.end - (s.gt + (Date.now() - s.lastReal) * s.speed)) / s.speed)}</p></div>` : ''}<div class="card"><small>Nghiên cứu</small>${rows}</div>`;
   }
   if (d.k === 'benthuyen') {
-    const miss = 100 - s.vo;
-    return `<div class="card"><small>Thân thuyền</small><div class="hpbar hull"><i style="width:${Math.round(s.vo)}%"></i></div><p>Độ bền <b>${Math.round(s.vo)}%</b>${s.vo < 30 ? ' · <b class="bad">thuyền đi chậm 30%</b>' : ''}${s.vo <= 0 ? ' · <b class="bad">không ra khơi được</b>' : ''}</p>
-      ${miss > 0 ? `<div class="costs">${costs({ go: Math.ceil(miss * 1.2 * s.lv.thuyen.tier), vai: Math.ceil(miss / 12) }, s.res)}</div><button type="button" class="primary wide" id="btnSuaThuyen">Sửa thuyền, vá buồm</button>` : '<p class="good">Thuyền còn nguyên.</p>'}</div>`;
+    const rc = repairCost(s);
+    const cap = fleetCap(d.lv);
+    const ships = s.fleet
+      .map((sh) => {
+        const slots = sh.k === 'chien' ? 3 : sh.k === 'buom' ? 2 : 1;
+        const used = WEAPON_KEYS.filter((w) => sh.w[w]);
+        return `<div class="ship"><b>${SHIPS[sh.k].name}</b> <small>bền ${Math.round(sh.vo)}%${used.length ? ' · ' + used.map((w) => WEAPONS[w].name).join(', ') : ''}</small>
+          ${used.length < slots ? `<div class="row">${WEAPON_KEYS.filter((w) => !sh.w[w]).map((w) => `<button type="button" data-vk="${sh.id}:${w}" title="${WEAPONS[w].desc}">Lắp ${WEAPONS[w].name} ${costs(WEAPONS[w].cost)}</button>`).join('')}</div>` : ''}
+          <button type="button" class="link" data-phatau="${sh.id}">tháo dỡ</button></div>`;
+      })
+      .join('');
+    const build = SHIP_KINDS.map((k) => `<button type="button" class="wide" data-ship="${k}" ${d.lv < SHIPS[k].need || s.fleet.length >= cap ? 'disabled' : ''}><b>${SHIPS[k].name}</b> ${d.lv < SHIPS[k].need ? `(cần xưởng cấp ${SHIPS[k].need})` : ''} · ${costs(SHIPS[k].cost, s.res)}<br><small>${SHIPS[k].desc}</small></button>`).join('');
+    return `<div class="card"><small>Thuyền chính</small><div class="hpbar hull"><i style="width:${Math.round(s.vo)}%"></i></div><p>Độ bền <b>${Math.round(s.vo)}%</b>${s.vo < 30 ? ' · <b class="bad">thuyền đi chậm 30%</b>' : ''}${s.vo <= 0 ? ' · <b class="bad">không ra khơi được</b>' : ''}</p>
+      ${rc ? `<div class="costs">${costs(rc, s.res)}</div><button type="button" class="primary wide" id="btnSuaThuyen">Sửa thuyền và hạm đội</button>` : '<p class="good">Thuyền còn nguyên.</p>'}</div>
+      <div class="card"><small>Hạm đội (${s.fleet.length}/${cap})</small>${ships || '<p class="muted small">Chưa có thuyền chiến. Thuyền chiến theo thuyền chính ra trận và giữ bến khi ở nhà.</p>'}</div>
+      <div class="card"><small>Đóng thuyền mới</small>${build}</div>`;
   }
   if (d.k === 'xuongren') {
     const rows = GEAR_KEYS.filter((g) => s.kho[g] > 0).map((g) => `<p>${GEAR[g].name} ×${s.kho[g]}: <b class="${s.ben[g] < 40 ? 'bad' : ''}">${Math.round(s.ben[g])}%</b></p>`).join('');
@@ -82,6 +97,12 @@ export function dinhClick(ui: UI, d: Dinh, t: HTMLElement): boolean {
   if (t.dataset.tech) return run(ui.store.do({ t: 'hoc', k: t.dataset.tech as TechKey })), true;
   if (t.id === 'btnSuaThuyen') return run(ui.store.do({ t: 'suaThuyen' })), true;
   if (t.id === 'btnSuaDo') return run(ui.store.do({ t: 'suaDo' })), true;
+  if (t.dataset.ship) return run(ui.store.do({ t: 'dongTau', k: t.dataset.ship as ShipKind })), true;
+  if (t.dataset.vk) {
+    const [id, w] = t.dataset.vk.split(':');
+    return run(ui.store.do({ t: 'lapVK', id, w: w as ShipWeapon })), true;
+  }
+  if (t.dataset.phatau) return run(ui.store.do({ t: 'phaTau', id: t.dataset.phatau })), true;
   return false;
 }
 

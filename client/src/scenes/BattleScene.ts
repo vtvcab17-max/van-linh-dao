@@ -11,6 +11,7 @@ import type { Store } from '../store';
 import { zoomFor } from './IslandScene';
 import type { UI } from '../ui';
 import { drawUnit, GENERALS as GEN_LOOKS, TROOPS } from '../art2/units';
+import { drawBoat } from '../art2/builds';
 
 interface Squad {
   u: BUnit;
@@ -108,12 +109,16 @@ export class BattleScene extends Phaser.Scene {
 
   private texFor(u: BUnit, side: 0 | 1): string {
     if (u.key === 'an') return this.heroTex(u, side);
+    if (u.key.startsWith('tau-')) {
+      const m = u.key.match(/^tau-(ghe|buom|chien)(n?)(d?)(m?)$/);
+      if (m) return ensureTex(this, u.key, () => drawBoat(m[1] as 'ghe' | 'buom' | 'chien', { no: !!m[2], da: !!m[3], dam: !!m[4] }, side === 0 ? '#ee5d4a' : '#5f6878'));
+    }
     const gl = GEN_LOOKS.find((x) => x.id === u.key);
     if (gl) return ensureTex(this, `gen-${gl.id}`, () => drawUnit(gl.look));
     return `ch-${u.key}`;
   }
   private menTex(u: BUnit): string | null {
-    if (u.wall) return null;
+    if (u.wall || u.key.startsWith('tau-')) return null;
     const t = MEN[u.key];
     if (t) {
       const def = TROOPS.find((x) => x.id === t)!;
