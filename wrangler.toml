@@ -9,6 +9,9 @@ compatibility_date = "2025-09-01"
 compatibility_flags = ["nodejs_compat"]
 # giữ các biến đặt trên trang Cloudflare (ví dụ GOOGLE_CLIENT_ID) khi đưa bản mới lên
 keep_vars = true
+# bật địa chỉ công khai van-linh-dao.<tên-tài-khoản>.workers.dev
+workers_dev = true
+preview_urls = false
 
 # Bản web của game (Vite build ra thư mục dist) phục vụ cùng địa chỉ
 [assets]
