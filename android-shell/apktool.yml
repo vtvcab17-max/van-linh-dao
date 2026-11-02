@@ -1,0 +1,24 @@
+!!brut.androlib.apk.ApkInfo
+apkFileName: van-linh-dao.apk
+compressionType: false
+doNotCompress:
+- arsc
+- png
+isFrameworkApk: false
+packageInfo:
+  forcedPackageId: '127'
+  renameManifestPackage: null
+sdkInfo:
+  minSdkVersion: '21'
+  targetSdkVersion: '34'
+sharedLibrary: false
+sparseResources: false
+unknownFiles: {}
+usesFramework:
+  ids:
+  - 1
+  tag: null
+version: 2.9.3
+versionInfo:
+  versionCode: '3'
+  versionName: 0.3.0

@@ -1,0 +1,30 @@
+{
+  "name": "van-linh-dao",
+  "version": "1.0.0",
+  "description": "Vạn Linh Đảo — game chiến thuật sinh tồn trên đảo, pixel art. © Beta Holding",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:web": "VITE_EDITION=official VITE_VLD_SERVER=same-origin vite build",
+    "build:artifact": "vite build && node tools/artifact.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && tsc -p server/tsconfig.json",
+    "danh-gia": "node tools/evaluate.mjs",
+    "server:dev": "cd server && wrangler dev --port 8787",
+    "server:deploy": "npm run build:web && cd server && wrangler deploy"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "phaser": "^3.80.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10",
+    "vite-plugin-singlefile": "^2.0.3",
+    "vitest": "^2.1.4"
+  },
+  "private": true,
+  "type": "module"
+}

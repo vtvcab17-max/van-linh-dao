@@ -1,0 +1,269 @@
+// Mô phỏng trận đánh tự động theo lượt. Thuần logic, có hạt giống → server tính lại được y hệt.
+import { COMPANIONS, EFFECTS, LINH_VAT, MONSTERS, type CompKey, type MonsterKey, type SkillKey, type UnitBase } from './data';
+import type { Rng } from './rng';
+
+export interface BUnit {
+  id: string;
+  side: 0 | 1;
+  key: string; // khoá sprite
+  name: string;
+  lv: number;
+  maxHp: number;
+  hp: number;
+  atk: number;
+  def: number;
+  spd: number;
+  skill: SkillKey;
+  row: 'front' | 'back';
+  thorns: number;
+  wall?: boolean;
+  acted: number;
+  atkUp: number;
+  defUp: number;
+  taunt: number;
+  burn: number;
+  poison: number;
+}
+
+export type BEventKind = 'hit' | 'skill' | 'heal' | 'dot' | 'die' | 'buff' | 'thorns';
+export interface BEvent {
+  r: number;
+  a: string;
+  k: BEventKind;
+  s?: SkillKey;
+  t?: string[];
+  v?: number[];
+  crit?: boolean;
+}
+
+export interface BattleResult {
+  winner: 0 | 1;
+  rounds: number;
+  events: BEvent[];
+  a: BUnit[];
+  b: BUnit[];
+}
+
+const scale = (lv: number) => 1 + 0.12 * (lv - 1);
+
+export function makeUnit(base: UnitBase, key: string, lv: number, side: 0 | 1, idx: number, atkBonus = 0): BUnit {
+  const m = scale(lv);
+  return {
+    id: `${side}${idx}`,
+    side,
+    key,
+    name: base.name,
+    lv,
+    maxHp: Math.round(base.hp * m),
+    hp: Math.round(base.hp * m),
+    atk: Math.round(base.atk * m + atkBonus),
+    def: Math.round(base.def * m),
+    spd: base.spd + 0.2 * (lv - 1),
+    skill: base.skill,
+    row: base.row,
+    thorns: base.skill === 'phandon' ? 0.2 : 0,
+    acted: 0,
+    atkUp: 0,
+    defUp: 0,
+    taunt: 0,
+    burn: 0,
+    poison: 0,
+  };
+}
+
+export function makeWall(tier: number, side: 0 | 1, idx: number): BUnit {
+  const t = Math.max(1, Math.min(5, tier));
+  return {
+    id: `${side}${idx}`,
+    side,
+    key: `rao${t}`,
+    name: LINH_VAT.rao.tiers[t - 1],
+    lv: t,
+    maxHp: EFFECTS.wallHp[t - 1],
+    hp: EFFECTS.wallHp[t - 1],
+    atk: 0,
+    def: 8 + t * 4,
+    spd: 0,
+    skill: 'chan',
+    row: 'front',
+    thorns: EFFECTS.wallThorns[t - 1],
+    wall: true,
+    acted: 0,
+    atkUp: 0,
+    defUp: 0,
+    taunt: 999,
+    burn: 0,
+    poison: 0,
+  };
+}
+
+export interface TeamSpec {
+  comps: { k: CompKey; lv: number }[];
+  cuocTier: number;
+  raoTier?: number; // có → thêm lũy tre chắn (khi phòng thủ)
+  hero?: string; // tên chủ đảo (nhân vật "an" mang tên người chơi)
+}
+
+export function teamFromSpec(spec: TeamSpec, side: 0 | 1): BUnit[] {
+  const out: BUnit[] = [];
+  spec.comps.forEach((c, i) => {
+    const bonus = c.k === 'an' ? EFFECTS.anAtkBonus[Math.max(0, spec.cuocTier - 1)] : 0;
+    const base = c.k === 'an' && spec.hero ? { ...COMPANIONS.an, name: spec.hero } : COMPANIONS[c.k];
+    out.push(makeUnit(base, c.k, c.lv, side, i, bonus));
+  });
+  if (spec.raoTier) out.push(makeWall(spec.raoTier, side, out.length));
+  return out;
+}
+
+export function teamFromMonsters(list: [MonsterKey, number][], side: 0 | 1): BUnit[] {
+  return list.map(([k, lv], i) => makeUnit(MONSTERS[k], k, lv, side, i));
+}
+
+function damage(att: BUnit, def: BUnit, mult: number, rng: Rng): { dmg: number; crit: boolean } {
+  const atk = att.atk * mult * (att.atkUp > 0 ? 1.25 : 1);
+  const d = def.def * (def.defUp > 0 ? 1.6 : 1);
+  const crit = rng() < 0.1;
+  let dmg = atk * (100 / (100 + d * 5)) * (0.9 + rng() * 0.2);
+  if (crit) dmg *= 1.5;
+  return { dmg: Math.max(1, Math.round(dmg)), crit };
+}
+
+export function simulate(a: BUnit[], b: BUnit[], rng: Rng, maxRounds = 20): BattleResult {
+  const snapA = a.map((u) => ({ ...u }));
+  const snapB = b.map((u) => ({ ...u }));
+  const all = [...a, ...b];
+  const events: BEvent[] = [];
+  const alive = (side: 0 | 1) => all.filter((u) => u.side === side && u.hp > 0);
+  const over = () => alive(0).length === 0 || alive(1).length === 0;
+
+  const pickTarget = (side: 0 | 1): BUnit | undefined => {
+    const foes = alive(side === 0 ? 1 : 0);
+    if (!foes.length) return undefined;
+    const taunting = foes.filter((f) => f.taunt > 0);
+    if (taunting.length) return taunting[Math.floor(rng() * taunting.length)];
+    const front = foes.filter((f) => f.row === 'front');
+    const pool = front.length ? front : foes;
+    return pool[Math.floor(rng() * pool.length)];
+  };
+
+  const hit = (r: number, att: BUnit, tgt: BUnit, mult: number, skill?: SkillKey) => {
+    const { dmg, crit } = damage(att, tgt, mult, rng);
+    tgt.hp = Math.max(0, tgt.hp - dmg);
+    events.push({ r, a: att.id, k: skill ? 'skill' : 'hit', s: skill, t: [tgt.id], v: [dmg], crit });
+    if (tgt.thorns > 0 && att.hp > 0) {
+      const back = Math.max(1, Math.round(dmg * tgt.thorns));
+      att.hp = Math.max(0, att.hp - back);
+      events.push({ r, a: tgt.id, k: 'thorns', t: [att.id], v: [back] });
+      if (att.hp === 0) events.push({ r, a: att.id, k: 'die' });
+    }
+    if (tgt.hp === 0) events.push({ r, a: tgt.id, k: 'die' });
+  };
+
+  let round = 0;
+  while (!over() && round < maxRounds) {
+    round++;
+    const order = all
+      .filter((u) => u.hp > 0 && !u.wall)
+      .map((u) => ({ u, tie: rng() }))
+      .sort((x, y) => y.u.spd - x.u.spd || x.tie - y.tie)
+      .map((x) => x.u);
+    for (const u of order) {
+      if (u.hp <= 0 || over()) continue;
+      // sát thương theo thời gian
+      if (u.burn > 0 || u.poison > 0) {
+        const pct = (u.burn > 0 ? 0.06 : 0) + (u.poison > 0 ? 0.05 : 0);
+        const v = Math.max(1, Math.round(u.maxHp * pct));
+        u.hp = Math.max(0, u.hp - v);
+        events.push({ r: round, a: u.id, k: 'dot', v: [v] });
+        if (u.hp === 0) {
+          events.push({ r: round, a: u.id, k: 'die' });
+          continue;
+        }
+      }
+      const useSkill = u.acted % 3 === 2;
+      u.acted++;
+      const allies = alive(u.side);
+      if (!useSkill) {
+        const t = pickTarget(u.side);
+        if (t) hit(round, u, t, 1);
+        continue;
+      }
+      switch (u.skill) {
+        case 'thinhhon': {
+          allies.forEach((x) => (x.atkUp = 2));
+          events.push({ r: round, a: u.id, k: 'buff', s: u.skill, t: allies.map((x) => x.id) });
+          const t = pickTarget(u.side);
+          if (t) hit(round, u, t, 1);
+          break;
+        }
+        case 'thietcot': {
+          u.taunt = 2;
+          u.defUp = 2;
+          events.push({ r: round, a: u.id, k: 'buff', s: u.skill, t: [u.id] });
+          break;
+        }
+        case 'lalanh': {
+          const low = allies.filter((x) => !x.wall).sort((x, y) => x.hp / x.maxHp - y.hp / y.maxHp)[0];
+          if (low) {
+            const v = Math.round(low.maxHp * 0.28);
+            low.hp = Math.min(low.maxHp, low.hp + v);
+            low.burn = 0;
+            low.poison = 0;
+            events.push({ r: round, a: u.id, k: 'heal', s: u.skill, t: [low.id], v: [v] });
+          }
+          break;
+        }
+        case 'samset': {
+          const foes = alive(u.side === 0 ? 1 : 0).sort(() => rng() - 0.5).slice(0, 2);
+          for (const f of foes) if (u.hp > 0) hit(round, u, f, 1.15, 'samset');
+          break;
+        }
+        case 'dot': {
+          const t = pickTarget(u.side);
+          if (t) {
+            hit(round, u, t, 1, 'dot');
+            if (t.hp > 0) t.burn = 2;
+          }
+          break;
+        }
+        case 'docto': {
+          const t = pickTarget(u.side);
+          if (t) {
+            hit(round, u, t, 1, 'docto');
+            if (t.hp > 0) t.poison = 3;
+          }
+          break;
+        }
+        case 'danhkep': {
+          for (let i = 0; i < 2; i++) {
+            const t = pickTarget(u.side);
+            if (t && u.hp > 0) hit(round, u, t, 0.7, 'danhkep');
+          }
+          break;
+        }
+        case 'dapcang': {
+          for (const f of alive(u.side === 0 ? 1 : 0)) if (u.hp > 0) hit(round, u, f, 0.65, 'dapcang');
+          break;
+        }
+        case 'cuoploi': {
+          const t = pickTarget(u.side);
+          if (t) hit(round, u, t, 1.4, 'cuoploi');
+          break;
+        }
+        default: {
+          const t = pickTarget(u.side);
+          if (t) hit(round, u, t, 1.2, u.skill);
+        }
+      }
+    }
+    for (const u of all) {
+      if (u.atkUp > 0) u.atkUp--;
+      if (u.defUp > 0) u.defUp--;
+      if (u.taunt > 0 && u.taunt < 999) u.taunt--;
+      if (u.burn > 0) u.burn--;
+      if (u.poison > 0) u.poison--;
+    }
+  }
+  const winner: 0 | 1 = alive(1).length === 0 && alive(0).length > 0 ? 0 : 1;
+  return { winner, rounds: round, events, a: snapA, b: snapB };
+}
