@@ -14,8 +14,8 @@ import { SEA_COLS, SEA_ROWS } from './mapsize';
 export type Rarity = 'thường' | 'hiếm' | 'quý' | 'huyền thoại';
 export const RARITY_COLOR: Record<Rarity, string> = { thường: '#d8d2c4', hiếm: '#62b356', quý: '#4f90da', 'huyền thoại': '#ec8d3c' };
 
-export type ItemKey = 'banhchung' | 'ruounep' | 'haido' | 'goquy' | 'ngoctraiden' | 'lenhbai' | 'vayrong' | 'trongdong';
-export const ITEM_KEYS: ItemKey[] = ['banhchung', 'ruounep', 'haido', 'goquy', 'ngoctraiden', 'lenhbai', 'vayrong', 'trongdong'];
+export type ItemKey = 'banhchung' | 'ruounep' | 'haido' | 'goquy' | 'ngoctraiden' | 'lenhbai' | 'vayrong' | 'trongdong' | 'thegd';
+export const ITEM_KEYS: ItemKey[] = ['banhchung', 'ruounep', 'haido', 'goquy', 'ngoctraiden', 'lenhbai', 'vayrong', 'trongdong', 'thegd'];
 
 export interface ItemDef {
   name: string;
@@ -35,6 +35,7 @@ export const ITEMS: Record<ItemKey, ItemDef> = {
   ngoctraiden: { name: 'Ngọc Trai Đen', rarity: 'quý', desc: 'Đổi lấy 4 Ngọc Trai. Thương buôn rất chuộng.', value: 700, use: true },
   lenhbai: { name: 'Lệnh Bài Thủy Sư', rarity: 'quý', desc: 'Thêm vĩnh viễn 1 đội thợ xây (tối đa 2 lệnh bài).', value: 1500, use: true },
   vayrong: { name: 'Vảy Rồng Lạc Long', rarity: 'huyền thoại', desc: 'Giữ trong túi: +5% công mọi trận (tối đa 3 vảy).', value: 4000, use: false },
+  thegd: { name: 'Thẻ Đổi Giao Diện', rarity: 'quý', desc: 'Mở bảng chỉnh nhân vật một lần (dùng khi chỉnh avatar, mất sau khi lưu).', value: 800, use: false },
   trongdong: { name: 'Trống Đồng Đông Sơn', rarity: 'huyền thoại', desc: 'Giữ trong túi: thuế thu được +25%.', value: 6000, use: false },
 };
 
@@ -76,6 +77,7 @@ export const SHOP_BASE: ShopOffer[] = [
   { id: 'sat', good: 'sat', n: 60, price: 150 },
   { id: 'la', good: 'la', n: 100, price: 90 },
   { id: 'hd', good: 'haido', n: 1, price: 320, daily: 2 },
+  { id: 'tg', good: 'thegd', n: 1, price: 900, daily: 1 },
 ];
 
 /** Hàng hiếm bày bán theo ngày (đổi mỗi 00:00 giờ Việt Nam), mỗi người mua 1 lần/ngày. */

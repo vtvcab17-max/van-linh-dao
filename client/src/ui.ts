@@ -1430,6 +1430,11 @@ export class UI {
   // ---------------- tạo / chỉnh nhân vật ----------------
   openAvatar(first = false) {
     const s = this.store.s;
+    // chỉ đổi được một lần; sau đó cần Thẻ Đổi Giao Diện
+    if (s.avatarSet && !first && (s.bag.thegd ?? 0) < 1) {
+      this.toast('Nhân vật chỉ đổi được một lần. Mua Thẻ Đổi Giao Diện ở Chợ để đổi lại.', 'bad');
+      return;
+    }
     let av: Avatar = { ...s.avatar };
     const swatch = (key: 'sk' | 'hc' | 'tc', list: readonly { name: string; c: readonly string[] }[]) =>
       `<div class="sw" role="radiogroup">${list
@@ -1452,7 +1457,7 @@ export class UI {
         </div>
       </div>
       <div class="row"><button type="button" id="avRand">Ngẫu nhiên</button><button type="button" class="primary" id="avSave" style="flex:1">${first ? 'Vào đảo' : 'Lưu nhân vật'}</button></div>
-      ${first ? '<p class="muted small">Đổi lại lúc nào cũng được: chạm vào nhân vật trên đảo hoặc vào Cài đặt.</p>' : ''}`;
+      ${first ? '<p class="muted small">Chú ý: chỉ chọn được một lần. Muốn đổi lại sau này phải có Thẻ Đổi Giao Diện (bán ở Chợ).</p>' : '<p class="muted small">Lưu sẽ dùng 1 Thẻ Đổi Giao Diện.</p>'}`;
     const names: Record<string, (a: Avatar) => string> = {
       ha: (a) => HAIRS[a.g][a.ha],
       to: (a) => OUTFITS[a.to],

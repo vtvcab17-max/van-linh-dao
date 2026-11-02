@@ -991,6 +991,11 @@ export function apply(s: PlayerState, a: Action): Outcome {
     case 'avatar': {
       const av = cleanAvatar(a.av);
       if (!av) return fail('Dáng vẻ không hợp lệ.');
+      // lần đầu miễn phí; sau đó mỗi lần đổi tốn một Thẻ Đổi Giao Diện
+      if (s.avatarSet) {
+        if ((s.bag.thegd ?? 0) < 1) return fail('Nhân vật chỉ đổi được một lần. Cần Thẻ Đổi Giao Diện (mua ở Chợ).');
+        s.bag.thegd = (s.bag.thegd ?? 0) - 1;
+      }
       s.avatar = av;
       s.avatarSet = true;
       return { ok: true, msg: 'Đã lưu dáng vẻ nhân vật.' };

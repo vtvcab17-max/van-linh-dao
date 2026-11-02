@@ -308,3 +308,17 @@ describe('Kinh tế: nhà cửa, thuế, cửa hàng, thôn tính', () => {
     expect(v.chuQuan).toBeNull();
   });
 });
+
+describe('nhân vật chỉ đổi một lần', () => {
+  it('lần đầu miễn phí, lần sau cần Thẻ Đổi Giao Diện', () => {
+    const s = newPlayer('av1', 'Thử', 1000);
+    const av = { ...s.avatar, ha: (s.avatar.ha + 1) % 5 };
+    expect(apply(s, { t: 'avatar', av }).ok).toBe(true);
+    const av2 = { ...av, ha: (av.ha + 1) % 5 };
+    expect(apply(s, { t: 'avatar', av: av2 }).ok).toBe(false);
+    s.bag.thegd = 1;
+    expect(apply(s, { t: 'avatar', av: av2 }).ok).toBe(true);
+    expect(s.bag.thegd).toBe(0);
+    expect(apply(s, { t: 'avatar', av }).ok).toBe(false);
+  });
+});

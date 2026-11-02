@@ -91,9 +91,8 @@ export class IslandScene extends Phaser.Scene {
       this.blinkUntil[k] = 0;
     }
     this.tweens.add({ targets: this.lvs.thuyen, angle: { from: -2, to: 2 }, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
-    // nhân vật chủ đảo (nam/nữ, theo dáng vẻ người chơi tự chỉnh); chạm vào để chỉnh
+    // nhân vật chủ đảo (nam/nữ); chỉ đi theo ô vuông, chạm vào không mở gì cả
     this.an = this.add.image(wx(11) + 8, wx(12) + 15, avatarTex(this, this.store.s.avatar)).setOrigin(0.5, 1).setScale(Q);
-    this.an.setInteractive({ useHandCursor: true }).on('pointerup', () => !this.dragged && this.ui.openAvatar());
     this.events.on('wake', () => this.enterFromSea());
     this.rua = this.add.image(wx(9) + 8, wx(14) + 12, 'ch-rua').setOrigin(0.5, 1).setDepth(wx(14)).setScale(Q);
     const labelsBox = () => document.getElementById('buildlabels');
@@ -201,14 +200,63 @@ export class IslandScene extends Phaser.Scene {
     return this.screenOf(img.x, this.lvTop(k));
   }
 
+  /** Ô lưới hiện tại của nhân vật. */
+  private cellOf() {
+    return { x: Math.round((this.an.x - PAD - 8) / T), y: Math.round((this.an.y - PAD - 15) / T) };
+  }
+  private walkable(tx: number, ty: number) {
+    const s = this.store.s;
+    return isLand(s, tx, ty) && !occupied(s, tx, ty);
+  }
+  /** Tìm đường ngắn nhất theo ô vuông (4 hướng) tới ô đích hoặc ô trống sát đích. */
+  private pathTo(tx: number, ty: number): { x: number; y: number }[] | null {
+    const from = this.cellOf();
+    const goal = (x: number, y: number) => (x === tx && y === ty) || (!this.walkable(tx, ty) && Math.abs(x - tx) + Math.abs(y - ty) === 1);
+    const key = (x: number, y: number) => y * GRID + x;
+    const prev = new Map<number, number>();
+    const q: { x: number; y: number }[] = [from];
+    prev.set(key(from.x, from.y), -1);
+    let end: { x: number; y: number } | null = goal(from.x, from.y) && this.walkable(from.x, from.y) ? from : null;
+    for (let i = 0; i < q.length && !end; i++) {
+      const c = q[i];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = c.x + dx, ny = c.y + dy;
+        if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID || prev.has(key(nx, ny)) || !this.walkable(nx, ny)) continue;
+        prev.set(key(nx, ny), key(c.x, c.y));
+        q.push({ x: nx, y: ny });
+        if (goal(nx, ny)) {
+          end = { x: nx, y: ny };
+          break;
+        }
+      }
+    }
+    if (!end) return null;
+    const out: { x: number; y: number }[] = [];
+    for (let k = key(end.x, end.y); k !== -1; k = prev.get(k)!) out.unshift({ x: k % GRID, y: Math.floor(k / GRID) });
+    out.shift();
+    return out;
+  }
+  private walkChain: Phaser.Tweens.TweenChain | null = null;
   private walkTo(tx: number, ty: number) {
-    const x = wx(tx) + (this.an.x < wx(tx) + 8 ? -2 : 18);
-    const y = wx(ty) + 15;
-    this.an.setFlipX(x < this.an.x);
-    const dist = Phaser.Math.Distance.Between(this.an.x, this.an.y, x, y);
-    this.tweens.killTweensOf(this.an);
-    this.tweens.add({ targets: this.an, x, y, duration: Math.min(900, dist * 9), ease: 'Linear' });
+    const path = this.pathTo(tx, ty);
     this.store.net.setActivity('đang làm lụng trên đảo');
+    this.walkChain?.stop();
+    this.tweens.killTweensOf(this.an);
+    // đang đi dở thì dừng ở giữa ô: kéo về ô gần nhất cho khỏi lệch lưới
+    const c0 = this.cellOf();
+    this.an.setPosition(wx(c0.x) + 8, wx(c0.y) + 15);
+    if (!path || !path.length) return;
+    // đi từng ô, mỗi ô một nhịp, không cắt chéo
+    this.walkChain = this.tweens.chain({
+      targets: this.an,
+      tweens: path.map((c) => ({
+        x: wx(c.x) + 8,
+        y: wx(c.y) + 15,
+        duration: 150,
+        ease: 'Linear',
+        onStart: () => this.an.setFlipX(wx(c.x) + 8 < this.an.x),
+      })),
+    });
   }
 
   private tapNode(id: string) {
