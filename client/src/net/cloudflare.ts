@@ -177,6 +177,12 @@ export class CloudflareNet extends NetBase {
         this.bossW = m.boss as BossWorld;
         this.emit('boss');
         return;
+      case 'dm':
+        this.emit('dm', m.msg);
+        return;
+      case 'social':
+        this.emit('social', m);
+        return;
       case 'owners':
         this.own = (m.owners as Record<string, IsleOwner>) ?? {};
         this.emit('owners');

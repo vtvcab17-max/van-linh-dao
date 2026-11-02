@@ -373,6 +373,7 @@ export class SeaScene extends Phaser.Scene {
     const w = worldFor(s.khu);
     const online = new Set(net.online().map((o) => o.id));
     const myGuild = s.guild?.tag ?? '';
+    const allyT = new Set([myGuild, ...(s.guild?.allyTags ?? [])].filter(Boolean));
     // lãnh thổ: đảo tự nhiên có chủ + vùng quanh đảo nhà
     const terr = new Map<string, number>();
     const mark = (c: number, r: number, col: number, k = 1) => {
@@ -380,10 +381,10 @@ export class SeaScene extends Phaser.Scene {
       if (k) for (const n of hexNeighbors({ c, r })) if (!terr.has(`${n.c},${n.r}`)) terr.set(`${n.c},${n.r}`, col);
     };
     const MINE = 0x4fd06a, ALLY = 0x5aa8ff, OTHER = 0xf0554a, BOT = 0xffc36a;
-    for (const p of list) if (p.home && seenAt(p.home.x, p.home.y)) mark(p.home.x, p.home.y, p.bot ? BOT : myGuild && p.guild === myGuild ? ALLY : OTHER);
+    for (const p of list) if (p.home && seenAt(p.home.x, p.home.y)) mark(p.home.x, p.home.y, p.bot ? BOT : allyT.has(p.guild ?? '') ? ALLY : OTHER);
     for (const [isle, o] of Object.entries(owners)) {
       const i = w.isles.find((x) => x.id === isle);
-      if (i && seenAt(i.c, i.r)) mark(i.c, i.r, o.p === s.id ? MINE : myGuild && o.g === myGuild ? ALLY : OTHER);
+      if (i && seenAt(i.c, i.r)) mark(i.c, i.r, o.p === s.id ? MINE : allyT.has(o.g) ? ALLY : OTHER);
     }
     for (const o of s.isles) {
       const i = w.isles.find((x) => x.id === o.id);
@@ -403,7 +404,7 @@ export class SeaScene extends Phaser.Scene {
       if (!seenAt(c.x, c.y)) continue;
       const q = hexCenterPx({ c: c.x, r: c.y });
       this.island(p.id, q.x, q.y, p.bot ? 'bot' : 'player', p.land, p.tiers?.leu ?? 1, online.has(p.id));
-      this.label(q.x, q.y + 14, p.name, p.bot ? '#ffd29a' : myGuild && p.guild === myGuild ? '#bfe0ff' : '#ffb3a8', `${p.power} sức mạnh${p.guild ? ` · [${p.guild}]` : ''}`);
+      this.label(q.x, q.y + 14, p.name, p.bot ? '#ffd29a' : allyT.has(p.guild ?? '') ? '#bfe0ff' : '#ffb3a8', `${p.power} sức mạnh${p.guild ? ` · [${p.guild}]` : ''}`);
     }
     // đảo tự nhiên
     for (const i of w.isles) {
@@ -413,7 +414,7 @@ export class SeaScene extends Phaser.Scene {
       this.add1(img);
       const own = owners[i.id];
       const mine = s.isles.some((o) => o.id === i.id);
-      if (own || mine) this.flag(q.x + 7, q.y - 10, mine ? MINE : myGuild && own?.g === myGuild ? ALLY : OTHER);
+      if (own || mine) this.flag(q.x + 7, q.y - 10, mine ? MINE : allyT.has(own?.g ?? '') ? ALLY : OTHER);
       if (i.kind === 'bian' && !mine) {
         const ring = this.add.circle(q.x, q.y + 2, 12).setStrokeStyle(1, 0xc07cff, 0.9);
         this.tweens.add({ targets: ring, scale: { from: 0.85, to: 1.2 }, alpha: { from: 1, to: 0.2 }, duration: 1100, yoyo: true, repeat: -1 });

@@ -169,14 +169,14 @@ export function openMap(ui: UI) {
       const i = r * WORLD_W + c;
       return (seen[i >> 3] & (1 << (i & 7))) !== 0;
     };
-    for (const i of w.isles) if (isSeenAt(i.c, i.r)) dot(i.c, i.r, owners[i.id] ? (owners[i.id].p === s.id ? '#4fd06a' : owners[i.id].g && owners[i.id].g === s.guild?.tag ? '#5aa8ff' : '#f0554a') : i.kind === 'bian' ? '#c07cff' : '#cfe8a0');
+    for (const i of w.isles) if (isSeenAt(i.c, i.r)) dot(i.c, i.r, owners[i.id] ? (owners[i.id].p === s.id ? '#4fd06a' : owners[i.id].g && [s.guild?.tag, ...(s.guild?.allyTags ?? [])].includes(owners[i.id].g) ? '#5aa8ff' : '#f0554a') : i.kind === 'bian' ? '#c07cff' : '#cfe8a0');
     for (const o of s.isles) {
       const i = w.isles.find((y) => y.id === o.id);
       if (i) dot(i.c, i.r, '#4fd06a', K + 2);
     }
     for (const p of ui.store.net.islands()) {
       const h = p.home ?? islandCell(p.id, s.khu);
-      if (isSeenAt(h.x, h.y)) dot(h.x, h.y, p.bot ? '#ffc36a' : p.guild && p.guild === s.guild?.tag ? '#5aa8ff' : '#f0554a', K + 1);
+      if (isSeenAt(h.x, h.y)) dot(h.x, h.y, p.bot ? '#ffc36a' : p.guild && [s.guild?.tag, ...(s.guild?.allyTags ?? [])].includes(p.guild) ? '#5aa8ff' : '#f0554a', K + 1);
     }
     dot(CENTER.c, CENTER.r, '#8a1f1f', K + 4);
     const me = homeCell(s);

@@ -73,6 +73,11 @@ export class Cho extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS trades (id INTEGER PRIMARY KEY AUTOINCREMENT, good TEXT, n INTEGER, price INTEGER, t INTEGER);
       CREATE TABLE IF NOT EXISTS guilds (id TEXT PRIMARY KEY, name TEXT UNIQUE, tag TEXT UNIQUE, leader TEXT, leaderName TEXT, fund INTEGER DEFAULT 0, about TEXT, created INTEGER);
       CREATE TABLE IF NOT EXISTS gmembers (player TEXT PRIMARY KEY, guild TEXT, name TEXT, khu TEXT, joined INTEGER, donated INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS friend_req (fr TEXT, too TEXT, frName TEXT, frKhu TEXT, t INTEGER, PRIMARY KEY (fr, too));
+      CREATE TABLE IF NOT EXISTS friends (a TEXT, b TEXT, aName TEXT, bName TEXT, aKhu TEXT, bKhu TEXT, t INTEGER, PRIMARY KEY (a, b));
+      CREATE TABLE IF NOT EXISTS dm (id INTEGER PRIMARY KEY AUTOINCREMENT, fr TEXT, too TEXT, frName TEXT, t INTEGER, body TEXT, seen INTEGER DEFAULT 0);
+      CREATE INDEX IF NOT EXISTS dm_too ON dm(too);
+      CREATE TABLE IF NOT EXISTS gally (a TEXT, b TEXT, status TEXT, t INTEGER, PRIMARY KEY (a, b));
       CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
     `);
   }
@@ -242,10 +247,10 @@ export class Cho extends DurableObject<Env> {
     const members = this.sql.exec<{ c: number }>('SELECT COUNT(*) AS c FROM gmembers WHERE guild = ?', id).one().c;
     return { ...g, members, lv: guildLevel(g.fund) };
   }
-  async memberOf(player: string): Promise<{ id: string; name: string; tag: string; lv: number } | null> {
+  async memberOf(player: string): Promise<{ id: string; name: string; tag: string; lv: number; allies: string[]; allyTags: string[] } | null> {
     const m = this.sql.exec<{ guild: string }>('SELECT guild FROM gmembers WHERE player = ?', player).toArray()[0];
     const g = m && this.guildOf(m.guild);
-    return g ? { id: g.id, name: g.name, tag: g.tag, lv: g.lv } : null;
+    return g ? { id: g.id, name: g.name, tag: g.tag, lv: g.lv, allies: this.alliesOf(g.id), allyTags: this.alliesOf(g.id).map((x) => this.guildOf(x)?.tag ?? '').filter(Boolean) } : null;
   }
   async gList(): Promise<R> {
     const ids = this.sql.exec<{ id: string }>('SELECT id FROM guilds ORDER BY fund DESC LIMIT 50').toArray();
@@ -302,6 +307,126 @@ export class Cho extends DurableObject<Env> {
     if (who === leader) return no('Hội trưởng muốn đi thì bấm Rời hội.');
     this.sql.exec('DELETE FROM gmembers WHERE player = ? AND guild = ?', who, g.id);
     return ok(undefined, 'Đã mời ra khỏi hội.');
+  }
+
+  // ---------- bạn bè, nhắn riêng ----------
+  private pair(x: string, y: string): [string, string] {
+    return x < y ? [x, y] : [y, x];
+  }
+  private isFriend(x: string, y: string) {
+    const [a, b] = this.pair(x, y);
+    return this.sql.exec('SELECT 1 FROM friends WHERE a = ? AND b = ?', a, b).toArray().length > 0;
+  }
+  private async notify(player: string, khu: string, msg: unknown) {
+    try {
+      const stub = this.env.HAI_KHU.get(this.env.HAI_KHU.idFromName(khu)) as unknown as { push(p: string, m: unknown): Promise<void> };
+      await stub.push(player, msg);
+    } catch {
+      /* người nhận xem lúc vào lại */
+    }
+  }
+  /** Gửi lời mời kết bạn; nếu người kia đã mời mình thì thành bạn luôn. */
+  async fAdd(me: string, meName: string, meKhu: string, other: string, otherName: string, otherKhu: string): Promise<R> {
+    if (!other || other === me) return no('Không kết bạn với chính mình được.');
+    if (this.isFriend(me, other)) return no('Hai người đã là bạn.');
+    const back = this.sql.exec('SELECT 1 FROM friend_req WHERE fr = ? AND too = ?', other, me).toArray().length > 0;
+    if (back) return this.fAccept(me, meName, meKhu, other);
+    const n = this.sql.exec<{ c: number }>('SELECT COUNT(*) AS c FROM friend_req WHERE fr = ?', me).one().c;
+    if (n >= 30) return no('Bạn đang chờ quá nhiều lời mời.');
+    this.sql.exec('INSERT OR REPLACE INTO friend_req (fr, too, frName, frKhu, t) VALUES (?, ?, ?, ?, ?)', me, other, meName, meKhu, Date.now());
+    if (otherKhu) this.ctx.waitUntil(this.notify(other, otherKhu, { t: 'social', kind: 'req', from: meName }));
+    return ok(undefined, `Đã gửi lời mời kết bạn tới ${otherName || other}.`);
+  }
+  async fAccept(me: string, meName: string, meKhu: string, other: string): Promise<R> {
+    const r = this.sql.exec<{ frName: string; frKhu: string }>('SELECT frName, frKhu FROM friend_req WHERE fr = ? AND too = ?', other, me).toArray()[0];
+    if (!r) return no('Không có lời mời này.');
+    this.sql.exec('DELETE FROM friend_req WHERE (fr = ? AND too = ?) OR (fr = ? AND too = ?)', other, me, me, other);
+    const [a, b] = this.pair(me, other);
+    const aIsMe = a === me;
+    this.sql.exec('INSERT OR REPLACE INTO friends (a, b, aName, bName, aKhu, bKhu, t) VALUES (?, ?, ?, ?, ?, ?, ?)', a, b, aIsMe ? meName : r.frName, aIsMe ? r.frName : meName, aIsMe ? meKhu : r.frKhu, aIsMe ? r.frKhu : meKhu, Date.now());
+    this.ctx.waitUntil(this.notify(other, r.frKhu, { t: 'social', kind: 'friend', from: meName }));
+    return ok(undefined, `${r.frName} và bạn đã là bạn bè.`);
+  }
+  async fRemove(me: string, other: string): Promise<R> {
+    const [a, b] = this.pair(me, other);
+    this.sql.exec('DELETE FROM friends WHERE a = ? AND b = ?', a, b);
+    this.sql.exec('DELETE FROM friend_req WHERE (fr = ? AND too = ?) OR (fr = ? AND too = ?)', other, me, me, other);
+    return ok(undefined, 'Đã xóa.');
+  }
+  async fList(me: string): Promise<R> {
+    const friends = this.sql
+      .exec<{ a: string; b: string; aName: string; bName: string; aKhu: string; bKhu: string }>('SELECT a, b, aName, bName, aKhu, bKhu FROM friends WHERE a = ? OR b = ?', me, me)
+      .toArray()
+      .map((f) => (f.a === me ? { id: f.b, name: f.bName, khu: f.bKhu } : { id: f.a, name: f.aName, khu: f.aKhu }));
+    const incoming = this.sql.exec<{ fr: string; frName: string; frKhu: string }>('SELECT fr, frName, frKhu FROM friend_req WHERE too = ?', me).toArray().map((r) => ({ id: r.fr, name: r.frName, khu: r.frKhu }));
+    const outgoing = this.sql.exec<{ too: string }>('SELECT too FROM friend_req WHERE fr = ?', me).toArray().map((r) => r.too);
+    const unread = this.sql.exec<{ fr: string; c: number }>('SELECT fr, COUNT(*) AS c FROM dm WHERE too = ? AND seen = 0 GROUP BY fr', me).toArray();
+    return ok({ friends, incoming, outgoing, unread: Object.fromEntries(unread.map((u) => [u.fr, u.c])) });
+  }
+  /** Nhắn riêng: chỉ giữa bạn bè (chống làm phiền). */
+  async dmSend(me: string, meName: string, other: string, body: string): Promise<R> {
+    body = body.replace(/[ -]/g, ' ').trim().slice(0, 300);
+    if (!body) return no('Chưa có nội dung.');
+    if (!this.isFriend(me, other)) return no('Chỉ nhắn riêng được với bạn bè. Gửi lời mời kết bạn trước.');
+    const t = Date.now();
+    this.sql.exec('INSERT INTO dm (fr, too, frName, t, body, seen) VALUES (?, ?, ?, ?, ?, 0)', me, other, meName, t, body);
+    const [a, b] = this.pair(me, other);
+    const f = this.sql.exec<{ a: string; aKhu: string; bKhu: string }>('SELECT a, aKhu, bKhu FROM friends WHERE a = ? AND b = ?', a, b).toArray()[0];
+    const khu = f ? (f.a === other ? f.aKhu : f.bKhu) : '';
+    if (khu) this.ctx.waitUntil(this.notify(other, khu, { t: 'dm', msg: { fr: me, frName: meName, too: other, t, body } }));
+    // giữ 200 tin gần nhất mỗi cặp
+    this.sql.exec('DELETE FROM dm WHERE id IN (SELECT id FROM dm WHERE (fr = ? AND too = ?) OR (fr = ? AND too = ?) ORDER BY id DESC LIMIT -1 OFFSET 200)', me, other, other, me);
+    return ok({ fr: me, frName: meName, too: other, t, body });
+  }
+  async dmThread(me: string, other: string): Promise<R> {
+    const rows = this.sql.exec<{ fr: string; frName: string; too: string; t: number; body: string }>('SELECT fr, frName, too, t, body FROM dm WHERE (fr = ? AND too = ?) OR (fr = ? AND too = ?) ORDER BY id DESC LIMIT 60', me, other, other, me).toArray().reverse();
+    this.sql.exec('UPDATE dm SET seen = 1 WHERE fr = ? AND too = ?', other, me);
+    return ok({ msgs: rows });
+  }
+
+  // ---------- liên minh thương hội ----------
+  private leaderGuild(player: string): Guild | null {
+    const m = this.sql.exec<{ guild: string }>('SELECT guild FROM gmembers WHERE player = ?', player).toArray()[0];
+    const g = m && this.guildOf(m.guild);
+    return g && g.leader === player ? g : null;
+  }
+  /** Các hội đã kết liên minh với hội này. */
+  alliesOf(guild: string): string[] {
+    return this.sql
+      .exec<{ a: string; b: string }>("SELECT a, b FROM gally WHERE (a = ? OR b = ?) AND status = 'dong'", guild, guild)
+      .toArray()
+      .map((r) => (r.a === guild ? r.b : r.a));
+  }
+  async gAlly(player: string, target: string): Promise<R> {
+    const g = this.leaderGuild(player);
+    if (!g) return no('Chỉ hội trưởng mới kết liên minh.');
+    if (g.id === target || !this.guildOf(target)) return no('Không có thương hội này.');
+    const [a, b] = this.pair(g.id, target);
+    const cur = this.sql.exec<{ status: string }>('SELECT status FROM gally WHERE a = ? AND b = ?', a, b).toArray()[0];
+    if (cur?.status === 'dong') return no('Hai hội đã là đồng minh.');
+    if (cur && cur.status === `xin:${target}`) {
+      this.sql.exec("UPDATE gally SET status = 'dong', t = ? WHERE a = ? AND b = ?", Date.now(), a, b);
+      return ok(undefined, 'Đã kết liên minh!');
+    }
+    if (this.alliesOf(g.id).length >= 3) return no('Mỗi hội tối đa 3 đồng minh.');
+    this.sql.exec('INSERT OR REPLACE INTO gally (a, b, status, t) VALUES (?, ?, ?, ?)', a, b, `xin:${g.id}`, Date.now());
+    return ok(undefined, 'Đã gửi lời mời liên minh. Hội trưởng bên kia bấm Kết liên minh để đồng ý.');
+  }
+  async gAllyEnd(player: string, target: string): Promise<R> {
+    const g = this.leaderGuild(player);
+    if (!g) return no('Chỉ hội trưởng mới hủy liên minh.');
+    const [a, b] = this.pair(g.id, target);
+    this.sql.exec('DELETE FROM gally WHERE a = ? AND b = ?', a, b);
+    return ok(undefined, 'Đã hủy liên minh.');
+  }
+  async gAllies(guild: string): Promise<R> {
+    const allies = this.alliesOf(guild).map((id) => this.guildOf(id)).filter(Boolean);
+    const asks = this.sql
+      .exec<{ a: string; b: string; status: string }>("SELECT a, b, status FROM gally WHERE (a = ? OR b = ?) AND status LIKE 'xin:%'", guild, guild)
+      .toArray()
+      .map((r) => ({ from: r.status.slice(4), other: r.a === guild ? r.b : r.a }))
+      .map((x) => ({ ...x, g: this.guildOf(x.other) }));
+    return ok({ allies, asks });
   }
 
   // ---------- thương buôn NPC ----------

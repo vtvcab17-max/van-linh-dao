@@ -14,7 +14,7 @@ import { bLevel, GUILD_COST, isGood, marketFee } from '../../shared/economy';
 import type { Cho, Mail } from './cho';
 
 /** Các hàm của Chợ gọi được từ Hải Khu (gọi xuyên Durable Object). */
-type ChoApi = Pick<Cho, 'search' | 'mine' | 'list' | 'buy' | 'cancel' | 'order' | 'fill' | 'bid' | 'claim' | 'memberOf' | 'gList' | 'gInfo' | 'gCreate' | 'gJoin' | 'gLeave' | 'gDonate' | 'gKick'>;
+type ChoApi = Pick<Cho, 'search' | 'mine' | 'list' | 'buy' | 'cancel' | 'order' | 'fill' | 'bid' | 'claim' | 'memberOf' | 'gList' | 'gInfo' | 'gCreate' | 'gJoin' | 'gLeave' | 'gDonate' | 'gKick' | 'fAdd' | 'fAccept' | 'fRemove' | 'fList' | 'dmSend' | 'dmThread' | 'gAlly' | 'gAllyEnd' | 'gAllies'>;
 
 export interface Env {
   HAI_KHU: DurableObjectNamespace<HaiKhu>;
@@ -313,14 +313,14 @@ export class HaiKhu extends DurableObject<Env> {
     this.sql.exec('INSERT INTO fleets (player, body, ends) VALUES (?, ?, ?) ON CONFLICT(player) DO UPDATE SET body = excluded.body, ends = excluded.ends', s.id, JSON.stringify(body), Math.round(body.r));
   }
   /** Danh sách đoàn thuyền gửi cho một người: tên chủ thuyền chỉ hiện với chính mình và cùng thương hội. */
-  fleetsFor(viewer: string, guild: string) {
+  fleetsFor(viewer: string, guild: string, allies: string[] = []) {
     this.sql.exec('DELETE FROM fleets WHERE ends < ?', Date.now() - 60_000);
     return this.sql
       .exec<{ body: string }>('SELECT body FROM fleets')
       .toArray()
       .map((r) => JSON.parse(r.body))
       .map((f) => {
-        const ally = f.p === viewer || (guild && f.g === guild);
+        const ally = f.p === viewer || (guild && (f.g === guild || allies.includes(f.g)));
         return { id: f.id, k: f.k, from: f.from, to: f.to, d: f.d, a: f.a, r: f.r, t: f.t, mine: f.p === viewer, who: ally ? f.n : '' };
       });
   }
@@ -328,8 +328,8 @@ export class HaiKhu extends DurableObject<Env> {
     for (const ws of this.sockets()) {
       const a = this.att(ws);
       if (!a?.id) continue;
-      const g = this.cache.get(a.id)?.guild?.id ?? '';
-      this.send(ws, { t: 'fleets', list: this.fleetsFor(a.id, g) });
+      const gd = this.cache.get(a.id)?.guild;
+      this.send(ws, { t: 'fleets', list: this.fleetsFor(a.id, gd?.id ?? '', gd?.allies ?? []) });
     }
   }
 
@@ -406,7 +406,7 @@ export class HaiKhu extends DurableObject<Env> {
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server, [id]);
     server.serializeAttachment({ id, name: s.name, act: 'vừa vào Hải Khu', win: now, n: 0 } satisfies Att);
-    this.send(server, { t: 'welcome', state: s, serverNow: Date.now(), islands: [...allBots(now), ...this.pubs().filter((p) => p.id !== id)], chat: this.chatTail(), online: this.online(), version: GAME.version, boss: bw, owners: this.owners(), fleets: this.fleetsFor(id, s.guild?.id ?? '') });
+    this.send(server, { t: 'welcome', state: s, serverNow: Date.now(), islands: [...allBots(now), ...this.pubs().filter((p) => p.id !== id)], chat: this.chatTail(), online: this.online(), version: GAME.version, boss: bw, owners: this.owners(), fleets: this.fleetsFor(id, s.guild?.id ?? '', s.guild?.allies ?? []) });
     // tin bị đột kích lúc vắng nhà
     const pending = this.sql.exec<{ id: string; body: string }>('SELECT id, body FROM raids WHERE target = ? AND delivered = 0', id).toArray();
     for (const r of pending) {
@@ -492,6 +492,11 @@ export class HaiKhu extends DurableObject<Env> {
     for (const m of mail) giveGood(s, m.good, m.n);
     if (mail.length) this.touch(s);
     return mail;
+  }
+
+  /** Chợ gọi sang: tin nhắn riêng, lời mời kết bạn tới người đang online ở Hải Khu này. */
+  async push(player: string, msg: unknown) {
+    this.sendTo(player, msg);
   }
 
   /** Chợ gọi sang khi có thư cho người chơi đang online ở Hải Khu này. */
@@ -621,6 +626,49 @@ export class HaiKhu extends DurableObject<Env> {
           }
           s.guild = await cho.memberOf(s.id);
           return reply(r.ok, r.msg, r.data, true);
+        }
+        // ---- bạn bè, nhắn riêng, liên minh ----
+        case 'fAdd': {
+          const id = String(m.id ?? '').slice(0, 80);
+          const p = id ? this.pubOf(id) : null;
+          if (p?.bot) return reply(false, 'Đảo máy không kết bạn được.');
+          const r = await cho.fAdd(s.id, s.name, this.khu, id, p?.name ?? String(m.name ?? ''), p ? this.khu : String(m.khu ?? ''));
+          return reply(r.ok, r.msg, r.data);
+        }
+        case 'fAccept': {
+          const r = await cho.fAccept(s.id, s.name, this.khu, String(m.id ?? ''));
+          return reply(r.ok, r.msg, r.data);
+        }
+        case 'fRemove': {
+          const r = await cho.fRemove(s.id, String(m.id ?? ''));
+          return reply(r.ok, r.msg, r.data);
+        }
+        case 'fList': {
+          const r = await cho.fList(s.id);
+          // ai đang online ở Hải Khu này
+          const on = new Set(this.online().map((o) => o.id));
+          const d = r.data as { friends: { id: string; khu: string; online?: boolean }[] };
+          for (const f of d.friends) f.online = f.khu === this.khu && on.has(f.id);
+          return reply(r.ok, r.msg, d);
+        }
+        case 'dmSend': {
+          const r = await cho.dmSend(s.id, s.name, String(m.id ?? ''), String(m.text ?? ''));
+          return reply(r.ok, r.msg, r.data);
+        }
+        case 'dmThread': {
+          const r = await cho.dmThread(s.id, String(m.id ?? ''));
+          return reply(r.ok, r.msg, r.data);
+        }
+        case 'gAlly':
+        case 'gAllyEnd': {
+          const r = m.op === 'gAlly' ? await cho.gAlly(s.id, String(m.id ?? '')) : await cho.gAllyEnd(s.id, String(m.id ?? ''));
+          s.guild = await cho.memberOf(s.id);
+          return reply(r.ok, r.msg, r.data, true);
+        }
+        case 'gAllies': {
+          if (!s.guild) return reply(false, 'Bạn chưa vào hội nào.');
+          const r = await cho.gAllies(s.guild.id);
+          return reply(r.ok, r.msg, r.data);
         }
       }
       reply(false, 'Không rõ yêu cầu.');

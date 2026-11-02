@@ -338,6 +338,10 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 .mk-search, .mk-form { display: flex; gap: 6px; flex-wrap: wrap; } .mk-search input[name=q] { flex: 1; min-width: 140px; } .mk-form select { width: auto; flex: 1; }
 .stack select { background: var(--ink); border: 2px solid var(--gold-dim); border-radius: 5px; padding: 8px; color: var(--paper); }
 .gear.special { background: linear-gradient(90deg, rgba(232,184,79,.18), transparent); border-radius: 5px; } .tag { color: var(--gold); font: 14px var(--font-pixel); }
+/* bạn bè */
+.friend { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 8px; align-items: center; width: 100%; text-align: left; margin: 3px 0; }
+.friend i { width: 9px; height: 9px; border-radius: 50%; background: #777; } .friend i.on { background: #7cff9a; box-shadow: 0 0 6px #7cff9a; }
+.friend em { font-style: normal; background: #ff4a3a; color: #fff; border-radius: 9px; padding: 0 6px; font-size: 12px; }
 /* thời tiết, ngày đêm */
 #wxfx { position: fixed; inset: 0; pointer-events: none; z-index: 1; background: rgba(10, 18, 60, var(--dark, 0)); transition: background 2s; }
 #wxfx.wx-mua, #wxfx.wx-giong { background-image: repeating-linear-gradient(105deg, rgba(200,225,255,.22) 0 1px, transparent 1px 13px); background-size: 120px 120px; animation: rain .5s linear infinite; }

@@ -33,6 +33,7 @@ import { LV_LABEL, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, GEAR, GEAR_KEYS
 import { thuongGioiHtml } from './thuonggioi';
 import { openGenerals, openWheel } from './ui-gacha';
 import { openHex as openHexPanel, openMap } from './ui-sea';
+import { addFriend, openFriends } from './ui-social';
 import { dinhClick, dinhExtra, openKho, openWeather, renderWxFx, supplyLine, wxChip } from './ui-eco';
 import {
   B_KEYS, BUILDINGS, DAY0, dayOf, GUILD_COST, guildLevel, ITEM_KEYS, ITEMS, marketFee, PORT_MULT, RARITY_COLOR, ROUTE_MS, routePeriod, routesNear, SHOP_BASE, shopSpecial, tollPerHour, tributePerHour, goodRarity, bLevel,
@@ -508,6 +509,9 @@ export class UI {
     sheet.classList.add('in');
     requestAnimationFrame(() => this.updatePads());
   }
+  sheetKindPublic() {
+    return this.sheetKind;
+  }
   closeSheet() {
     const wasOpen = !$('#sheet').hidden;
     $('#sheet').hidden = true;
@@ -686,7 +690,8 @@ export class UI {
         .chats()
         .map((m) => `<div class="msg ${m.from === this.store.net.meId ? 'me' : ''} ${m.bot ? 'bot' : ''}"><b><img src="${this.avatarOf(m.from)}" alt="">${esc(m.name)}${m.bot ? ' <i>máy</i>' : ''}</b><span>${esc(m.text)}</span><time>${new Date(m.t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time></div>`)
         .join('');
-    const html = `<div class="chat" id="chatList">${list()}</div>
+    const tabs = this.store.net.market ? `<div class="seg tabs3"><button type="button" data-ct="world" aria-checked="true">Thế giới</button><button type="button" data-ct="friends">Bạn bè</button><button type="button" data-ct="ally">Liên minh</button></div>` : '';
+    const html = `${tabs}<div class="chat" id="chatList">${list()}</div>
       <form class="chat-in" id="chatForm"><input id="chatText" maxlength="140" placeholder="${this.store.net.canWrite ? 'Nhắn cả Hải Khu...' : 'Bạn đang ở quyền chỉ xem'}" autocomplete="off" ${this.store.net.canWrite ? '' : 'disabled'}><button class="primary">Gửi</button></form>
       <p class="muted small">${esc(this.store.net.label)}. Tin của đảo máy được đánh dấu "máy".</p>`;
     let count = 0;
@@ -699,6 +704,8 @@ export class UI {
       'Chat Hải Khu',
       html,
       (body) => {
+        body.querySelector('[data-ct="friends"]')?.addEventListener('click', () => void openFriends(this));
+        body.querySelector('[data-ct="ally"]')?.addEventListener('click', () => void import('./ui-social').then((m) => m.openAlliance(this)));
         body.querySelector<HTMLFormElement>('#chatForm')!.addEventListener('submit', (e) => {
           e.preventDefault();
           const input = body.querySelector<HTMLInputElement>('#chatText')!;
@@ -837,6 +844,7 @@ export class UI {
       <div class="stats"><span>${LINH_VAT.leu.tiers[(p.tiers.leu ?? 1) - 1]}</span><span>${LINH_VAT.cuoc.tiers[(p.tiers.cuoc ?? 1) - 1]}</span><span>${LINH_VAT.rao.tiers[(p.tiers.rao ?? 1) - 1]}</span><span>${LINH_VAT.thuyen.tiers[(p.tiers.thuyen ?? 1) - 1]}</span></div>
       <div class="enemies">${p.team.map((t) => `<div class="enemy"><img src="${t.k === 'an' ? avatarUrl(pubAvatar(p), 3) : portraitUrl(t.k)}" alt=""><span>${t.k === 'an' ? esc(p.name) : COMPANIONS[t.k].name}</span><small>cấp ${t.lv}</small></div>`).join('')}</div>
       ${isMe ? `<p class="hint">Người khác thấy đảo bạn như thế này. Phần tài nguyên dưới mức được bảo vệ của Nhà chính không bị cướp.</p><button class="wide" id="btnHome">Phóng vào đảo</button>` : `
+        ${p.bot || !this.store.net.market ? '' : `<div class="row"><button type="button" id="btnFriend">Kết bạn</button><span class="muted small">ID: ${esc(p.id)} · (${to.x}, ${to.y})</span></div>`}
         <div class="card"><small>Nếu thắng, chở về khoảng</small><div class="costs">${lootPreview || 'Đảo này nghèo quá, chẳng có gì để lấy.'}</div></div>
         <p class="muted small">So sức: bạn ${me.power} · họ ${p.power}${p.fort ? ` · thành trì: ${['Đảo Trống', 'Xóm Đảo', 'Làng Lũy', 'Đồn Lũy', 'Thành Trì', 'Kinh Thành'][p.fort]}` : ''}${p.guild ? ` · hội [${esc(p.guild)}]` : ''}</p>
         ${p.lord ? `<p class="hint">Đảo này đang là chư hầu của ${p.lord.id === s.id ? '<b>bạn</b>' : esc(p.lord.name)}.</p>` : ''}
@@ -850,6 +858,7 @@ export class UI {
         })()}`}`;
     this.openSheet('island', isMe ? 'Đảo của bạn' : 'Đảo láng giềng', html, (body) => {
       body.querySelector('#btnHome')?.addEventListener('click', () => this.goIsland());
+      body.querySelector('#btnFriend')?.addEventListener('click', () => void addFriend(this, p.id, p.name));
       body.querySelector('#btnSail')?.addEventListener('click', () => {
         const o = this.store.do({ t: 'sail', kind: 'island', target: p, to });
         if (o.ok) this.store.net.setActivity(`đang chèo thuyền tới ${p.islandName}`);
@@ -916,7 +925,7 @@ export class UI {
       </form>
       <div class="card"><small>Chế độ chơi</small><p>${esc(this.store.net.label)}</p>${
         this.store.net.account
-          ? `<p class="muted small">Đăng nhập bằng Google · ${esc(this.store.net.account.name)}. Đảo được lưu trên server, chơi máy nào cũng tiếp tục được.</p><button type="button" id="btnLogout">Đăng xuất</button>`
+          ? `<p class="muted small">Đăng nhập bằng Google · ${esc(this.store.net.account.name)}. Đảo được lưu trên server, chơi máy nào cũng tiếp tục được.</p><p class="small">ID người chơi của bạn (gửi cho bạn bè để kết bạn): <b class="code">${esc(this.store.net.meId)}</b></p><button type="button" id="btnLogout">Đăng xuất</button>`
           : ''
       }</div>
       <div class="row wrap">

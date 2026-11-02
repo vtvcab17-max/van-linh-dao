@@ -37,7 +37,7 @@ export interface Telemetry {
 }
 
 export type NetMode = 'offline' | 'claude' | 'cloudflare';
-export type NetEvent = 'islands' | 'chat' | 'raid' | 'status' | 'sync' | 'raided' | 'notice' | 'boss' | 'owners' | 'fleets';
+export type NetEvent = 'islands' | 'chat' | 'raid' | 'status' | 'sync' | 'raided' | 'notice' | 'boss' | 'owners' | 'fleets' | 'dm' | 'social';
 
 export interface Net {
   mode: NetMode;

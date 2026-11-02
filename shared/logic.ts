@@ -141,7 +141,7 @@ export interface PlayerState {
   /** Đội thợ thêm (Lệnh Bài Thủy Sư). */
   slotsBonus: number;
   /** Thương hội (server ghi). */
-  guild: { id: string; name: string; tag: string; lv: number } | null;
+  guild: { id: string; name: string; tag: string; lv: number; allies?: string[]; allyTags?: string[] } | null;
   /** Tướng đang có: số sao (1..5). */
   tuong: Partial<Record<GenId, number>>;
   /** Tướng ra trận cùng đội. */
