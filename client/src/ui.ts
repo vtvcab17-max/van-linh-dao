@@ -73,6 +73,7 @@ export class UI {
   private bubble: { text: string; until: number; anchor: () => { x: number; y: number } } | null = null;
   private sheetKind = '';
   private sheetRefresh: (() => void) | null = null;
+  private bossRedraw: (() => void) | null = null;
   private perfOn = false;
   private lastChatSeen = 0;
   private ratings = { fun: 0, smooth: 0, clear: 0 };
@@ -257,6 +258,7 @@ export class UI {
     this.store.net.on('chat', () => this.renderChatBadge());
     this.store.net.on('status', (s) => this.toast(String(s), 'muted'));
     this.store.net.on('islands', () => this.renderTop());
+    this.store.net.on('boss', () => this.sheetKind === 'boss' && this.bossRedraw?.());
     setInterval(() => this.renderChatBadge(), 5000);
     this.lastChatSeen = Number(ls.get('vld-chat-seen') ?? Date.now());
     const top = $('#top');
@@ -1334,22 +1336,38 @@ export class UI {
       const pick = GEAR_KEYS.map(
         (k) => `<div class="avrow"><span>${GEAR[k].name.split(' ').slice(0, 2).join(' ')}</span><div class="step"><button type="button" data-c="${k}" data-d="-1" aria-label="Bớt">‹</button><b>${carry[k]} / ${s.kho[k]}</b><button type="button" data-c="${k}" data-d="1" aria-label="Thêm">›</button></div></div>`,
       ).join('');
+      const bw = this.store.net.bossWorld(s);
+      const pct = bw.max ? Math.round((bw.hp / bw.max) * 1000) / 10 : 0;
+      const myRank = bw.top.findIndex((x) => x.id === s.id) + 1;
+      const top = bw.top
+        .slice(0, 8)
+        .map((x, i) => `<li class="${x.id === s.id ? 'me' : ''}"><b>${i + 1}</b><span>${esc(x.name)}</span><span>${x.dmg.toLocaleString('vi-VN')}</span></li>`)
+        .join('');
       return `
         <div class="lv-head"><img class="lv-img" src="${portraitUrl('thuytinh')}" alt=""><div><h3>${f.name} · ${f.title}</h3><p class="muted">${f.lore}</p>
-          <div class="stats"><span>Máu ${f.hp}</span><span>Công ${f.atk}</span><span>Thủ ${f.def}</span><span>Tốc ${f.spd}</span><span>+${f.minions} Thủy Binh</span></div></div></div>
-        <div class="card"><small>Hồi sinh và đổi dạng sau</small><p><b>${d} ngày ${h} giờ ${m} phút</b> (thứ Hai 00:00)</p>
-          <p>Tuần này: sát thương cao nhất <b>${s.boss.best}</b> / ${f.hp} · ${s.boss.tries} lần đánh${s.boss.won ? ' · <b class="good">ĐÃ PHI THĂNG</b>' : ''}</p><p class="muted small">Đã phi thăng tổng cộng ${s.asc} lần.</p></div>
-        <ul class="req">${req(s.lv.leu.tier >= BOSS_REQ.leu, `Nhà chính bậc ${BOSS_REQ.leu}+`)}${req(s.lv.thuyen.tier >= BOSS_REQ.thuyen, `Thuyền bậc ${BOSS_REQ.thuyen}+ để vượt bão`)}${req(!s.boss.won, 'Chưa phi thăng tuần này')}</ul>
+          <div class="stats"><span>Máu mỗi trận ${f.hp}</span><span>Công ${f.atk}</span><span>Thủ ${f.def}</span><span>Tốc ${f.spd}</span><span>+${f.minions} Thủy Binh</span></div></div></div>
+        <div class="card"><small>Máu chung cả Hải Khu</small>
+          <div class="hpbar"><i style="width:${pct}%"></i></div>
+          <p><b>${bw.hp.toLocaleString('vi-VN')}</b> / ${bw.max.toLocaleString('vi-VN')} máu ${bw.done ? '· <b class="good">ĐÃ BỊ HẠ</b>' : ''}</p>
+          <p class="muted small">Không ai hạ được Thủy Tinh một mình. Mọi đảo cùng góp sát thương. Khi máu chung về 0, Thiên Môn mở cho <b>${bw.slots}</b> người góp nhiều nhất (chưa từng phi thăng).</p>
+          ${bw.winners.length ? `<p>Phi thăng tuần này: <b>${bw.winners.map((x) => esc(x.name)).join(', ')}</b></p>` : ''}
+          <p>Bạn góp <b>${s.boss.total.toLocaleString('vi-VN')}</b> sát thương${myRank ? ` · hạng ${myRank}` : ''} · ${s.boss.tries} lần đánh</p>
+          <p class="muted small">Hồi sinh và đổi dạng sau <b>${d} ngày ${h} giờ ${m} phút</b> (thứ Hai 00:00). Đã phi thăng tổng cộng ${s.asc} lần.</p></div>
+        ${top ? `<ol class="bxh boss">${top}</ol>` : ''}
+        <ul class="req">${req(s.lv.leu.tier >= BOSS_REQ.leu, `Nhà chính bậc ${BOSS_REQ.leu}`)}${req(s.lv.thuyen.tier >= BOSS_REQ.thuyen, `Thuyền bậc ${BOSS_REQ.thuyen} để vượt bão`)}${req(!bw.done, 'Thủy Tinh tuần này chưa bị hạ')}</ul>
         <div class="card"><small>Chở trang bị theo thuyền</small><div class="avopts">${pick}</div>
           <p>Đội được thêm <b>+${Math.round(b.atk * 100)}%</b> công · <b>+${Math.round(b.def * 100)}%</b> thủ · <b>+${Math.round(b.hp * 100)}%</b> máu</p>
           <p class="muted small">Chỉ trang bị mang theo mới có tác dụng ở Mắt Bão. Trang bị mang đi thì đảo nhà yếu đi khi bị đột kích.</p></div>
-        <div class="card danger-card"><small>Luật Mắt Bão</small><p><b>Thắng:</b> phi thăng, nhận ${'600 sò, 12 ngọc'}, mở cổng Thượng Giới, trang bị theo thuyền về nhà.</p>
-          <p><b>Thua:</b> mất <b>toàn bộ trang bị mang theo</b>, thuyền bị đánh chìm, về lại <b>Thuyền Thúng</b> (phải xây lại từ đầu).</p></div>
+        <div class="card danger-card"><small>Luật Mắt Bão</small>
+          <p><b>Trụ được hết trận:</b> sát thương được cộng vào máu chung, thuyền và trang bị rút về nhà.</p>
+          <p><b>Bị diệt sạch:</b> mất <b>toàn bộ trang bị mang theo</b>, thuyền bị đánh chìm, về lại <b>Thuyền Thúng</b>.</p>
+          <p><b>Phi thăng:</b> chỉ người góp nhiều nhất khi Thủy Tinh gục mới được. Mỗi tuần tối đa 3 người mỗi Hải Khu, không quá 5% số người đang chơi.</p></div>
         ${this.sailLine(BOSS_CELL, BOSS_TRAVEL_MUL)}
         ${s.voyage ? this.sailButton(false, '', '') : `<button class="primary wide ${armed ? 'hot' : ''}" id="btnBoss" ${err ? 'disabled' : ''}>${err ? esc(err) : armed ? 'Chắc chắn? Bấm lần nữa để ra khơi' : 'Vượt bão đánh Thủy Tinh'}</button>`}
         ${s.asc > 0 ? '<button class="wide" id="btnTG">Cổng Thượng Giới</button>' : ''}`;
     };
     this.openSheet('boss', 'Mắt Bão', draw(), (body) => {
+      this.bossRedraw = () => (body.innerHTML = draw());
       body.addEventListener('click', (e) => {
         const t = (e.target as HTMLElement).closest('button');
         if (!t) return;
@@ -1371,18 +1389,17 @@ export class UI {
   }
 
   showBossResult(o: Outcome) {
-    const s = this.store.s;
-    const win = !!o.boss?.win;
     const f = bossOf(weekOf(this.store.now()));
-    const html = win
-      ? `<div class="result win asc"><b>PHI THĂNG</b><span>Đánh bại ${f.name} · ${f.title}</span></div>
-         <p>Mây ngũ sắc phủ kín ${esc(s.islandName)}. Bạn là <b>Tiên Nhân</b> (phi thăng ${s.asc} lần).</p>
-         <div class="card"><small>Thuyền đang chở về</small><div class="costs">${Object.entries(o.gained ?? {}).map(([k, v]) => `<span class="cost"><img src="${iconUrl(k)}" alt="">+${v}</span>`).join(' ')}</div><p class="muted small">Trang bị mang theo cũng về nhà cùng thuyền.</p></div>
-         ${thuongGioiHtml(s)}`
-      : `<div class="result lose"><b>Thất bại</b><span>${o.battle?.rounds ?? 0} lượt</span></div>
-         <p>Gây <b>${o.boss?.dmg ?? 0}</b> / ${f.hp} sát thương cho ${f.name}.</p>
+    const bw = this.store.net.bossWorld(this.store.s);
+    const wiped = !!o.boss?.wiped;
+    const html = !wiped
+      ? `<div class="result win"><b>Trụ vững</b><span>${o.battle?.rounds ?? 0} lượt</span></div>
+         <p>Gây <b>${(o.boss?.dmg ?? 0).toLocaleString('vi-VN')}</b> sát thương cho ${f.name} · ${f.title}. Đã cộng vào máu chung của Hải Khu.</p>
+         <p class="muted small">Máu chung còn ${bw.hp.toLocaleString('vi-VN')} / ${bw.max.toLocaleString('vi-VN')}. Thuyền và trang bị đang rút về nhà.</p>`
+      : `<div class="result lose"><b>Bị diệt sạch</b><span>${o.battle?.rounds ?? 0} lượt</span></div>
+         <p>Vẫn gây được <b>${(o.boss?.dmg ?? 0).toLocaleString('vi-VN')}</b> sát thương vào máu chung.</p>
          <div class="card danger-card"><small>Cái giá phải trả</small><p>Toàn bộ trang bị mang theo đã chìm xuống đáy biển. Thuyền bị đánh chìm, bạn bơi về đảo và chỉ còn <b>Thuyền Thúng</b>.</p></div>
-         <p class="hint">Nâng cấp đội, chế tạo thêm trang bị, xây lại thuyền rồi quay lại. Thủy Tinh hồi sinh và đổi dạng mỗi thứ Hai.</p>`;
+         <p class="hint">Mạnh lên rồi quay lại. Thủy Tinh hồi sinh và đổi dạng mỗi thứ Hai.</p>`;
     this.openSheet('result', 'Đại chiến Thủy Tinh', html + '<button class="primary wide" id="btnOk">Tiếp tục</button>', (b) => b.querySelector('#btnOk')!.addEventListener('click', () => this.closeSheet()));
   }
 
@@ -1398,7 +1415,7 @@ export class UI {
       const week = weekOf(this.store.now());
       const me = { ...publicOf(s), me: true };
       const all = [me, ...this.store.net.islands().map((p) => ({ ...p, me: false }))];
-      const val = (p: IslandPub) => (tab === 'power' ? p.power : tab === 'boss' ? (p.boss?.week === week ? p.boss.best : 0) : p.asc ?? 0);
+      const val = (p: IslandPub) => (tab === 'power' ? p.power : tab === 'boss' ? (p.boss?.week === week ? (p.boss.total ?? p.boss.best) : 0) : p.asc ?? 0);
       const list = all.filter((p) => tab !== 'asc' || (p.asc ?? 0) > 0).sort((a, b) => val(b) - val(a) || b.power - a.power).slice(0, 50);
       const unit = tab === 'power' ? 'sức mạnh' : tab === 'boss' ? 'sát thương' : 'lần';
       const rows = list
@@ -1409,7 +1426,7 @@ export class UI {
         .join('');
       const f = bossOf(week);
       return `<div class="seg tabs3">${(['power', 'boss', 'asc'] as const).map((k) => `<button type="button" data-t="${k}" aria-checked="${tab === k}">${k === 'power' ? 'Sức mạnh' : k === 'boss' ? 'Thủy Tinh tuần' : 'Phi thăng'}</button>`).join('')}</div>
-        ${tab === 'boss' ? `<p class="muted small">Tuần này: ${f.name} · ${f.title} (${f.hp} máu). ★ = đã đánh bại và phi thăng. Làm mới mỗi thứ Hai.</p>` : ''}
+        ${tab === 'boss' ? `<p class="muted small">Tuần này: ${f.name} · ${f.title}. Tổng sát thương góp vào máu chung. ★ = được Thiên Môn chọn phi thăng. Làm mới mỗi thứ Hai.</p>` : ''}
         ${tab === 'asc' && !list.length ? '<p class="hint">Chưa ai phi thăng. Hãy là người đầu tiên đánh bại Thủy Tinh!</p>' : ''}
         <ol class="bxh">${rows}</ol>
         <button type="button" class="wide" id="btnBossGo">Xem Thủy Tinh ở Mắt Bão</button>`;

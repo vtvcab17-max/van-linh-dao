@@ -2,6 +2,7 @@
 import { allBots, botChatsSince, BOTS } from '../../../shared/bots';
 import { publicOf, resolveRaid, type IslandPub, type PlayerState, type RaidEvent } from '../../../shared/logic';
 import { hashStr } from '../../../shared/rng';
+import { BOSS_POOL_MIN, weekOf, type BossWorld } from '../../../shared/boss';
 import type { ChatMsg, Feedback, Net, NetEvent, NetMode, Telemetry } from './types';
 
 export const ls = {
@@ -42,6 +43,13 @@ export abstract class NetBase implements Net {
   protected botChatFrom = Date.now() - 20 * 60_000;
   protected onlineList: { id: string; act: string }[] = [];
   protected lastBotRaid = Date.now();
+
+  /** Bản chơi một mình: không có ai góp sức, máu chung chỉ trừ theo sát thương của mình. */
+  bossWorld(s: PlayerState): BossWorld {
+    const week = weekOf(Date.now());
+    const mine = s.boss.week === week ? s.boss.total : 0;
+    return { week, hp: Math.max(0, BOSS_POOL_MIN - mine), max: BOSS_POOL_MIN, slots: 1, done: false, top: mine ? [{ id: s.id, name: s.name, dmg: mine }] : [], winners: [] };
+  }
 
   on(ev: NetEvent, cb: (d?: unknown) => void) {
     (this.handlers[ev] ??= []).push(cb);

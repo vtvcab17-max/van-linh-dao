@@ -4,7 +4,8 @@
 import { DurableObject } from 'cloudflare:workers';
 import { allBots } from '../../shared/bots';
 import { GAME } from '../../shared/data';
-import { apply, applyRaidAgainstMe, digest, migrate, newPlayer, publicOf, tick, type Action, type IslandPub, type PlayerState } from '../../shared/logic';
+import { apply, applyRaidAgainstMe, ascend, digest, migrate, newPlayer, publicOf, tick, type Action, type IslandPub, type PlayerState } from '../../shared/logic';
+import { ascendSlots, bossPoolMax, weekOf, type BossWorld } from '../../shared/boss';
 import { islandCell } from '../../shared/map';
 import { giveGood, haveGood, takeGood, goodLabel } from '../../shared/logic';
 import { bLevel, GUILD_COST, isGood, marketFee } from '../../shared/economy';
@@ -70,6 +71,8 @@ export class HaiKhu extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS raids (id TEXT PRIMARY KEY, target TEXT, t INTEGER, body TEXT, delivered INTEGER DEFAULT 0);
       CREATE TABLE IF NOT EXISTS feedback (n INTEGER PRIMARY KEY AUTOINCREMENT, player TEXT, t INTEGER, body TEXT);
       CREATE TABLE IF NOT EXISTS telemetry (player TEXT PRIMARY KEY, t INTEGER, body TEXT);
+      CREATE TABLE IF NOT EXISTS boss (week INTEGER PRIMARY KEY, hp INTEGER, max INTEGER, slots INTEGER, done INTEGER, winners TEXT);
+      CREATE TABLE IF NOT EXISTS boss_dmg (week INTEGER, player TEXT, name TEXT, dmg INTEGER, PRIMARY KEY (week, player));
     `);
   }
 
@@ -167,8 +170,69 @@ export class HaiKhu extends DurableObject<Env> {
     if (!cur) await this.ctx.storage.setAlarm(Date.now() + ALARM_MS);
   }
 
+  // ---------- Thủy Tinh: máu chung cả Hải Khu ----------
+  private activeCount() {
+    return this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM players WHERE updated > ?', Date.now() - 7 * 86_400_000).one().n;
+  }
+  /** Tình hình Thủy Tinh tuần này (tạo mới khi sang tuần). */
+  bossWorld(now = Date.now()): BossWorld {
+    const week = weekOf(now);
+    let row = this.sql.exec<{ hp: number; max: number; slots: number; done: number; winners: string }>('SELECT hp, max, slots, done, winners FROM boss WHERE week = ?', week).toArray()[0];
+    if (!row) {
+      const active = this.activeCount();
+      const max = bossPoolMax(active);
+      row = { hp: max, max, slots: ascendSlots(active), done: 0, winners: '[]' };
+      this.sql.exec('INSERT OR IGNORE INTO boss (week, hp, max, slots, done, winners) VALUES (?, ?, ?, ?, 0, ?)', week, row.hp, row.max, row.slots, '[]');
+    }
+    const top = this.sql.exec<{ player: string; name: string; dmg: number }>('SELECT player, name, dmg FROM boss_dmg WHERE week = ? ORDER BY dmg DESC LIMIT 10', week).toArray().map((r) => ({ id: r.player, name: r.name, dmg: r.dmg }));
+    return { week, hp: Math.max(0, row.hp), max: row.max, slots: row.slots, done: !!row.done, top, winners: JSON.parse(row.winners || '[]') };
+  }
+  /** Cộng sát thương người chơi vừa gây vào máu chung; hạ được thì mở Thiên Môn. */
+  private settleBoss(s: PlayerState) {
+    if (!s.bossOut?.length) return;
+    const now = Date.now();
+    const w = this.bossWorld(now);
+    for (const o of s.bossOut.splice(0)) {
+      if (o.w !== w.week || w.done || !(o.d > 0)) continue;
+      const d = Math.min(Math.floor(o.d), 200_000);
+      this.sql.exec('INSERT INTO boss_dmg (week, player, name, dmg) VALUES (?, ?, ?, ?) ON CONFLICT(week, player) DO UPDATE SET dmg = dmg + excluded.dmg, name = excluded.name', w.week, s.id, s.name, d);
+      this.sql.exec('UPDATE boss SET hp = hp - ? WHERE week = ?', d, w.week);
+    }
+    this.touch(s);
+    const after = this.bossWorld(now);
+    if (after.hp <= 0 && !after.done) this.openThienMon(after);
+    else this.broadcast({ t: 'boss', boss: after });
+  }
+  /** Thủy Tinh đã bị hạ: chọn người góp sát thương nhiều nhất (chưa từng phi thăng) cho phi thăng. */
+  private openThienMon(w: BossWorld) {
+    const rows = this.sql.exec<{ player: string; name: string; dmg: number }>('SELECT player, name, dmg FROM boss_dmg WHERE week = ? ORDER BY dmg DESC', w.week).toArray();
+    const winners: { id: string; name: string }[] = [];
+    for (const r of rows) {
+      if (winners.length >= w.slots) break;
+      const p = this.load(r.player);
+      if (!p || p.asc > 0) continue;
+      tick(p, Date.now());
+      const text = ascend(p, winners.length + 1);
+      winners.push({ id: p.id, name: p.name });
+      this.touch(p);
+      this.sendTo(p.id, { t: 'sync', state: p, serverNow: Date.now(), msg: text });
+    }
+    this.sql.exec('UPDATE boss SET done = 1, hp = 0, winners = ? WHERE week = ?', JSON.stringify(winners), w.week);
+    // ai đang online cũng biết Thủy Tinh đã bị hạ tuần này
+    for (const id of new Set(this.online().map((o) => o.id))) {
+      const p = this.load(id);
+      if (!p) continue;
+      p.thienMon = { week: w.week, done: true };
+      this.touch(p);
+    }
+    const names = winners.map((x) => x.name).join(', ') || 'chưa ai đủ điều kiện';
+    this.broadcast({ t: 'boss', boss: this.bossWorld() });
+    this.broadcast({ t: 'info', msg: `Thủy Tinh đã bị cả Hải Khu hạ! Thiên Môn mở cho: ${names}.` });
+  }
+
   /** Thuyền đột kích đã đánh xong → trừ thẳng vào đảo bị đánh và báo cho chủ đảo. */
   private settleRaids(s: PlayerState) {
+    this.settleBoss(s);
     if (!s.outbox.length) return;
     for (const ev of s.outbox.splice(0)) {
       if (ev.targetId.startsWith('bot-')) continue;
@@ -222,6 +286,8 @@ export class HaiKhu extends DurableObject<Env> {
     }
     tick(s, now);
     this.settleRaids(s);
+    const bw = this.bossWorld(now);
+    s.thienMon = { week: bw.week, done: bw.done };
     // hàng, tiền từ chợ gửi tới lúc vắng nhà; thương hội
     await this.claimMail(s);
     try {
@@ -234,7 +300,7 @@ export class HaiKhu extends DurableObject<Env> {
     const [client, server] = Object.values(pair);
     this.ctx.acceptWebSocket(server, [id]);
     server.serializeAttachment({ id, name: s.name, act: 'vừa vào Hải Khu', win: now, n: 0 } satisfies Att);
-    this.send(server, { t: 'welcome', state: s, serverNow: Date.now(), islands: [...allBots(now), ...this.pubs().filter((p) => p.id !== id)], chat: this.chatTail(), online: this.online(), version: GAME.version });
+    this.send(server, { t: 'welcome', state: s, serverNow: Date.now(), islands: [...allBots(now), ...this.pubs().filter((p) => p.id !== id)], chat: this.chatTail(), online: this.online(), version: GAME.version, boss: bw });
     // tin bị đột kích lúc vắng nhà
     const pending = this.sql.exec<{ id: string; body: string }>('SELECT id, body FROM raids WHERE target = ? AND delivered = 0', id).toArray();
     for (const r of pending) {

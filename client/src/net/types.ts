@@ -1,4 +1,5 @@
 import type { Action, IslandPub, PlayerState, RaidEvent } from '../../../shared/logic';
+import type { BossWorld } from '../../../shared/boss';
 
 export interface ChatMsg {
   id: string;
@@ -35,7 +36,7 @@ export interface Telemetry {
 }
 
 export type NetMode = 'offline' | 'claude' | 'cloudflare';
-export type NetEvent = 'islands' | 'chat' | 'raid' | 'status' | 'sync' | 'raided' | 'notice';
+export type NetEvent = 'islands' | 'chat' | 'raid' | 'status' | 'sync' | 'raided' | 'notice' | 'boss';
 
 export interface Net {
   mode: NetMode;
@@ -67,4 +68,6 @@ export interface Net {
   account?: { name: string; khu: string; logout: () => void };
   /** Chợ thế giới, đấu giá, thương hội (chỉ bản chính thức). */
   market?(op: string, args?: Record<string, unknown>): Promise<{ ok: boolean; msg: string; data?: any }>;
+  /** Thủy Tinh tuần này: máu chung cả Hải Khu (bản chính thức do server gửi). */
+  bossWorld(s: PlayerState): BossWorld;
 }

@@ -3,6 +3,7 @@
 import type { Action, IslandPub, PlayerState, RaidEvent } from '../../../shared/logic';
 import { logout, forgetSession, type Session } from '../login';
 import { NetBase } from './base';
+import type { BossWorld } from '../../../shared/boss';
 import type { ChatMsg, Feedback, Telemetry } from './types';
 
 const TELE_EVERY = 5 * 60_000;
@@ -25,6 +26,7 @@ export class CloudflareNet extends NetBase {
   private everWelcomed = false;
   private rid = 0;
   private waits = new Map<number, (r: { ok: boolean; msg: string; data?: any }) => void>();
+  private bossW: BossWorld | null = null;
 
   constructor(
     private server: string,
@@ -122,6 +124,7 @@ export class CloudflareNet extends NetBase {
         for (const p of (m.islands as IslandPub[]) ?? []) if (!p.bot) this.realIslands.set(p.id, p);
         this.chatList = (m.chat as ChatMsg[]) ?? [];
         this.onlineList = (m.online as { id: string; act: string }[]) ?? [];
+        if (m.boss) this.bossW = m.boss as BossWorld;
         // nối lại giữa chừng: hành động chờ gửi đã bị server bỏ qua nên lấy trạng thái server làm chuẩn
         this.queue = this.queue.filter((s) => !s.startsWith('{"t":"a"'));
         this.flushQueue();
@@ -165,6 +168,10 @@ export class CloudflareNet extends NetBase {
         }
         return;
       }
+      case 'boss':
+        this.bossW = m.boss as BossWorld;
+        this.emit('boss');
+        return;
       case 'pong':
         this.clock(m.serverNow);
         return;
@@ -173,6 +180,10 @@ export class CloudflareNet extends NetBase {
         this.emit('notice', { msg: String(m.msg ?? ''), kind: m.t === 'error' ? 'bad' : 'good' });
         return;
     }
+  }
+
+  bossWorld(s: PlayerState): BossWorld {
+    return this.bossW ?? super.bossWorld(s);
   }
 
   async loadSave() {

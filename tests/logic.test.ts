@@ -189,7 +189,8 @@ describe('Đảo và nhân vật', () => {
 });
 
 import { fightBoss, bossCheck } from '../shared/logic';
-import { BOSS_FORMS, WEEK0, WEEK_MS, weekOf } from '../shared/boss';
+import { BOSS_FORMS, WEEK0, WEEK_MS, weekOf, bossOf, ascendSlots, bossPoolMax } from '../shared/boss';
+import { ascend } from '../shared/logic';
 
 describe('Thủy Tinh, trang bị, phi thăng', () => {
   const strong = (id: string) => {
@@ -223,19 +224,39 @@ describe('Thủy Tinh, trang bị, phi thăng', () => {
     expect(s.asc).toBe(0);
     expect(s.boss.best).toBeGreaterThan(0);
   });
-  it('thắng Thủy Tinh: phi thăng, trang bị về nhà, tuần sau hồi sinh', () => {
+  it('đội mạnh nhất cũng không hạ nổi Thủy Tinh một mình: chỉ góp sát thương, trụ được thì rút về', () => {
     const s = strong('g6');
     s.kho = { giao: 5, khien: 5, thuoc: 5, bua: 3 };
     apply(s, { t: 'sail', kind: 'boss', carry: { ...s.kho } });
     tick(s, s.lastReal + 6 * 3600_000);
+    expect(s.asc).toBe(0);
+    expect(s.boss.won).toBe(false);
+    expect(s.boss.total).toBeGreaterThan(0);
+    expect(s.bossOut.length).toBe(1);
+    expect(s.bossOut[0].d).toBe(s.boss.total);
+    expect(s.boss.total).toBeLessThan(bossOf(0).hp);
+  });
+  it('Thiên Môn: server cho phi thăng, tuần sau hồi sinh, đã hạ thì không đánh nữa', () => {
+    const s = strong('g7');
+    s.kho = { giao: 5, khien: 5, thuoc: 5, bua: 3 };
+    ascend(s, 1);
     expect(s.asc).toBe(1);
     expect(s.boss.won).toBe(true);
-    expect(s.kho.giao).toBe(5);
     expect(bossCheck(s)).not.toBeNull();
     tick(s, WEEK0 + WEEK_MS + 1000);
     expect(s.boss.won).toBe(false);
     expect(s.asc).toBe(1);
     expect(weekOf(s.lastReal)).toBe(1);
+    expect(bossCheck(s)).toBeNull();
+    s.thienMon = { week: 1, done: true };
+    expect(bossCheck(s)).not.toBeNull();
+  });
+  it('số chỗ Thiên Môn: tối đa 3 người, không quá 5% người chơi', () => {
+    expect(ascendSlots(10)).toBe(1);
+    expect(ascendSlots(40)).toBe(2);
+    expect(ascendSlots(1000)).toBe(3);
+    expect(bossPoolMax(10)).toBe(300_000);
+    expect(bossPoolMax(100)).toBe(1_200_000);
   });
   it('mỗi tuần một dạng Thủy Tinh', () => {
     expect(new Set(BOSS_FORMS.map((f) => f.title)).size).toBe(4);

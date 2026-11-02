@@ -107,7 +107,11 @@ export interface PlayerState {
   /** Kho trang bị đang cất ở nhà (tăng sức cho mọi trận). */
   kho: GearSet;
   /** Thành tích đánh Thủy Tinh trong tuần hiện tại (làm mới mỗi thứ Hai). */
-  boss: { week: number; best: number; tries: number; won: boolean };
+  boss: { week: number; best: number; tries: number; won: boolean; total: number };
+  /** Sát thương lên Thủy Tinh chờ server cộng vào máu chung (server lấy ra rồi xóa). */
+  bossOut: { w: number; d: number }[];
+  /** Server ghi: Thủy Tinh tuần này đã bị cả Hải Khu hạ chưa. */
+  thienMon: { week: number; done: boolean };
   /** Số lần phi thăng. */
   asc: number;
   /** Dành sẵn cho Thượng Giới (bản sau). Để trống. */
@@ -252,7 +256,9 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     avatar: avatarFrom(id),
     avatarSet: false,
     kho: noGear(),
-    boss: { week: weekOf(now), best: 0, tries: 0, won: false },
+    boss: { week: weekOf(now), best: 0, tries: 0, won: false, total: 0 },
+    bossOut: [],
+    thienMon: { week: weekOf(now), done: false },
     asc: 0,
     thuongGioi: {},
     dinh: [],
@@ -466,7 +472,8 @@ export function tick(s: PlayerState, now: number): string[] {
   s.lastReal = now;
   // thứ Hai: Thủy Tinh hồi sinh, thành tích tuần làm mới (số lần phi thăng giữ nguyên)
   const wk = weekOf(now);
-  if (s.boss.week !== wk) s.boss = { week: wk, best: 0, tries: 0, won: false };
+  if (s.boss.week !== wk) s.boss = { week: wk, best: 0, tries: 0, won: false, total: 0 };
+  if (s.thienMon.week !== wk) s.thienMon = { week: wk, done: false };
   // chư hầu hết hạn: tự do
   s.chuHau = s.chuHau.filter((v) => v.until > now);
   if (s.chuQuan && s.chuQuan.until <= now) {
@@ -581,11 +588,16 @@ export function bossCheck(s: PlayerState): string | null {
   if (s.lv.thuyen.tier < BOSS_REQ.thuyen) return `Cần thuyền bậc ${BOSS_REQ.thuyen} trở lên mới vượt được vùng bão.`;
   if (s.builds.some((b) => b.lv === 'thuyen')) return 'Thuyền đang được nâng cấp, chưa ra khơi được.';
   if (s.boss.won) return 'Bạn đã phi thăng tuần này. Thủy Tinh sẽ hồi sinh vào thứ Hai.';
+  if (s.thienMon.week === weekOf(s.lastReal) && s.thienMon.done) return 'Thủy Tinh tuần này đã bị cả Hải Khu hạ. Chờ thứ Hai.';
   if (s.voyage) return 'Thuyền đang ở ngoài biển.';
   return null;
 }
 
-/** Đại chiến Thủy Tinh: đội + trang bị chở theo, đấu tối đa 30 lượt. */
+/**
+ * Đại chiến Thủy Tinh: đội + trang bị chở theo, đấu tối đa 40 lượt.
+ * Không đội nào hạ được Thủy Tinh một mình: sát thương được cộng vào máu chung của cả Hải Khu.
+ * Bị diệt sạch thì mất trang bị mang theo và thuyền; trụ được tới hết trận thì rút về an toàn.
+ */
 export function fightBoss(s: PlayerState, carry: GearSet): Outcome {
   const week = weekOf(s.lastReal);
   const form = bossOf(week);
@@ -598,19 +610,25 @@ export function fightBoss(s: PlayerState, carry: GearSet): Outcome {
   s.boss.tries++;
   const dmg = Math.max(0, form.hp - (real.hpB?.[0] ?? form.hp));
   s.boss.best = Math.max(s.boss.best, dmg);
-  const win = real.winner === 0;
-  const ups = rewardComps(s, spec, win ? 60 : 15);
-  if (win) {
-    s.stats.wins++;
-    s.boss.won = true;
-    s.asc++;
-    const relic: ItemKey = s.bag.trongdong ? 'vayrong' : 'trongdong';
-    s.bag[relic] = (s.bag[relic] ?? 0) + 1;
-    log(s, `PHI THĂNG! Đánh bại ${form.name} · ${form.title}.`);
-    return { ok: true, msg: `Đánh bại ${form.name} · ${form.title}! Bạn đã phi thăng.`, battle: real, gained: { ...ASCEND_REWARD }, levelUps: ups, boss: { dmg, win, form: form.key } };
-  }
-  log(s, `Thua ${form.name}: mất trang bị mang theo, thuyền bị đánh chìm.`);
-  return { ok: true, msg: `Thua ${form.name} · ${form.title}. Gây ${dmg} sát thương.`, battle: real, gained: {}, levelUps: ups, boss: { dmg, win, form: form.key } };
+  s.boss.total += dmg;
+  s.bossOut.push({ w: week, d: dmg });
+  const wiped = (real.hpA ?? []).every((hp) => hp <= 0);
+  const ups = rewardComps(s, spec, wiped ? 15 : 30);
+  if (wiped) log(s, `Bị Thủy Tinh diệt sạch: mất trang bị mang theo, thuyền bị đánh chìm. Gây ${dmg} sát thương.`);
+  else log(s, `Trụ vững trước Thủy Tinh, rút về an toàn. Gây ${dmg} sát thương vào máu chung.`);
+  return { ok: true, msg: `Gây ${dmg} sát thương cho ${form.name} · ${form.title}.`, battle: real, gained: {}, levelUps: ups, boss: { dmg, win: false, wiped, form: form.key } };
+}
+
+/** Server gọi khi Thủy Tinh bị cả Hải Khu hạ và người này được Thiên Môn chọn. */
+export function ascend(s: PlayerState, rank: number): string {
+  s.boss.won = true;
+  s.asc++;
+  const relic: ItemKey = s.bag.trongdong ? 'vayrong' : 'trongdong';
+  s.bag[relic] = (s.bag[relic] ?? 0) + 1;
+  addRes(s, ASCEND_REWARD);
+  const text = `PHI THĂNG! Thiên Môn mở cho bạn (hạng ${rank} góp sát thương). Bạn trở thành Tiên Nhân.`;
+  log(s, text);
+  return text;
 }
 
 /** Thuyền bị Thủy Tinh đánh chìm: về Thuyền Thúng, mất hết công sức xây. */
@@ -636,17 +654,17 @@ function voyageTick(s: PlayerState): string[] {
       const carry = cleanGear(v.carry);
       o = fightBoss(s, carry);
       s.lastBattle = { title: 'Đại chiến Thủy Tinh', o, seen: false };
-      if (o.boss?.win) {
-        // thắng: chở trang bị và phần thưởng về nhà
-        v.loot = o.gained ?? {};
-        v.win = true;
+      if (!o.boss?.wiped) {
+        // trụ được hết trận: rút về, trang bị theo thuyền về nhà
+        v.loot = {};
+        v.win = false;
         v.phase = 've';
-        notes.push('THỦY TINH ĐÃ BỊ ĐÁNH BẠI! Bạn đã phi thăng. Bấm "Xem trận".');
+        notes.push(`Trụ vững trước Thủy Tinh, gây ${o.boss?.dmg ?? 0} sát thương vào máu chung. Thuyền đang rút về.`);
       } else {
         // thua: mất sạch trang bị mang theo, thuyền bị đánh chìm, người bơi về đảo
         sinkBoat(s);
         s.voyage = null;
-        notes.push(`Thua Thủy Tinh (gây ${o.boss?.dmg ?? 0} sát thương). Mất trang bị mang theo, thuyền bị đánh chìm.`);
+        notes.push(`Bị Thủy Tinh diệt sạch (gây ${o.boss?.dmg ?? 0} sát thương). Mất trang bị mang theo, thuyền bị đánh chìm.`);
         return notes;
       }
     } else if (v.kind === 'wild') {
@@ -709,7 +727,7 @@ export interface Outcome {
   chest?: number;
   levelUps?: CompKey[];
   event?: RaidEvent;
-  boss?: { dmg: number; win: boolean; form: string };
+  boss?: { dmg: number; win: boolean; wiped?: boolean; form: string };
   item?: ItemKey;
 }
 
@@ -1058,7 +1076,7 @@ export interface IslandPub {
   /** trang bị cất ở nhà (giữ đảo khi bị đột kích) */
   gear?: GearSet;
   /** thành tích Thủy Tinh tuần */
-  boss?: { week: number; best: number; won: boolean };
+  boss?: { week: number; best: number; won: boolean; total?: number };
   /** số lần phi thăng */
   asc?: number;
   /** thành trì khi giữ đảo */
@@ -1094,7 +1112,7 @@ export function publicOf(s: PlayerState): IslandPub {
     updatedAt: Date.now(),
     avatar: s.avatar,
     gear: { ...s.kho },
-    boss: { week: s.boss.week, best: s.boss.best, won: s.boss.won },
+    boss: { week: s.boss.week, best: s.boss.best, won: s.boss.won, total: s.boss.total },
     asc: s.asc,
     def: defSpecOf(s.dinh),
     fort: fortLevel(s.dinh),
@@ -1262,6 +1280,8 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   merged.stats = { ...fresh.stats, ...s.stats };
   merged.comps = { ...fresh.comps, ...s.comps };
   merged.lv = { ...fresh.lv, ...s.lv };
+  merged.boss = { ...fresh.boss, ...s.boss };
+  if (!Array.isArray(merged.bossOut)) merged.bossOut = [];
   return merged;
 }
 

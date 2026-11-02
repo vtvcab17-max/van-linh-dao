@@ -44,6 +44,8 @@ export interface BattleResult {
   b: BUnit[];
   /** máu còn lại của bên 1 khi hết trận (tính sát thương lên boss) */
   hpB?: number[];
+  /** máu còn lại của bên 0 (không tính tường) khi hết trận */
+  hpA?: number[];
 }
 
 const scale = (lv: number) => 1 + 0.12 * (lv - 1);
@@ -297,5 +299,5 @@ export function simulate(a: BUnit[], b: BUnit[], rng: Rng, maxRounds = 20): Batt
     }
   }
   const winner: 0 | 1 = alive(1).length === 0 && alive(0).length > 0 ? 0 : 1;
-  return { winner, rounds: round, events, a: snapA, b: snapB, hpB: all.filter((u) => u.side === 1).map((u) => u.hp) };
+  return { winner, rounds: round, events, a: snapA, b: snapB, hpB: all.filter((u) => u.side === 1).map((u) => u.hp), hpA: all.filter((u) => u.side === 0 && !u.wall).map((u) => u.hp) };
 }
