@@ -4,7 +4,9 @@ import { currentQuest, dockPos, isLand, landCount, landCap, LV_POS, type PlayerS
 import { canvas, Pen } from '../art/pixel';
 import { CamCtl } from './camctl';
 import { drawIsland, drawScaffold, LV_SIZE } from '../art/sprites';
-import { avatarTex, ensureTex, HD, lvTex, preloadAll, texBox, waterTex } from '../art/textures';
+import { avatarTex, dinhTex, ensureTex, HD, lvTex, preloadAll, texBox, waterTex } from '../art/textures';
+import { BUILDINGS, type BKey } from '../../../shared/economy';
+import { occupied } from '../../../shared/logic';
 
 /** Hình vẽ chi tiết gấp HD lần nên thu lại cho đúng kích thước trong thế giới. */
 const Q = 1 / HD;
@@ -43,11 +45,15 @@ export class IslandScene extends Phaser.Scene {
   private lastSlow = 0;
   private dockKey = '';
   private scaffolds = {} as Record<LvKey, Phaser.GameObjects.Image>;
-  private buildLabels = new Map<LvKey, HTMLElement>();
+  private buildLabels = new Map<string, HTMLElement>();
   private lastBuildText = 0;
   private bounds = { x: 0, y: 0, w: WORLD, h: WORLD };
   private guide!: Phaser.GameObjects.Image;
   private halo!: Phaser.GameObjects.Image;
+  private dinhImgs = new Map<string, { img: Phaser.GameObjects.Image; scaf: Phaser.GameObjects.Image; key: string }>();
+  /** đang chọn chỗ đặt công trình */
+  placing: BKey | null = null;
+  private placeGfx!: Phaser.GameObjects.Graphics;
 
   private get dragged() {
     return this.ctl?.dragged ?? false;
@@ -71,6 +77,7 @@ export class IslandScene extends Phaser.Scene {
     });
     this.water = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setDepth(-20).setScale(Q);
     this.expandGfx = this.add.graphics().setDepth(5000);
+    this.placeGfx = this.add.graphics().setDepth(5001);
     for (const k of LV_KEYS) {
       const p = LV_POS[k];
       const img = this.add.image(wx(p.x) + 8, wx(p.y) + 15, '__DEFAULT').setOrigin(0.5, 1).setDepth(wx(p.y) + 15).setScale(Q);
@@ -241,6 +248,15 @@ export class IslandScene extends Phaser.Scene {
   private tapGround(worldX: number, worldY: number) {
     const tx = Math.floor((worldX - PAD) / T);
     const ty = Math.floor((worldY - PAD) / T);
+    if (this.placing) {
+      const o = this.store.do({ t: 'xay', k: this.placing, x: tx, y: ty });
+      this.ui.toast(o.msg, o.ok ? 'gold' : 'bad');
+      if (o.ok) {
+        this.walkTo(tx, ty);
+        this.setPlacing(null);
+      }
+      return;
+    }
     if (this.expandMode) {
       const o = this.store.do({ t: 'expand', x: tx, y: ty });
       const at = this.screenOf(wx(tx) + 8, wx(ty));
@@ -275,6 +291,62 @@ export class IslandScene extends Phaser.Scene {
     this.tweens.killTweensOf(this.rua);
     this.rua.setPosition(wx(best.x) + 8, wx(best.y) + 12).setDepth(wx(best.y));
     this.tweens.add({ targets: this.rua, y: this.rua.y + 1, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+  }
+
+  /** Bật/tắt chế độ chọn ô đất để xây. */
+  setPlacing(k: BKey | null) {
+    this.placing = k;
+    if (k) this.toggleExpand(false);
+    this.drawPlace();
+    this.ui.onPlacing(k);
+  }
+  private drawPlace() {
+    const g = this.placeGfx;
+    g.clear();
+    if (!this.placing) return;
+    const s = this.store.s;
+    for (let y = 0; y < GRID; y++)
+      for (let x = 0; x < GRID; x++) {
+        if (!isLand(s, x, y) || occupied(s, x, y)) continue;
+        g.fillStyle(0x7cff9a, 0.2).fillRect(wx(x) + 1, wx(y) + 1, T - 2, T - 2);
+        g.lineStyle(1, 0x7cff9a, 0.85).strokeRect(wx(x) + 1.5, wx(y) + 1.5, T - 3, T - 3);
+      }
+  }
+
+  /** Vẽ nhà cửa, thành trì; giàn giáo khi đang xây. */
+  private syncDinh(s: PlayerState) {
+    const seen = new Set<string>();
+    for (const d of s.dinh) {
+      seen.add(d.id);
+      const key = dinhTex(this, d.k, Math.max(1, d.lv || d.to || 1));
+      let v = this.dinhImgs.get(d.id);
+      if (!v) {
+        const img = this.add.image(wx(d.x) + 8, wx(d.y) + 15, key).setOrigin(0.5, 1).setDepth(wx(d.y) + 15).setScale(Q);
+        img.setInteractive({ useHandCursor: true }).on('pointerup', () => !this.dragged && this.ui.openDinh(d.id));
+        const scaf = this.add.image(img.x, img.y, ensureTex(this, 'scaf-16x24', () => drawScaffold(16, 24))).setOrigin(0.5, 1).setDepth(img.depth + 1).setScale(Q);
+        v = { img, scaf, key };
+        this.dinhImgs.set(d.id, v);
+        if (this.time.now > 2000) this.tweens.add({ targets: img, scaleY: { from: 0, to: Q }, duration: 300, ease: 'Back.out' });
+      }
+      if (v.key !== key) {
+        v.img.setTexture(key);
+        v.key = key;
+        this.cameras.main.flash(250, 255, 230, 140);
+      }
+      v.img.setAlpha(d.lv === 0 ? 0.45 : 1);
+      v.scaf.setVisible(d.doneAt !== undefined);
+    }
+    for (const [id, v] of this.dinhImgs)
+      if (!seen.has(id)) {
+        v.img.destroy();
+        v.scaf.destroy();
+        this.dinhImgs.delete(id);
+      }
+    if (this.placing) this.drawPlace();
+  }
+  dinhAnchor(id: string) {
+    const v = this.dinhImgs.get(id);
+    return v ? this.screenOf(v.img.x, v.img.y - v.img.displayHeight) : { x: 0, y: 0 };
   }
 
   toggleExpand(on?: boolean) {
@@ -339,32 +411,35 @@ export class IslandScene extends Phaser.Scene {
     const s = this.store.s;
     const box = document.getElementById('buildlabels');
     if (!box) return;
-    const active = new Set(s.builds.map((b) => b.lv));
+    const active = new Set<string>([...s.builds.map((b) => b.lv), ...s.dinh.filter((d) => d.doneAt !== undefined).map((d) => d.id)]);
     for (const [k, el] of this.buildLabels)
       if (!active.has(k)) {
         el.remove();
         this.buildLabels.delete(k);
       }
-    if (!s.builds.length) return;
+    if (!active.size) return;
     const gtNow = s.gt + (Date.now() - s.lastReal) * s.speed;
     const writeText = time - this.lastBuildText > 250;
     if (writeText) this.lastBuildText = time;
-    for (const b of s.builds) {
-      let el = this.buildLabels.get(b.lv);
+    const jobs = [
+      ...s.builds.map((b) => ({ key: b.lv as string, start: b.start, end: b.end, name: LINH_VAT[b.lv].tiers[b.to - 1], at: () => this.screenOf(this.lvs[b.lv].x, this.lvTop(b.lv) - 2) })),
+      ...s.dinh.filter((d) => d.doneAt !== undefined).map((d) => ({ key: d.id, start: d.doneAt! - BUILDINGS[d.k].ms[(d.to ?? 1) - 1], end: d.doneAt!, name: BUILDINGS[d.k].names[(d.to ?? 1) - 1], at: () => this.dinhAnchor(d.id) })),
+    ];
+    for (const b of jobs) {
+      let el = this.buildLabels.get(b.key);
       if (!el) {
         el = document.createElement('div');
         el.className = 'blabel';
         el.innerHTML = '<b></b><i><span></span></i>';
         box.appendChild(el);
-        this.buildLabels.set(b.lv, el);
+        this.buildLabels.set(b.key, el);
       }
-      const img = this.lvs[b.lv];
-      const p = this.screenOf(img.x, this.lvTop(b.lv) - 2);
+      const p = b.at();
       el.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px) translate(-50%, -100%)`;
       if (writeText) {
         const left = Math.max(0, Math.ceil((b.end - gtNow) / 1000 / s.speed));
         const mm = left >= 3600 ? `${Math.floor(left / 3600)}:${String(Math.floor((left % 3600) / 60)).padStart(2, '0')}:${String(left % 60).padStart(2, '0')}` : `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-        el.querySelector('b')!.textContent = `Xây ${LINH_VAT[b.lv].tiers[b.to - 1]} · ${mm}`;
+        el.querySelector('b')!.textContent = `Xây ${b.name} · ${mm}`;
         (el.querySelector('span') as HTMLElement).style.width = `${Math.min(100, Math.round(((gtNow - b.start) / (b.end - b.start)) * 100))}%`;
       }
     }
@@ -437,6 +512,7 @@ export class IslandScene extends Phaser.Scene {
     }
     for (const [id, img] of this.chests) if (!seenC.has(id)) (img.destroy(), this.chests.delete(id));
     this.syncLv();
+    this.syncDinh(s);
   }
 
   /** Chỗ mũi tên hướng dẫn cần chỉ (toạ độ thế giới) theo nhiệm vụ hiện tại. */

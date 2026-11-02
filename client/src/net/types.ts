@@ -65,4 +65,6 @@ export interface Net {
   sendAction?(a: Action, at: number, h: string): void;
   serverNow?(): number;
   account?: { name: string; khu: string; logout: () => void };
+  /** Chợ thế giới, đấu giá, thương hội (chỉ bản chính thức). */
+  market?(op: string, args?: Record<string, unknown>): Promise<{ ok: boolean; msg: string; data?: any }>;
 }

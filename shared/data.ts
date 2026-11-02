@@ -7,8 +7,8 @@ export const GAME = {
   tagline: 'Vạn vật đều có hồn. Lắng nghe, rồi sống sót.',
 };
 
-export type ResKey = 'co' | 'la' | 'tre' | 'go' | 'cui' | 'da' | 'sat' | 'so' | 'ngoc';
-export const RES_KEYS: ResKey[] = ['co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc'];
+export type ResKey = 'co' | 'la' | 'tre' | 'go' | 'cui' | 'da' | 'sat' | 'so' | 'ngoc' | 'tien';
+export const RES_KEYS: ResKey[] = ['co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc', 'tien'];
 export const FEEDABLE: ResKey[] = ['co', 'la', 'tre', 'go', 'cui', 'da', 'sat'];
 export const RES: Record<ResKey, { name: string; capped: boolean }> = {
   co: { name: 'Cỏ tranh', capped: true },
@@ -20,6 +20,7 @@ export const RES: Record<ResKey, { name: string; capped: boolean }> = {
   sat: { name: 'Sắt vụn', capped: true },
   so: { name: 'Vỏ Sò', capped: false },
   ngoc: { name: 'Ngọc Trai', capped: false },
+  tien: { name: 'Tiền đồng', capped: false },
 };
 
 export type NodeKind = 'grass' | 'palm' | 'bamboo' | 'rock' | 'scrap' | 'drift';

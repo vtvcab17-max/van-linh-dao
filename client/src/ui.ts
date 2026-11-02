@@ -21,16 +21,21 @@ import {
   type ResKey,
   type WildDef,
 } from '../../shared/data';
-import { bossCheck, buildMs, buildOf, buildSlots, canPay, currentQuest, dockPos, expandCost, landCap, landCount, LV_POS, newPlayer, power, publicOf, sailMs, storageCap, titleOf, xpForLevel, type IslandPub, type Outcome } from '../../shared/logic';
+import { bossCheck, busySlots, conquerCheck, craftCost, goodLabel, haveGood, homeCell, incomePerHour, nearestBase, fortName, shopPrice, buildMs, buildOf, buildSlots, canPay, currentQuest, dockPos, expandCost, landCap, landCount, LV_POS, newPlayer, power, publicOf, sailMs, storageCap, titleOf, xpForLevel, type IslandPub, type Outcome } from '../../shared/logic';
 import { drawLeu, drawMiniIsland, drawEmote } from './art/sprites';
 import { canvasUrl, iconUrl, lvCanvas, portraitUrl } from './art/textures';
 import { avatarUrl } from './art/avatar';
 import { drawSeaIsland, lookOf } from './art/islands';
-import { avatarFrom, cleanAvatar, GENDERS, HAIRS, HAIR_COLORS, HATS, ITEMS, OUTFITS, OUTFIT_COLORS, SKINS, type Avatar } from '../../shared/avatar';
+import { avatarFrom, cleanAvatar, GENDERS, HAIRS, HAIR_COLORS, HATS, ITEMS as AV_ITEMS, OUTFITS, OUTFIT_COLORS, SKINS, type Avatar } from '../../shared/avatar';
 import { hashStr } from '../../shared/rng';
 import { LV_LABEL, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, GEAR, GEAR_KEYS, gearBonus, noGear, weekEnd, weekOf, type GearKey, type GearSet } from '../../shared/boss';
 import { thuongGioiHtml } from './thuonggioi';
+import {
+  B_KEYS, BUILDINGS, DAY0, dayOf, GUILD_COST, guildLevel, ITEM_KEYS, ITEMS, marketFee, PORT_MULT, RARITY_COLOR, ROUTE_MS, routePeriod, routesNear, SHOP_BASE, shopSpecial, tollPerHour, tributePerHour, goodRarity, bLevel,
+  type BKey, type ItemKey, type Route,
+} from '../../shared/economy';
 import { canvas, Pen } from './art/pixel';
+import { drawDinh } from './art/dinh';
 import { playTrailer } from './trailer';
 import type { IslandScene } from './scenes/IslandScene';
 import type { SeaScene } from './scenes/SeaScene';
@@ -57,7 +62,7 @@ const costHtml = (cost: Partial<Record<ResKey, number>>, have: Record<ResKey, nu
     .map(([k, v]) => `<span class="cost ${have[k as ResKey] >= (v ?? 0) ? '' : 'short'}"><img src="${iconUrl(k)}" alt="">${v} ${RES[k as ResKey].name}</span>`)
     .join(' ');
 
-type Tab = 'island' | 'sea' | 'team' | 'chat' | 'feedback' | 'bxh';
+type Tab = 'island' | 'sea' | 'team' | 'chat' | 'feedback' | 'bxh' | 'cho';
 
 /** Dáng vẻ của một đảo người khác (dữ liệu gửi qua mạng nên luôn kiểm lại). */
 export const pubAvatar = (p: { id: string; avatar?: unknown }): Avatar => cleanAvatar(p.avatar) ?? avatarFrom(p.id);
@@ -178,8 +183,9 @@ export class UI {
   private sailLine(to: { x: number; y: number }, mul = 1) {
     const s = this.store.s;
     const ms = sailMs(s, to, mul) / s.speed;
-    const dist = Math.max(1, Math.hypot(to.x - HOME_CELL.x, to.y - HOME_CELL.y));
-    return `<div class="card"><small>Hải trình</small><p>Cách đảo bạn <b>${dist.toFixed(1).replace('.', ',')} hải lý</b>. ${esc(LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1])} đi mất <b>${hms(ms)}</b>, về mất <b>${hms(ms)}</b>.</p><p class="muted small">Xa hơn thì lâu hơn. Tiến hóa thuyền để đi nhanh hơn. Chiến lợi phẩm về tới bến mới nhận.</p></div>`;
+    const base = nearestBase(s, to);
+    const dist = Math.max(1, Math.hypot(to.x - base.x, to.y - base.y));
+    return `<div class="card"><small>Hải trình</small><p>Cách ${base.x === homeCell(s).x && base.y === homeCell(s).y ? 'đảo bạn' : `cứ điểm ${esc(base.name)}`} <b>${dist.toFixed(1).replace('.', ',')} hải lý</b>. ${esc(LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1])} đi mất <b>${hms(ms)}</b>, về mất <b>${hms(ms)}</b>.</p><p class="muted small">Xa hơn thì lâu hơn. Tiến hóa thuyền để đi nhanh hơn. Chiến lợi phẩm về tới bến mới nhận.</p></div>`;
   }
 
   private sail(o: Outcome) {
@@ -196,6 +202,9 @@ export class UI {
     document.querySelectorAll<HTMLButtonElement>('#nav button').forEach((b) => b.addEventListener('click', () => this.showTab(b.dataset.tab as Tab)));
     $('#btnSettings').addEventListener('click', () => this.openSettings());
     $('#meAv').addEventListener('click', () => this.openAvatar());
+    $('#btnBuild').addEventListener('click', () => (this.island.placing ? this.island.setPlacing(null) : this.openBuildMenu()));
+    $('#income').addEventListener('click', () => this.openCho('linh'));
+    $('#vassal').addEventListener('click', () => this.openCho('linh'));
     $('#btnExpand').addEventListener('click', () => this.toggleExpand());
     $('#btnSpeed').addEventListener('click', () => {
       const next = this.store.s.speed === 1 ? 5 : this.store.s.speed === 5 ? 10 : 1;
@@ -217,6 +226,7 @@ export class UI {
       chat: canvasUrl('nav-chat', () => drawEmote('nghe'), 3),
       feedback: canvasUrl('nav-fb', () => drawEmote('vui'), 3),
       bxh: canvasUrl('nav-bxh', drawCup, 2),
+      cho: iconUrl('tien'),
     };
     document.querySelectorAll<HTMLButtonElement>('#nav button').forEach((b) => {
       const img = document.createElement('img');
@@ -276,6 +286,16 @@ export class UI {
     const p = power(s);
     $('#islandName').textContent = s.islandName;
     $('#title').textContent = `${titleOf(p)} · ${p} sức mạnh`;
+    const inc = incomePerHour(s, this.store.now());
+    $('#income').textContent = `${inc.total >= 0 ? '+' : ''}${Math.round(inc.total)} tiền/giờ`;
+    const vb = $('#vassal');
+    const lord = s.chuQuan && s.chuQuan.until > this.store.now() ? s.chuQuan : null;
+    vb.hidden = !lord && !s.chuHau.length;
+    vb.innerHTML = lord
+      ? `<b class="bad">Chư hầu của ${esc(lord.name)}</b><span>nộp ${tributePerHour(power(s))} tiền/giờ · còn ${hms(lord.until - this.store.now())}</span>`
+      : s.chuHau.length
+        ? `<b>Lãnh chúa ${s.chuHau.length} đảo</b><span>${s.chuHau.map((v) => esc(v.islandName)).slice(0, 2).join(', ')}</span>`
+        : '';
     const av = avatarUrl(s.avatar, 3, true);
     const meImg = $('#meAv img') as HTMLImageElement;
     if (meImg.getAttribute('src') !== av) {
@@ -292,7 +312,7 @@ export class UI {
     const s = this.store.s;
     const cap = storageCap(s);
     const el = $('#res');
-    const show: ResKey[] = ['co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc'];
+    const show: ResKey[] = ['tien', 'co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc'];
     if (el.childElementCount !== show.length) {
       el.innerHTML = show.map((k) => `<span class="r" data-k="${k}" title="${RES[k].name}"><img src="${iconUrl(k)}" alt="${RES[k].name}"><b></b></span>`).join('');
     }
@@ -343,7 +363,8 @@ export class UI {
     if (tab === 'chat') this.openChat();
     if (tab === 'feedback') this.openFeedback();
     if (tab === 'bxh') this.openBxh();
-    if (tab === 'team' || tab === 'chat' || tab === 'feedback' || tab === 'bxh') {
+    if (tab === 'cho') this.openCho();
+    if (tab === 'team' || tab === 'chat' || tab === 'feedback' || tab === 'bxh' || tab === 'cho') {
       document.querySelectorAll<HTMLButtonElement>('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
       this.tab = prev === 'sea' ? 'sea' : 'island';
       this.tabSheet = tab;
@@ -789,14 +810,26 @@ export class UI {
       <div class="enemies">${p.team.map((t) => `<div class="enemy"><img src="${t.k === 'an' ? avatarUrl(pubAvatar(p), 3) : portraitUrl(t.k)}" alt=""><span>${t.k === 'an' ? esc(p.name) : COMPANIONS[t.k].name}</span><small>cấp ${t.lv}</small></div>`).join('')}</div>
       ${isMe ? `<p class="hint">Người khác thấy đảo bạn như thế này. Phần tài nguyên dưới mức được bảo vệ của Nhà chính không bị cướp.</p><button class="wide" id="btnHome">Phóng vào đảo</button>` : `
         <div class="card"><small>Nếu thắng, chở về khoảng</small><div class="costs">${lootPreview || 'Đảo này nghèo quá, chẳng có gì để lấy.'}</div></div>
-        <p class="muted small">So sức: bạn ${me.power} · họ ${p.power}</p>
+        <p class="muted small">So sức: bạn ${me.power} · họ ${p.power}${p.fort ? ` · thành trì: ${['Đảo Trống', 'Xóm Đảo', 'Làng Lũy', 'Đồn Lũy', 'Thành Trì', 'Kinh Thành'][p.fort]}` : ''}${p.guild ? ` · hội [${esc(p.guild)}]` : ''}</p>
+        ${p.lord ? `<p class="hint">Đảo này đang là chư hầu của ${p.lord.id === s.id ? '<b>bạn</b>' : esc(p.lord.name)}.</p>` : ''}
+        ${s.chuQuan && s.chuQuan.id === p.id ? '<p class="hint">Đây là chủ của bạn. Đánh thắng họ để <b>khởi nghĩa</b>, giành lại tự do.</p>' : ''}
+        <p class="muted small">Thuế thương thuyền ở đảo này: ~${Math.round(tollPerHour(to, routePeriod(this.store.now()), p.port ?? 0))} tiền/giờ${routesNear(to, routePeriod(this.store.now())).length ? ` (${routesNear(to, routePeriod(this.store.now())).map((r) => r.m.name).join(', ')} đi ngang)` : ''}.</p>
         ${this.sailLine(to)}
-        ${this.sailButton(cd <= 0, `Vừa đột kích, chờ ${secs(cd / s.speed)}`, 'Lên thuyền đột kích')}`}`;
+        ${this.sailButton(cd <= 0, `Vừa đột kích, chờ ${secs(cd / s.speed)}`, 'Đột kích cướp tài nguyên')}
+        ${s.voyage || cd > 0 ? '' : (() => {
+          const err = conquerCheck(s, p);
+          return `<button class="wide ${err ? '' : 'hot'}" id="btnConquer" ${err ? 'disabled' : ''}>${err ? esc(err) : 'Đánh chiếm làm chư hầu (72 giờ)'}</button><p class="muted small">Thắng thì đảo này cống nạp ~${tributePerHour(p.power)} tiền/giờ, chia bạn một nửa thuế thương thuyền, và thành cứ điểm cho thuyền xuất phát.</p>`;
+        })()}`}`;
     this.openSheet('island', isMe ? 'Đảo của bạn' : 'Đảo láng giềng', html, (body) => {
       body.querySelector('#btnHome')?.addEventListener('click', () => this.goIsland());
       body.querySelector('#btnSail')?.addEventListener('click', () => {
         const o = this.store.do({ t: 'sail', kind: 'island', target: p, to });
         if (o.ok) this.store.net.setActivity(`đang chèo thuyền tới ${p.islandName}`);
+        this.sail(o);
+      });
+      body.querySelector('#btnConquer')?.addEventListener('click', () => {
+        const o = this.store.do({ t: 'sail', kind: 'island', target: p, to, conquer: true });
+        if (o.ok) this.store.net.setActivity(`đang kéo quân đánh chiếm ${p.islandName}`);
         this.sail(o);
       });
     });
@@ -861,6 +894,7 @@ export class UI {
       <div class="row wrap">
         <button type="button" id="btnAv">Chỉnh nhân vật</button>
         <button type="button" id="btnTrailer">Xem trailer</button>
+        <button type="button" id="btnFb">Góp ý</button>
         <button type="button" id="btnTG">Cổng Thượng Giới</button>
         <button type="button" id="btnPerf">${this.perfOn ? 'Tắt bảng đo' : 'Bật bảng đo hiệu năng'}</button>
         <button type="button" id="btnLog">Nhật ký đảo</button>
@@ -875,6 +909,7 @@ export class UI {
         void playTrailer(this.store.s.avatar);
       });
       body.querySelector('#btnTG')?.addEventListener('click', () => this.openThuongGioi());
+      body.querySelector('#btnFb')?.addEventListener('click', () => this.openFeedback());
       body.querySelector('#nameForm')!.addEventListener('submit', (e) => {
         e.preventDefault();
         const o = this.store.do({ t: 'rename', name: ($('#inName') as HTMLInputElement).value, island: ($('#inIsland') as HTMLInputElement).value });
@@ -951,6 +986,332 @@ export class UI {
     }).join('');
     return `<div class="card"><small>Trang bị trong kho</small><p class="muted small">Cất ở nhà thì tăng sức cho mọi trận và khi giữ đảo. Mang đi đánh Thủy Tinh mà thua thì mất hết.</p>
       <p><b>+${Math.round(b.atk * 100)}%</b> công · <b>+${Math.round(b.def * 100)}%</b> thủ · <b>+${Math.round(b.hp * 100)}%</b> máu</p>${rows}</div>`;
+  }
+
+  // ---------------- xây dựng nhà cửa, thành trì ----------------
+  openBuildMenu() {
+    const draw = () => {
+      const s = this.store.s;
+      const groups: Record<string, BKey[]> = { 'Nhà cửa': [], 'Kinh tế': [], 'Thành trì': [] };
+      for (const k of B_KEYS) groups[BUILDINGS[k].group === 'nhà cửa' ? 'Nhà cửa' : BUILDINGS[k].group === 'kinh tế' ? 'Kinh tế' : 'Thành trì'].push(k);
+      const row = (k: BKey) => {
+        const b = BUILDINGS[k];
+        const have = s.dinh.filter((d) => d.k === k).length;
+        const lock = s.lv.leu.tier < b.needLeu ? `Cần Nhà chính bậc ${b.needLeu}` : have >= b.max ? `Đã đủ ${b.max}` : '';
+        return `<div class="gear"><img src="${canvasUrl('dinh-ui-' + k, () => drawDinh(k, 1), 2)}" alt=""><div><b>${b.names[0]} <span class="lvl">${have}/${b.max}</span></b><small>${b.desc} · xây ${hms(b.ms[0])}</small><div class="costs">${costHtml(b.cost[0], s.res)}</div></div>
+          <button type="button" data-b="${k}" ${lock || !canPay(s, b.cost[0]) ? 'disabled' : ''}>${lock || 'Chọn chỗ'}</button></div>`;
+      };
+      return `<div class="card"><small>Đảo của bạn</small><p>Thành trì: <b>${fortName(s)}</b> · Đội thợ: ${busySlots(s)}/${buildSlots(s)} đang bận · Kho chứa ${storageCap(s)}</p>
+        <p class="muted small">Bấm "Chọn chỗ" rồi chạm một ô đất trống (viền xanh). Chạm công trình đã xây để nâng cấp. Càng lên cấp xây càng lâu.</p></div>
+        ${Object.entries(groups).map(([g, ks]) => `<div class="card"><small>${g}</small>${ks.map(row).join('')}</div>`).join('')}`;
+    };
+    this.openSheet('build', 'Xây dựng', draw(), (body) =>
+      body.addEventListener('click', (e) => {
+        const t = (e.target as HTMLElement).closest('button');
+        if (!t?.dataset.b) return;
+        this.closeSheet();
+        if (this.tab !== 'island') this.goIsland();
+        this.island.setPlacing(t.dataset.b as BKey);
+      }),
+    );
+  }
+
+  onPlacing(k: BKey | null) {
+    const b = $('#btnBuild');
+    b.textContent = k ? 'Hủy chọn chỗ' : 'Xây dựng';
+    b.classList.toggle('hot', !!k);
+    if (k) this.toast(`Chạm một ô đất có viền xanh để xây ${BUILDINGS[k].names[0]}.`, 'gold', 4000);
+  }
+
+  openDinh(id: string) {
+    let armed = false;
+    const draw = () => {
+      const s = this.store.s;
+      const d = s.dinh.find((x) => x.id === id);
+      if (!d) return '<p>Công trình đã bị dỡ.</p>';
+      const b = BUILDINGS[d.k];
+      const lv = Math.max(1, d.lv);
+      const busy = d.doneAt !== undefined;
+      const left = busy ? d.doneAt! - (s.gt + (Date.now() - s.lastReal) * s.speed) : 0;
+      const next = d.lv < 3 && !busy ? `<div class="card"><small>Nâng lên ${b.names[d.lv]}</small><div class="costs">${costHtml(b.cost[d.lv], s.res)}</div><p class="muted small">Xây mất ${hms(b.ms[d.lv])}</p>
+        <button class="primary wide" id="btnUp" ${canPay(s, b.cost[d.lv]) && busySlots(s) < buildSlots(s) ? '' : 'disabled'}>${busySlots(s) >= buildSlots(s) ? 'Thợ đang bận hết' : 'Nâng cấp'}</button></div>` : '';
+      return `<div class="lv-head"><img class="lv-img" src="${canvasUrl(`dinh-ui-${d.k}-${lv}`, () => drawDinh(d.k, lv), 4)}" alt=""><div><h3>${b.names[lv - 1]}</h3><p class="tier">Cấp ${d.lv || 0}/3${busy ? ` · đang xây lên cấp ${d.to}` : ''}</p><p class="muted">${b.desc}</p></div></div>
+        ${busy ? `<div class="card"><small>Đang xây</small><p>Còn <b>${hms(left / s.speed)}</b></p></div>` : ''}
+        ${next}
+        <button class="wide" id="btnPha">${armed ? 'Chắc chắn dỡ? Bấm lần nữa' : 'Dỡ bỏ (thu lại 30% vật liệu)'}</button>`;
+    };
+    this.openSheet('dinh', 'Công trình', draw(), (body) =>
+      body.addEventListener('click', (e) => {
+        const t = (e.target as HTMLElement).closest('button');
+        if (!t) return;
+        if (t.id === 'btnUp') {
+          const o = this.store.do({ t: 'nang', id });
+          this.toast(o.msg, o.ok ? 'gold' : 'bad');
+        } else if (t.id === 'btnPha') {
+          if (!armed) armed = true;
+          else {
+            const o = this.store.do({ t: 'pha', id });
+            this.toast(o.msg, o.ok ? 'gold' : 'bad');
+            return this.closeSheet();
+          }
+        }
+        body.innerHTML = draw();
+      }),
+      () => {
+        const b = $('#sheet .sheet-body');
+        if (b && this.sheetKind === 'dinh' && !b.matches(':focus-within')) b.innerHTML = draw();
+      },
+    );
+  }
+
+  openMerchant(rt: Route) {
+    const s = this.store.s;
+    const html = `<div class="card"><small>${esc(rt.m.name)}</small><p>Tuyến buôn 6 giờ này ghé ${rt.pts.length} điểm. Đảo nằm sát tuyến (trong ${2.5} hải lý) thu <b>${rt.value} tiền/giờ</b> × hệ số Trạm thuế (${PORT_MULT.join(' / ')}).</p>
+      <p>Hàng mang theo: ${rt.m.goods.map((g) => `<span style="color:${RARITY_COLOR[goodRarity(g)]}">${esc(goodLabel(g))}</span>`).join(', ')}</p>
+      <p class="muted small">Đổi tuyến sau ${hms(ROUTE_MS - ((this.store.now() - DAY0) % ROUTE_MS))}. Đảo bạn ${routesNear(homeCell(s), routePeriod(this.store.now())).some((r) => r.m.id === rt.m.id) ? '<b class="good">đang nằm trên tuyến này</b>' : 'không nằm trên tuyến này'}.</p></div>
+      <button class="primary wide" id="btnGoMarket">Xem hàng của thương buôn ở chợ</button>`;
+    this.openSheet('merchant', 'Thương thuyền', html, (b) => b.querySelector('#btnGoMarket')!.addEventListener('click', () => this.openCho('market', rt.m.name.split(' ').slice(-2).join(' '))));
+  }
+
+  // ---------------- chợ, cửa hàng, túi đồ, thương hội, lãnh địa ----------------
+  private choTab = 'shop';
+  openCho(tab?: string, q = '') {
+    if (tab) this.choTab = tab;
+    const net = this.store.net;
+    const online = !!net.market;
+    const st = { q, cat: 'all', sort: 'new', data: null as any, mine: null as any, guilds: null as any, ginfo: null as any, busy: false, sellGood: 'go', mode: 'fixed' };
+    const tabs: [string, string][] = [
+      ['shop', 'Cửa hàng'],
+      ['bag', 'Túi đồ'],
+      ['market', 'Chợ'],
+      ['orders', 'Đặt mua'],
+      ['sell', 'Đăng bán'],
+      ['mine', 'Của tôi'],
+      ['guild', 'Thương hội'],
+      ['linh', 'Lãnh địa'],
+    ];
+    const s = () => this.store.s;
+    const goodOpt = (sel: string, onlyHave: boolean) =>
+      [...(['tien'] as string[]).filter(() => false), 'co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc', ...ITEM_KEYS, 'g_giao', 'g_khien', 'g_thuoc', 'g_bua']
+        .filter((g) => !onlyHave || haveGood(s(), g) > 0)
+        .map((g) => `<option value="${g}" ${g === sel ? 'selected' : ''}>${esc(goodLabel(g))}${onlyHave ? ` (có ${haveGood(s(), g)})` : ''}</option>`)
+        .join('');
+    const gname = (g: string) => `<b style="color:${RARITY_COLOR[goodRarity(g)]}">${esc(goodLabel(g))}</b>`;
+    const fee = () => marketFee(bLevel(s().dinh, 'cho'), !!s().guild);
+    const offline = '<p class="hint">Chợ thế giới, đấu giá và thương hội chỉ có ở bản chính thức (đăng nhập Google, chơi online). Cửa hàng, túi đồ, lãnh địa vẫn dùng được.</p>';
+    const call = async (op: string, args: Record<string, unknown> = {}) => {
+      if (!net.market) return null;
+      st.busy = true;
+      paint();
+      const r = await net.market(op, args);
+      st.busy = false;
+      if (r.msg) this.toast(r.msg, r.ok ? 'gold' : 'bad');
+      return r;
+    };
+    const load = async () => {
+      if (!online) return paint();
+      if (this.choTab === 'market' || this.choTab === 'orders') st.data = (await call('search', { q: st.q, cat: st.cat, sort: st.sort }))?.data ?? null;
+      if (this.choTab === 'mine') st.mine = (await call('mine'))?.data ?? null;
+      if (this.choTab === 'guild') {
+        if (s().guild) st.ginfo = (await call('gInfo', { id: s().guild!.id }))?.data ?? null;
+        else st.guilds = (await call('gList'))?.data ?? null;
+      }
+      paint();
+    };
+    const left = (t: number) => hms(Math.max(0, t - Date.now()));
+    const body = () => {
+      const S = s();
+      const tabBar = `<div class="seg scrolltabs">${tabs.map(([k, n]) => `<button type="button" data-tab2="${k}" aria-checked="${this.choTab === k}">${n}</button>`).join('')}</div>
+        <p class="money"><img src="${iconUrl('tien')}" alt=""> <b>${fmt(S.res.tien)}</b> tiền đồng${st.busy ? ' · <i>đang chờ chợ...</i>' : ''}</p>`;
+      switch (this.choTab) {
+        case 'shop': {
+          const day = dayOf(this.store.now());
+          const sp = shopSpecial(day);
+          const offers = [...SHOP_BASE, sp];
+          return tabBar + `<p class="muted small">Cửa hàng của Rùa Vàng. ${bLevel(S.dinh, 'cho') ? `Chợ phiên giúp giảm ${bLevel(S.dinh, 'cho') * 5}%.` : 'Xây Chợ phiên để mua rẻ hơn.'} Hàng hiếm đổi mỗi ngày.</p>` +
+            offers.map((o) => {
+              const bought = S.shop.day === day ? (S.shop.bought[o.id] ?? 0) : 0;
+              const price = shopPrice(S, o.price);
+              const out = o.daily !== undefined && bought >= o.daily;
+              return `<div class="gear ${o.id === 'sp' ? 'special' : ''}"><img src="${o.good in ITEMS ? canvasUrl('item-' + o.good, () => drawItemIcon(o.good as ItemKey), 3) : o.good.startsWith('g_') ? canvasUrl('gear-' + o.good.slice(2), () => drawGearIcon(o.good.slice(2) as GearKey), 3) : iconUrl(o.good)}" alt=""><div>${o.id === 'sp' ? '<small class="tag">HÀNG HIẾM HÔM NAY</small>' : ''}${gname(o.good)}${o.n > 1 ? ` ×${o.n}` : ''}<small>${o.good in ITEMS ? ITEMS[o.good as ItemKey].desc : ''}${o.daily ? ` · mỗi ngày ${o.daily}` : ''}</small></div>
+                <button type="button" data-buyshop="${o.id}" ${out || S.res.tien < price ? 'disabled' : ''}>${out ? 'Hết lượt' : `${price} tiền`}</button></div>`;
+            }).join('');
+        }
+        case 'bag': {
+          const have = ITEM_KEYS.filter((k) => (S.bag[k] ?? 0) > 0);
+          return tabBar + (have.length ? '' : '<p class="hint">Túi trống. Vật phẩm hiếm rơi từ hòm báu, thắng Thủy Tinh, hoặc mua ở cửa hàng, chợ.</p>') +
+            have.map((k) => `<div class="gear"><img src="${canvasUrl('item-' + k, () => drawItemIcon(k), 3)}" alt=""><div>${gname(k)} <span class="lvl">×${S.bag[k]}</span><small>${ITEMS[k].desc}</small></div>
+              ${ITEMS[k].use ? `<button type="button" data-use="${k}">Dùng</button>` : '<span class="muted small">Giữ trong túi</span>'}</div>`).join('');
+        }
+        case 'market': {
+          if (!online) return tabBar + offline;
+          const d = st.data;
+          const rows = (d?.listings ?? []).map((l: any) => {
+            const avg = d.prices?.[l.good]?.avg;
+            const isA = l.kind === 'auction';
+            return `<li><div>${gname(l.good)} ×${l.n}<small>${esc(l.sellerName)}${l.npc ? ' · thương buôn' : ''}${avg ? ` · giá TB ${Math.round(avg)}` : ''}</small></div>
+              <div class="mk-r">${isA ? `<span>${l.bidder ? 'Giá hiện tại' : 'Khởi điểm'} <b>${l.price}</b><small>${l.bidder ? esc(l.bidderName) + ' · ' : ''}còn ${left(l.ends)}</small></span><input type="number" min="${l.bidder ? Math.ceil(l.price * 1.05) : l.price}" value="${l.bidder ? Math.ceil(l.price * 1.05) : l.price}" data-bidv="${l.id}"><button type="button" data-bid="${l.id}" ${l.seller === S.id ? 'disabled' : ''}>Trả giá</button>`
+                : `<span><b>${l.price}</b>/món</span>${l.n > 1 ? `<input type="number" min="1" max="${l.n}" value="${Math.min(l.n, 10)}" data-qty="${l.id}">` : ''}<button type="button" class="primary" data-buy="${l.id}" ${l.seller === S.id ? 'disabled' : ''}>Mua</button>`}</div></li>`;
+          }).join('');
+          return tabBar + `<form class="mk-search" id="mkSearch"><input name="q" placeholder="Tìm hàng: gỗ, vảy rồng, bùa..." value="${esc(st.q)}"><select name="cat">${[['all', 'Tất cả'], ['res', 'Tài nguyên'], ['item', 'Vật phẩm'], ['gear', 'Trang bị'], ['rare', 'Hàng hiếm']].map(([v, n]) => `<option value="${v}" ${st.cat === v ? 'selected' : ''}>${n}</option>`).join('')}</select><select name="sort">${[['new', 'Mới nhất'], ['price', 'Rẻ nhất'], ['ending', 'Đấu giá sắp hết']].map(([v, n]) => `<option value="${v}" ${st.sort === v ? 'selected' : ''}>${n}</option>`).join('')}</select><button class="primary">Tìm</button></form>
+            <ol class="mk">${rows || '<li><div class="muted">Chưa có món nào khớp.</div></li>'}</ol><p class="muted small">Phí chợ của bạn: ${Math.round(fee() * 100)}% (trừ vào tiền người bán).</p>`;
+        }
+        case 'orders': {
+          if (!online) return tabBar + offline;
+          const rows = (st.data?.orders ?? []).map((o: any) => `<li><div>${gname(o.good)} ×${o.n}<small>${esc(o.buyerName)}${o.npc ? ' · thương buôn thu mua' : ''} · bạn có ${haveGood(S, o.good)}</small></div>
+            <div class="mk-r"><span><b>${o.price}</b>/món</span><input type="number" min="1" max="${o.n}" value="${Math.max(1, Math.min(o.n, haveGood(S, o.good)))}" data-fillq="${o.id}"><button type="button" class="primary" data-fill="${o.id}" data-good="${o.good}" ${haveGood(S, o.good) < 1 || o.buyer === S.id ? 'disabled' : ''}>Bán cho họ</button></div></li>`).join('');
+          return tabBar + `<div class="card"><small>Đặt giá mua (ký quỹ tiền)</small><form class="mk-form" id="mkOrder"><select name="good">${goodOpt('go', false)}</select><input name="n" type="number" min="1" value="100" aria-label="Số lượng"><input name="price" type="number" min="1" value="2" aria-label="Giá mỗi món"><button class="primary">Đặt mua</button></form></div>
+            <ol class="mk">${rows || '<li><div class="muted">Chưa có ai đặt mua.</div></li>'}</ol>`;
+        }
+        case 'sell': {
+          if (!online) return tabBar + offline;
+          const g = haveGood(S, st.sellGood) > 0 ? st.sellGood : (['co', 'la', 'tre', 'go', 'cui', 'da', 'sat', 'so', 'ngoc', ...ITEM_KEYS, 'g_giao', 'g_khien', 'g_thuoc', 'g_bua'].find((x) => haveGood(S, x) > 0) ?? 'go');
+          return tabBar + `<form class="stack" id="mkSell"><label>Món hàng</label><select name="good">${goodOpt(g, true)}</select>
+            <label>Số lượng</label><input name="n" type="number" min="1" max="${haveGood(S, g)}" value="${Math.min(haveGood(S, g), g in ITEMS || g.startsWith('g_') ? 1 : 100)}">
+            <label>Hình thức</label><div class="seg"><button type="button" data-mode="fixed" aria-checked="${st.mode === 'fixed'}">Bán giá cố định</button><button type="button" data-mode="auction" aria-checked="${st.mode === 'auction'}">Đấu giá</button></div>
+            <label>${st.mode === 'auction' ? 'Giá khởi điểm (cả lô)' : 'Giá mỗi món'}</label><input name="price" type="number" min="1" value="${g in ITEMS ? ITEMS[g as ItemKey].value : 2}">
+            ${st.mode === 'auction' ? `<label>Thời gian đấu giá</label><select name="hours">${[1, 6, 12, 24, 48].map((h) => `<option value="${h}" ${h === 6 ? 'selected' : ''}>${h} giờ</option>`).join('')}</select>` : ''}
+            <p class="muted small">Hàng được giữ ở chợ cho tới khi bán xong. Phí ${Math.round(fee() * 100)}%. Bán giá cố định tự gỡ sau 72 giờ, hàng về hộp thư.</p>
+            <button class="primary">${st.mode === 'auction' ? 'Mở phiên đấu giá' : 'Bày bán'}</button></form>`;
+        }
+        case 'mine': {
+          if (!online) return tabBar + offline;
+          const m = st.mine;
+          const ls = (m?.listings ?? []).map((l: any) => `<li><div>${gname(l.good)} ×${l.n}<small>${l.kind === 'auction' ? `Đấu giá · ${l.bidder === S.id ? 'bạn đang giữ giá' : l.bidder ? 'có người trả ' + l.price : 'chưa ai trả'} · còn ${left(l.ends)}` : `Bán ${l.price}/món`}</small></div>${l.seller === S.id ? `<button type="button" data-cancel="${l.id}">Gỡ</button>` : ''}</li>`).join('');
+          const os = (m?.orders ?? []).map((o: any) => `<li><div>Đặt mua ${gname(o.good)} ×${o.n}<small>${o.price}/món</small></div><button type="button" data-cancel="${o.id}">Hủy</button></li>`).join('');
+          return tabBar + `<p class="muted small">Tiền bán hàng, hàng mua được, tiền hoàn đều tự về đảo (hộp thư).</p><ol class="mk">${ls + os || '<li><div class="muted">Bạn chưa đăng món nào.</div></li>'}</ol>`;
+        }
+        case 'guild': {
+          if (!online) return tabBar + offline;
+          if (S.guild && st.ginfo) {
+            const g = st.ginfo.guild;
+            const lead = g.leader === S.id;
+            return tabBar + `<div class="card gold"><small>Thương hội</small><h3>${esc(g.name)} [${esc(g.tag)}]</h3><p>Cấp ${g.lv} · quỹ ${fmt(g.fund)} tiền · ${g.members} hội viên · hội trưởng ${esc(g.leaderName)}</p>
+              <p class="muted small">Ưu đãi: thuế thương thuyền +${g.lv * 5}%, phí chợ giảm 1%. Quỹ càng lớn, hội càng lên cấp (2.500 / 8.000 / 20.000 / 50.000).</p>${g.about ? `<p>${esc(g.about)}</p>` : ''}</div>
+              <form class="mk-form" id="gDonate"><input name="n" type="number" min="1" value="100"><button class="primary">Góp quỹ</button></form>
+              <ol class="bxh">${st.ginfo.members.map((m: any, i: number) => `<li><i>${i + 1}</i><span></span><div><b>${esc(m.name)}${m.player === g.leader ? ' (hội trưởng)' : ''}</b><small>góp ${fmt(m.donated)}</small></div>${lead && m.player !== S.id ? `<button type="button" data-kick="${m.player}">Mời ra</button>` : ''}</li>`).join('')}</ol>
+              <button type="button" class="wide" id="gLeave">Rời thương hội</button>`;
+          }
+          const list = (st.guilds?.guilds ?? []).map((g: any) => `<li><div><b>${esc(g.name)} [${esc(g.tag)}]</b><small>Cấp ${g.lv} · ${g.members} người · quỹ ${fmt(g.fund)}</small></div><button type="button" data-join="${g.id}">Xin vào</button></li>`).join('');
+          return tabBar + `<p class="hint">Thương hội: hội viên được thuế thương thuyền cao hơn, phí chợ thấp hơn, cùng góp quỹ để hội lên cấp.</p><ol class="mk">${list || '<li><div class="muted">Chưa có thương hội nào. Hãy lập hội đầu tiên!</div></li>'}</ol>
+            <div class="card"><small>Lập thương hội (${GUILD_COST} tiền)</small><form class="stack" id="gCreate"><input name="name" maxlength="24" placeholder="Tên hội, ví dụ: Thương Hội Phố Hiến"><input name="tag" maxlength="4" placeholder="Ký hiệu 2–4 chữ, ví dụ: PH"><input name="about" maxlength="140" placeholder="Giới thiệu ngắn"><button class="primary">Lập hội</button></form></div>`;
+        }
+        case 'linh': {
+          const now = this.store.now();
+          const inc = incomePerHour(S, now);
+          const near = routesNear(homeCell(S), routePeriod(now));
+          return tabBar + `<div class="card"><small>Thu nhập mỗi giờ</small>
+              <p>Nhà dân <b>+${Math.round(inc.dan)}</b> · Thuế thương thuyền <b>+${Math.round(inc.toll)}</b> · Chư hầu cống nạp <b>+${Math.round(inc.cong)}</b>${inc.nop ? ` · Nộp cho chủ <b class="bad">−${Math.round(inc.nop)}</b>` : ''}</p>
+              <p>Tổng: <b>${Math.round(inc.total)} tiền/giờ</b> · hôm nay đã thu ${fmt(S.thue.today)}</p></div>
+            <div class="card"><small>Tuyến buôn đi ngang đảo bạn</small><p>${near.length ? near.map((r) => `<span style="color:${r.m.color}">${esc(r.m.name)}</span> (${r.value}/giờ)`).join(', ') : 'Khung giờ này không có thương thuyền nào đi ngang.'}</p>
+              <p class="muted small">Thương buôn đổi tuyến sau ${hms(ROUTE_MS - ((now - DAY0) % ROUTE_MS))}. Trạm thuế cấp ${bLevel(S.dinh, 'tramthue')} → hệ số ×${PORT_MULT[bLevel(S.dinh, 'tramthue')]}.</p></div>
+            <div class="card"><small>Chư hầu, cứ điểm (${S.chuHau.length})</small>${S.chuHau.length ? S.chuHau.map((v) => `<p><b>${esc(v.islandName)}</b> (${esc(v.name)}) · +${tributePerHour(v.power)} tiền/giờ · còn ${hms(v.until - now)}</p>`).join('') : '<p class="muted">Chưa có. Xây Trại Lính rồi ra Hải Khu chọn đảo, bấm "Đánh chiếm".</p>'}</div>
+            ${S.chuQuan && S.chuQuan.until > now ? `<div class="card danger-card"><small>Bạn đang là chư hầu</small><p>Chủ: <b>${esc(S.chuQuan.name)}</b> (${esc(S.chuQuan.islandName)}). Nộp ${tributePerHour(power(S))} tiền/giờ, còn ${hms(S.chuQuan.until - now)}.</p><p class="muted small">Ra Hải Khu, chọn đảo của họ và đánh thắng để khởi nghĩa.</p></div>` : ''}`;
+        }
+      }
+      return tabBar;
+    };
+    const paint = () => {
+      const b = $('#sheet .sheet-body');
+      if (this.sheetKind === 'cho' && b) {
+        const y = b.scrollTop;
+        b.innerHTML = body();
+        b.scrollTop = y;
+      }
+    };
+    this.openSheet('cho', 'Chợ Vạn Đảo', body(), (b) => {
+      b.addEventListener('click', async (e) => {
+        const t = (e.target as HTMLElement).closest('button');
+        if (!t || st.busy) return;
+        const d = t.dataset;
+        if (d.tab2) {
+          this.choTab = d.tab2;
+          paint();
+          return void load();
+        }
+        if (d.buyshop) {
+          const o = this.store.do({ t: 'mua', offer: d.buyshop });
+          this.toast(o.msg, o.ok ? 'gold' : 'bad');
+          return paint();
+        }
+        if (d.use) {
+          const o = this.store.do({ t: 'dung', item: d.use as ItemKey });
+          this.toast(o.msg, o.ok ? 'gold' : 'bad');
+          return paint();
+        }
+        if (d.mode) {
+          st.mode = d.mode;
+          return paint();
+        }
+        if (d.buy) {
+          const q = b.querySelector<HTMLInputElement>(`[data-qty="${d.buy}"]`);
+          await call('buy', { id: d.buy, n: q ? Number(q.value) : 1 });
+          return void load();
+        }
+        if (d.bid) {
+          const v = b.querySelector<HTMLInputElement>(`[data-bidv="${d.bid}"]`);
+          await call('bid', { id: d.bid, amount: Number(v?.value) });
+          return void load();
+        }
+        if (d.fill) {
+          const v = b.querySelector<HTMLInputElement>(`[data-fillq="${d.fill}"]`);
+          await call('fill', { id: d.fill, good: d.good, n: Number(v?.value) });
+          return void load();
+        }
+        if (d.cancel) {
+          await call('cancel', { id: d.cancel });
+          return void load();
+        }
+        if (d.join) {
+          await call('gJoin', { id: d.join });
+          return void load();
+        }
+        if (d.kick) {
+          await call('gKick', { who: d.kick });
+          return void load();
+        }
+        if (t.id === 'gLeave') {
+          await call('gLeave');
+          return void load();
+        }
+      });
+      b.addEventListener('change', (e) => {
+        const el = e.target as HTMLSelectElement;
+        if (el.closest('#mkSell') && el.name === 'good') {
+          st.sellGood = el.value;
+          paint();
+        }
+      });
+      b.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = e.target as HTMLFormElement;
+        const v = Object.fromEntries(new FormData(f).entries()) as Record<string, string>;
+        if (f.id === 'mkSearch') {
+          st.q = v.q ?? '';
+          st.cat = v.cat;
+          st.sort = v.sort;
+          return void load();
+        }
+        if (f.id === 'mkSell') {
+          const r = await call('list', { good: v.good, n: Number(v.n), price: Number(v.price), kind: st.mode, hours: Number(v.hours ?? 6) });
+          if (r?.ok) this.choTab = 'mine';
+          return void load();
+        }
+        if (f.id === 'mkOrder') {
+          await call('order', { good: v.good, n: Number(v.n), price: Number(v.price) });
+          return void load();
+        }
+        if (f.id === 'gCreate') {
+          await call('gCreate', { name: v.name, tag: v.tag, about: v.about });
+          return void load();
+        }
+        if (f.id === 'gDonate') {
+          await call('gDonate', { n: Number(v.n) });
+          return void load();
+        }
+      });
+    });
+    void load();
   }
 
   // ---------------- Thủy Tinh ----------------
@@ -1096,9 +1457,9 @@ export class UI {
       ha: (a) => HAIRS[a.g][a.ha],
       to: (a) => OUTFITS[a.to],
       hat: (a) => HATS[a.hat],
-      it: (a) => ITEMS[a.it],
+      it: (a) => AV_ITEMS[a.it],
     };
-    const counts: Record<string, number> = { ha: 5, to: OUTFITS.length, hat: HATS.length, it: ITEMS.length };
+    const counts: Record<string, number> = { ha: 5, to: OUTFITS.length, hat: HATS.length, it: AV_ITEMS.length };
     this.openSheet('avatar', first ? 'Tạo nhân vật' : 'Nhân vật của bạn', html, (body) => {
       const paint = () => {
         (body.querySelector('#avBig') as HTMLImageElement).src = avatarUrl(av, 8);
@@ -1206,6 +1567,67 @@ function drawGearIcon(k: GearKey) {
     p.ellipse(6, 6, 4, 4, 'X', false);
     p.px(5, 4, 'i');
     p.vline(6, 0, 2, 'e');
+  }
+  return c;
+}
+
+/** Biểu tượng vật phẩm. */
+function drawItemIcon(k: ItemKey) {
+  const [c, ctx] = canvas(12, 12);
+  const p = new Pen(ctx);
+  switch (k) {
+    case 'banhchung':
+      p.rect(2, 2, 8, 8, 'G');
+      p.rect(2, 2, 8, 8, 'H');
+      p.rect(3, 3, 6, 6, 'G');
+      p.hline(2, 9, 6, 'y');
+      p.vline(6, 2, 9, 'y');
+      break;
+    case 'ruounep':
+      p.ellipse(6, 8, 4, 3, 'u');
+      p.rect(5, 1, 2, 4, 'u');
+      p.rect(4, 0, 4, 1, 'e');
+      p.px(4, 7, 'w');
+      break;
+    case 'haido':
+      p.rect(1, 2, 10, 8, 'y');
+      p.line(2, 8, 5, 4, 'E');
+      p.line(5, 4, 9, 6, 'E');
+      p.px(9, 6, 'e');
+      p.vline(1, 2, 9, 'z');
+      p.vline(10, 2, 9, 'z');
+      break;
+    case 'goquy':
+      p.rect(1, 4, 10, 4, 'T');
+      p.hline(1, 10, 4, 'u');
+      p.ellipse(10, 6, 1, 2, 'u');
+      p.px(4, 2, 'q');
+      p.px(7, 1, 'q');
+      break;
+    case 'ngoctraiden':
+      p.ellipse(6, 6, 4, 4, 'K');
+      p.ellipse(5, 5, 2, 2, 'v');
+      p.px(4, 4, 'i');
+      break;
+    case 'lenhbai':
+      p.rect(3, 1, 6, 10, 'l');
+      p.rect(4, 2, 4, 8, 'L');
+      p.hline(4, 7, 5, 'E');
+      p.vline(6, 3, 8, 'E');
+      p.px(6, 0, 'e');
+      break;
+    case 'vayrong':
+      p.poly([[6, 0], [11, 6], [6, 11], [1, 6]], 'x');
+      p.poly([[6, 2], [9, 6], [6, 9], [3, 6]], 'X');
+      p.px(5, 4, 'i');
+      break;
+    case 'trongdong':
+      p.ellipse(6, 5, 5, 3, 'L');
+      p.ellipse(6, 5, 3, 2, 'l');
+      p.px(6, 5, 'i');
+      p.rect(2, 6, 8, 4, 'L');
+      p.hline(2, 9, 9, 'z');
+      break;
   }
   return c;
 }

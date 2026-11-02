@@ -6,10 +6,17 @@ import { allBots } from '../../shared/bots';
 import { GAME } from '../../shared/data';
 import { apply, applyRaidAgainstMe, digest, migrate, newPlayer, publicOf, tick, type Action, type IslandPub, type PlayerState } from '../../shared/logic';
 import { islandCell } from '../../shared/map';
+import { giveGood, haveGood, takeGood, goodLabel } from '../../shared/logic';
+import { bLevel, GUILD_COST, isGood, marketFee } from '../../shared/economy';
+import type { Cho, Mail } from './cho';
+
+/** Các hàm của Chợ gọi được từ Hải Khu (gọi xuyên Durable Object). */
+type ChoApi = Pick<Cho, 'search' | 'mine' | 'list' | 'buy' | 'cancel' | 'order' | 'fill' | 'bid' | 'claim' | 'memberOf' | 'gList' | 'gInfo' | 'gCreate' | 'gJoin' | 'gLeave' | 'gDonate' | 'gKick'>;
 
 export interface Env {
   HAI_KHU: DurableObjectNamespace<HaiKhu>;
   DIRECTORY: DurableObjectNamespace;
+  CHO: DurableObjectNamespace<Cho>;
   GOOGLE_CLIENT_ID?: string;
   SESSION_SECRET?: string;
   ADMIN_TOKEN?: string;
@@ -33,6 +40,7 @@ const clean = (s: unknown, n: number) => String(s ?? '').replace(/[\u0000-\u001f
 export class HaiKhu extends DurableObject<Env> {
   sql: SqlStorage;
   private cache = new Map<string, PlayerState>();
+  private khu = '';
   private dirty = new Set<string>();
   private changedPubs = new Set<string>();
   private onlineDirty = false;
@@ -41,6 +49,9 @@ export class HaiKhu extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
+    void ctx.blockConcurrencyWhile(async () => {
+      this.khu = (await ctx.storage.get<string>('khu')) ?? '';
+    });
     // ping giữ kết nối được Cloudflare trả lời tự động, không đánh thức Hải Khu (không tốn tiền)
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('{"t":"ping"}', '{"t":"pong"}'));
     // Hải Khu tạo từ bản thử nghiệm cũ có cột token bắt buộc → chuyển sang bảng mới, giữ nguyên đảo
@@ -197,6 +208,11 @@ export class HaiKhu extends DurableObject<Env> {
     const name = clean(rawName, 18) || 'Người lưu lạc';
     if (!id) return json({ error: 'Chưa đăng nhập' }, 401);
 
+    const khu = req.headers.get('x-khu') ?? '';
+    if (khu && khu !== this.khu) {
+      this.khu = khu;
+      await this.ctx.storage.put('khu', khu);
+    }
     const now = Date.now();
     let s = this.load(id);
     if (!s) {
@@ -206,6 +222,13 @@ export class HaiKhu extends DurableObject<Env> {
     }
     tick(s, now);
     this.settleRaids(s);
+    // hàng, tiền từ chợ gửi tới lúc vắng nhà; thương hội
+    await this.claimMail(s);
+    try {
+      s.guild = await this.cho().memberOf(id);
+    } catch {
+      /* chợ chưa sẵn sàng */
+    }
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -272,11 +295,165 @@ export class HaiKhu extends DurableObject<Env> {
         this.onlineDirty = true;
         void this.arm();
         return;
+      case 'm':
+        return void this.onMarket(ws, a, m);
       case 'resync': {
         const s = this.load(a.id);
         if (s) this.send(ws, { t: 'sync', state: s, serverNow: Date.now() });
         return;
       }
+    }
+  }
+
+  private cho(): ChoApi {
+    return this.env.CHO.get(this.env.CHO.idFromName('world')) as unknown as ChoApi;
+  }
+
+  /** Nhận thư từ chợ (tiền bán hàng, hàng mua được, tiền hoàn) vào đảo. */
+  private async claimMail(s: PlayerState): Promise<Mail[]> {
+    let mail: Mail[] = [];
+    try {
+      mail = await this.cho().claim(s.id);
+    } catch {
+      return [];
+    }
+    for (const m of mail) giveGood(s, m.good, m.n);
+    if (mail.length) this.touch(s);
+    return mail;
+  }
+
+  /** Chợ gọi sang khi có thư cho người chơi đang online ở Hải Khu này. */
+  async deliver(player: string) {
+    if (!this.ctx.getWebSockets(player).length) return;
+    const s = this.load(player);
+    if (!s) return;
+    const mail = await this.claimMail(s);
+    if (!mail.length) return;
+    const note = mail.map((m) => `${m.note}: ${m.good === 'tien' ? `+${m.n} tiền` : `${m.n} ${goodLabel(m.good)}`}`).slice(0, 4).join(' · ');
+    this.sendTo(player, { t: 'sync', state: s, serverNow: Date.now(), msg: `Thư từ chợ: ${note}` });
+    await this.arm();
+  }
+
+  /** Giao dịch chợ thế giới, thương hội: server làm hết, máy chỉ nhận kết quả. */
+  private async onMarket(ws: WebSocket, a: Att, m: Record<string, unknown>) {
+    const rid = m.rid;
+    const s = this.load(a.id);
+    if (!s) return;
+    const reply = (ok: boolean, msg: string, data?: unknown, changed = false) => {
+      if (changed) this.touch(s);
+      this.send(ws, { t: 'mr', rid, ok, msg, data });
+      if (changed) this.send(ws, { t: 'sync', state: s, serverNow: Date.now() });
+    };
+    const cho = this.cho();
+    const num = (v: unknown) => Math.floor(Number(v));
+    const fee = marketFee(bLevel(s.dinh, 'cho'), !!s.guild);
+    tick(s, Date.now());
+    try {
+      switch (m.op) {
+        case 'search': {
+          const r = await cho.search(String(m.q ?? '').slice(0, 30), String(m.cat ?? 'all'), String(m.sort ?? 'new'));
+          return reply(r.ok, r.msg, r.data);
+        }
+        case 'mine': {
+          const mail = await this.claimMail(s);
+          const r = await cho.mine(s.id);
+          return reply(true, mail.length ? `Nhận ${mail.length} thư từ chợ.` : '', r.data, mail.length > 0);
+        }
+        case 'list': {
+          const good = String(m.good);
+          const n = num(m.n);
+          const price = num(m.price);
+          const kind = m.kind === 'auction' ? 'auction' : 'fixed';
+          if (!isGood(good) || !(n > 0) || !(price > 0)) return reply(false, 'Đơn hàng không hợp lệ.');
+          if (haveGood(s, good) < n) return reply(false, `Không đủ ${goodLabel(good)}.`);
+          takeGood(s, good, n);
+          const r = await cho.list(s.id, s.name, this.khu, good, n, price, kind, num(m.hours) || 6, fee);
+          if (!r.ok) giveGood(s, good, n);
+          return reply(r.ok, r.msg, r.data, true);
+        }
+        case 'buy': {
+          const hold = s.res.tien;
+          s.res.tien = 0;
+          const r = await cho.buy(String(m.id), s.id, num(m.n) || 1, hold);
+          s.res.tien += hold - (r.ok ? r.data!.total : 0);
+          if (r.ok) giveGood(s, r.data!.good, r.data!.n);
+          return reply(r.ok, r.msg, r.data, true);
+        }
+        case 'order': {
+          const good = String(m.good);
+          const n = num(m.n);
+          const price = num(m.price);
+          if (!isGood(good) || !(n > 0) || !(price > 0)) return reply(false, 'Lệnh mua không hợp lệ.');
+          const total = n * price;
+          if (s.res.tien < total) return reply(false, `Cần ${total} tiền để ký quỹ lệnh mua.`);
+          s.res.tien -= total;
+          const r = await cho.order(s.id, s.name, this.khu, good, n, price);
+          if (!r.ok) s.res.tien += total;
+          return reply(r.ok, r.msg, r.data, true);
+        }
+        case 'fill': {
+          const good = String(m.good);
+          const n = num(m.n);
+          if (!isGood(good) || !(n > 0) || haveGood(s, good) < n) return reply(false, `Không đủ ${goodLabel(good)} để bán.`);
+          takeGood(s, good, n);
+          const r = await cho.fill(String(m.id), s.id, n, fee);
+          if (r.ok) {
+            const sold = r.data!.n;
+            if (sold < n) giveGood(s, good, n - sold);
+            s.res.tien += r.data!.total;
+          } else giveGood(s, good, n);
+          return reply(r.ok, r.ok ? `${r.msg} +${r.data!.total} tiền.` : r.msg, r.data, true);
+        }
+        case 'bid': {
+          const amount = num(m.amount);
+          if (!(amount > 0) || s.res.tien < amount) return reply(false, 'Không đủ tiền để trả giá.');
+          s.res.tien -= amount;
+          const r = await cho.bid(String(m.id), s.id, s.name, this.khu, amount);
+          if (!r.ok) s.res.tien += amount;
+          return reply(r.ok, r.msg, r.data, true);
+        }
+        case 'cancel': {
+          const r = await cho.cancel(String(m.id), s.id);
+          await this.claimMail(s);
+          return reply(r.ok, r.msg, r.data, true);
+        }
+        // ----- thương hội -----
+        case 'gList':
+          return reply(true, '', (await cho.gList()).data);
+        case 'gInfo': {
+          const r = await cho.gInfo(String(m.id));
+          return reply(r.ok, r.msg, r.data);
+        }
+        case 'gCreate': {
+          if (s.res.tien < GUILD_COST) return reply(false, `Lập thương hội cần ${GUILD_COST} tiền.`);
+          s.res.tien -= GUILD_COST;
+          const r = await cho.gCreate(s.id, s.name, this.khu, String(m.name ?? ''), String(m.tag ?? ''), String(m.about ?? ''));
+          if (!r.ok) s.res.tien += GUILD_COST;
+          s.guild = await cho.memberOf(s.id);
+          return reply(r.ok, r.msg, r.data, true);
+        }
+        case 'gJoin':
+        case 'gLeave':
+        case 'gKick':
+        case 'gDonate': {
+          let r;
+          if (m.op === 'gJoin') r = await cho.gJoin(s.id, s.name, this.khu, String(m.id));
+          else if (m.op === 'gLeave') r = await cho.gLeave(s.id);
+          else if (m.op === 'gKick') r = await cho.gKick(s.id, String(m.who));
+          else {
+            const n = num(m.n);
+            if (!(n > 0) || s.res.tien < n) return reply(false, 'Không đủ tiền.');
+            s.res.tien -= n;
+            r = await cho.gDonate(s.id, n);
+            if (!r.ok) s.res.tien += n;
+          }
+          s.guild = await cho.memberOf(s.id);
+          return reply(r.ok, r.msg, r.data, true);
+        }
+      }
+      reply(false, 'Không rõ yêu cầu.');
+    } catch (e) {
+      reply(false, 'Chợ đang bận, thử lại sau. ' + String((e as Error).message ?? '').slice(0, 80), undefined, true);
     }
   }
 

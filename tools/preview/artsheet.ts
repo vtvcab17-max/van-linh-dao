@@ -5,6 +5,7 @@ import { drawIsland, drawSeaIsland, LOOKS } from '../../client/src/art/islands';
 import { avatarFrom, type Avatar } from '../../shared/avatar';
 import { newPlayer } from '../../shared/logic';
 import { enhance } from '../../client/src/art/hd';
+import { drawDinh } from '../../client/src/art/dinh';
 const HDQ = location.search.includes('hd');
 const E = (c: HTMLCanvasElement) => (HDQ ? enhance(c) : c);
 const K = (n: number) => (HDQ ? n / 2 : n);
@@ -33,6 +34,8 @@ if (mode === 'b') {
   row('Cuốc', tiers.map((t) => E(drawCuoc(t, false, 'vui'))), K(4));
   row('Lũy tre', tiers.map((t) => E(drawRao(t, false, 'thuong'))), K(4));
   row('Thuyền', tiers.map((t) => E(drawThuyen(t, false, 'thuong'))), K(4));
+} else if (mode === 'd') {
+  for (const k of ['nhadan', 'khothoc', 'cho', 'tramthue', 'thapcanh', 'tuong', 'donbinh', 'xuongren', 'den'] as const) row(k, [1, 2, 3].map((l) => E(drawDinh(k, l))), K(5));
 } else if (mode === 'a') {
   const avs: Avatar[] = [];
   for (let g = 0; g < 2; g++) for (let ha = 0; ha < 5; ha++) avs.push({ g: g as 0 | 1, sk: ha % 4, ha, hc: ha, to: ha, tc: ha + g * 3, hat: 0, it: 0 });

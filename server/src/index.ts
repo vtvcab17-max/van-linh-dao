@@ -7,6 +7,7 @@ import { signSession, verifyGoogleIdToken, verifySession } from './auth';
 import type { Env } from './haikhu';
 export { HaiKhu } from './haikhu';
 export { Directory } from './directory';
+export { Cho } from './cho';
 import type { Directory } from './directory';
 
 const SESSION_DAYS = 30;
@@ -68,6 +69,7 @@ export default {
       const headers = new Headers(req.headers);
       headers.set('x-player-id', s.id);
       headers.set('x-player-name', encodeURIComponent(s.name));
+      headers.set('x-khu', m[1]);
       return stub.fetch(new Request(req, { headers }));
     }
 

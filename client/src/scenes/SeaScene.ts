@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
-import { HOME_CELL, LINH_VAT, WILDS } from '../../../shared/data';
-import { publicOf, type IslandPub } from '../../../shared/logic';
+import { LINH_VAT, WILDS } from '../../../shared/data';
+import { homeCell, publicOf, type IslandPub } from '../../../shared/logic';
+import { merchantPos, routePeriod, routesAt, type Route } from '../../../shared/economy';
 import { islandCell } from '../../../shared/map';
 import { BOSS_CELL, bossOf, weekEnd, weekOf } from '../../../shared/boss';
 import type { Store } from '../store';
 import type { UI } from '../ui';
 import { zoomFor } from './IslandScene';
-import { HD, seaIslandTex, waterTex } from '../art/textures';
+import { HD, merchantTex, seaIslandTex, waterTex } from '../art/textures';
 import { miniRadius, type MiniKind } from '../art/islands';
 import { CamCtl } from './camctl';
 
@@ -28,6 +29,9 @@ export class SeaScene extends Phaser.Scene {
   private waterF = 0;
   private layer!: Phaser.GameObjects.Container;
   private route!: Phaser.GameObjects.Graphics;
+  private trade!: Phaser.GameObjects.Graphics;
+  private ships: { rt: Route; img: Phaser.GameObjects.Image }[] = [];
+  private period = -1;
   private boat!: Phaser.GameObjects.Image;
   private boatLabel: Label | null = null;
   private sig = '';
@@ -49,6 +53,7 @@ export class SeaScene extends Phaser.Scene {
     this.water = this.add.image(-96, -96, waterTex(this, S, S, 0, '#b8d6ff')).setOrigin(0).setDepth(-10).setScale(1 / HD);
     this.layer = this.add.container(0, 0);
     this.route = this.add.graphics().setDepth(5);
+    this.trade = this.add.graphics().setDepth(2);
     this.boat = this.add.image(0, 0, 'boat-1').setOrigin(0.5, 0.85).setDepth(10).setVisible(false).setScale(1 / HD);
     this.tweens.add({ targets: this.boat, angle: { from: -4, to: 4 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     this.time.addEvent({ delay: 800, loop: true, callback: () => this.water.setTexture(waterTex(this, S, S, (this.waterF ^= 1), '#b8d6ff')) });
@@ -62,7 +67,7 @@ export class SeaScene extends Phaser.Scene {
       },
       // phóng to sát đảo nhà thì sà xuống đảo
       onPastMax: (x, y) => {
-        const h = this.P(HOME_CELL.x, HOME_CELL.y);
+        const h = this.P(this.home().x, this.home().y);
         if (Math.hypot(x - h.x, y - h.y) < 64) this.ui.goIsland();
         else this.ui.toast('Phóng to ở gần đảo của bạn để về đảo.', 'muted');
       },
@@ -86,6 +91,11 @@ export class SeaScene extends Phaser.Scene {
     this.enterFromIsland();
   }
 
+  /** Ô đảo mình trên hải đồ chung. */
+  home() {
+    return homeCell(this.store.s);
+  }
+
   get dragged() {
     return this.ctl?.dragged ?? false;
   }
@@ -106,7 +116,7 @@ export class SeaScene extends Phaser.Scene {
     if (was !== this.portrait) this.sig = '';
     if (center) {
       this.cameras.main.setZoom(this.defaultZoom());
-      const me = this.P(HOME_CELL.x, HOME_CELL.y);
+      const me = this.P(this.home().x, this.home().y);
       this.ctl.centerOn(me.x, me.y);
     }
     this.ctl.clamp();
@@ -117,7 +127,7 @@ export class SeaScene extends Phaser.Scene {
     this.fit(false);
     this.draw(true);
     const cam = this.cameras.main;
-    const me = this.P(HOME_CELL.x, HOME_CELL.y);
+    const me = this.P(this.home().x, this.home().y);
     cam.setZoom(this.ctl.o.maxZ);
     this.ctl.centerOn(me.x, me.y);
     cam.fadeIn(220, 18, 9, 10);
@@ -131,7 +141,7 @@ export class SeaScene extends Phaser.Scene {
   /** Phóng vào đảo nhà rồi mờ dần trước khi về đảo. */
   leaveToIsland(done: () => void) {
     const cam = this.cameras.main;
-    const me = this.P(HOME_CELL.x, HOME_CELL.y);
+    const me = this.P(this.home().x, this.home().y);
     const p = this.screenOfWorld(me.x, me.y, false);
     this.ctl.animateTo(this.ctl.o.maxZ + 2, p.x, p.y, 240);
     cam.fadeOut(240, 18, 9, 10);
@@ -144,7 +154,7 @@ export class SeaScene extends Phaser.Scene {
   }
 
   focusHome() {
-    const me = this.P(HOME_CELL.x, HOME_CELL.y);
+    const me = this.P(this.home().x, this.home().y);
     this.ctl.centerOn(me.x, me.y);
   }
 
@@ -214,7 +224,7 @@ export class SeaScene extends Phaser.Scene {
     this.labels = [];
     this.boatLabel = null;
     const me = publicOf(s);
-    const m = this.P(HOME_CELL.x, HOME_CELL.y);
+    const m = this.P(this.home().x, this.home().y);
     const dm = this.island(s.id, m.x, m.y, 'me', me.land, me.tiers.leu, () => this.ui.openIsland(me, true), true);
     this.label(m.x, m.y + dm, 'Đảo của bạn', '#f6d34d');
     for (const w of WILDS) {
@@ -242,6 +252,14 @@ export class SeaScene extends Phaser.Scene {
       const d = this.island(p.id, pos.x, pos.y, p.bot ? 'bot' : 'player', p.land, p.tiers?.leu ?? 1, () => this.ui.openIsland(p as IslandPub, false), online.has(p.id));
       this.label(pos.x, pos.y + d, p.name, p.bot ? '#ffd29a' : '#a9c8ff', `${p.power} sức mạnh${p.bot ? ' · máy' : ''}`);
     }
+    // chư hầu của mình: cắm cờ vàng (cứ điểm, thuyền xuất phát được từ đây)
+    for (const v of s.chuHau) {
+      const q = this.P(v.cell.x, v.cell.y);
+      const fl = this.add.rectangle(q.x + 9, q.y - 14, 6, 4, 0xf6d34d).setStrokeStyle(1, 0x1d1b2a);
+      const pole = this.add.rectangle(q.x + 6, q.y - 10, 1, 10, 0x1d1b2a);
+      this.layer.add([pole, fl]);
+      this.label(q.x, q.y - 26, 'Cứ điểm', '#f6d34d');
+    }
     if (s.voyage) this.boatLabel = this.label(0, 0, '', '#fbf3dc');
     const box = document.getElementById('maplabels');
     if (box) {
@@ -249,7 +267,42 @@ export class SeaScene extends Phaser.Scene {
       box.hidden = false;
     }
     this.drawRoute();
+    this.drawTrade(true);
     this.placeLabels(true);
+  }
+
+  /** Tuyến buôn của thương hội NPC (đổi mỗi 6 giờ) và thương thuyền đang chạy. */
+  private drawTrade(force = false) {
+    const period = routePeriod(this.store.now());
+    if (period === this.period && !force) return;
+    this.period = period;
+    const g = this.trade;
+    g.clear();
+    for (const sh of this.ships) sh.img.destroy();
+    this.ships = [];
+    for (const rt of routesAt(period)) {
+      const col = Phaser.Display.Color.HexStringToColor(rt.m.color).color;
+      for (let i = 1; i < rt.pts.length; i++) {
+        const a = this.P(rt.pts[i - 1].x, rt.pts[i - 1].y);
+        const b = this.P(rt.pts[i].x, rt.pts[i].y);
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        g.fillStyle(col, 0.55);
+        for (let d = 0; d < len; d += 7) g.fillRect(Math.round(a.x + ((b.x - a.x) * d) / len), Math.round(a.y + ((b.y - a.y) * d) / len), 3, 1);
+      }
+      const img = this.add.image(0, 0, merchantTex(this, rt.m.id, rt.m.color)).setScale(1 / HD).setDepth(4).setInteractive({ useHandCursor: true });
+      img.on('pointerup', () => !this.dragged && this.ui.openMerchant(rt));
+      this.ships.push({ rt, img });
+    }
+  }
+
+  private shipTick() {
+    const now = this.store.now();
+    for (const sh of this.ships) {
+      const p = merchantPos(sh.rt, now);
+      const q = this.P(p.x, p.y);
+      sh.img.setPosition(q.x, q.y + Math.round(Math.sin(now / 500 + q.x) * 1));
+      sh.img.setFlipX((this.portrait ? 0 : p.dir) < 0);
+    }
   }
 
   private drawRoute() {
@@ -259,7 +312,7 @@ export class SeaScene extends Phaser.Scene {
     this.boat.setVisible(!!v);
     if (!v) return;
     this.boat.setTexture(`boat-${this.store.s.lv.thuyen.tier}`);
-    const a = this.P(HOME_CELL.x, HOME_CELL.y);
+    const a = this.P((v.from ?? this.home()).x, (v.from ?? this.home()).y);
     const b = this.P(v.to.x, v.to.y);
     const len = Math.hypot(b.x - a.x, b.y - a.y);
     const n = Math.floor(len / 6);
@@ -276,7 +329,7 @@ export class SeaScene extends Phaser.Scene {
       return;
     }
     const gtNow = s.gt + (Date.now() - s.lastReal) * s.speed;
-    const home = this.P(HOME_CELL.x, HOME_CELL.y);
+    const home = this.P((v.from ?? this.home()).x, (v.from ?? this.home()).y);
     const dest = this.P(v.to.x, v.to.y);
     let t: number;
     let from = home,
@@ -311,6 +364,8 @@ export class SeaScene extends Phaser.Scene {
   update(time: number) {
     this.ctl.clamp();
     this.boatTick(time);
+    this.drawTrade();
+    this.shipTick();
     this.placeLabels();
   }
 }

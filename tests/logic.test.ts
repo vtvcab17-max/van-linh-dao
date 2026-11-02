@@ -196,7 +196,7 @@ describe('Thủy Tinh, trang bị, phi thăng', () => {
     const s = newPlayer(id, 'Lan', WEEK0 + 1000);
     for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 5;
     for (const k of ['an', 'ngoc', 'ha', 'chau'] as const) s.comps[k] = { lv: 20, xp: 0, unlocked: true };
-    s.res = { co: 9999, la: 9999, tre: 9999, go: 9999, cui: 9999, da: 9999, sat: 9999, so: 9999, ngoc: 99 };
+    s.res = { co: 9999, la: 9999, tre: 9999, go: 9999, cui: 9999, da: 9999, sat: 9999, so: 9999, ngoc: 99, tien: 9999 };
     return s;
   };
   it('chế tạo trang bị cần công trình đủ bậc và tài nguyên', () => {
@@ -240,5 +240,71 @@ describe('Thủy Tinh, trang bị, phi thăng', () => {
   it('mỗi tuần một dạng Thủy Tinh', () => {
     expect(new Set(BOSS_FORMS.map((f) => f.title)).size).toBe(4);
     void fightBoss;
+  });
+});
+
+import { incomePerHour, raid as raidNow, homeCell } from '../shared/logic';
+import { routesAt, tollPerHour, routePeriod, ROUTE_MS } from '../shared/economy';
+
+describe('Kinh tế: nhà cửa, thuế, cửa hàng, thôn tính', () => {
+  const rich = (id: string) => {
+    const s = newPlayer(id, 'Lan', T0);
+    for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 4;
+    for (const k of ['an', 'ngoc', 'ha', 'chau'] as const) s.comps[k] = { lv: 18, xp: 0, unlocked: true };
+    s.res = { co: 5000, la: 5000, tre: 5000, go: 5000, cui: 5000, da: 5000, sat: 5000, so: 5000, ngoc: 50, tien: 5000 };
+    return s;
+  };
+  const freeTile = (s: ReturnType<typeof rich>) => {
+    for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) if (s.land[y * 24 + x] === '1' && !s.nodes.some((n) => n.x === x && n.y === y) && !s.chests.some((c) => c.x === x && c.y === y) && !s.dinh.some((d) => d.x === x && d.y === y) && !(x === 11 && y === 11) && !(x === 12 && y === 12) && !(x === 10 && y === 13)) return { x, y };
+    return null;
+  };
+  it('xây nhà dân: tốn thợ, xong thì nộp thuế', () => {
+    const s = rich('e1');
+    const t = freeTile(s)!;
+    expect(apply(s, { t: 'xay', k: 'nhadan', x: t.x, y: t.y }).ok).toBe(true);
+    expect(apply(s, { t: 'xay', k: 'nhadan', x: t.x, y: t.y }).ok).toBe(false);
+    tick(s, s.lastReal + 3 * 60_000);
+    expect(s.dinh[0].lv).toBe(1);
+    expect(incomePerHour(s).dan).toBe(4);
+    const before = s.res.tien;
+    tick(s, s.lastReal + 3600_000);
+    expect(s.res.tien).toBeGreaterThanOrEqual(before + 4);
+  });
+  it('tuyến buôn đổi mỗi 6 giờ, đảo sát tuyến thu thuế', () => {
+    const p = routePeriod(T0);
+    expect(JSON.stringify(routesAt(p))).not.toBe(JSON.stringify(routesAt(p + 1)));
+    const rt = routesAt(p)[0];
+    expect(tollPerHour(rt.pts[1], p, 1)).toBeGreaterThan(0);
+    expect(routePeriod(T0 + ROUTE_MS)).toBe(p + 1);
+  });
+  it('cửa hàng bán bằng tiền đồng, vật phẩm dùng được', () => {
+    const s = rich('e2');
+    expect(apply(s, { t: 'mua', offer: 'bc' }).ok).toBe(true);
+    expect(s.bag.banhchung).toBe(1);
+    s.lv.leu.hunger = 90;
+    expect(apply(s, { t: 'dung', item: 'banhchung' }).ok).toBe(true);
+    expect(s.lv.leu.hunger).toBe(0);
+  });
+  it('thôn tính đảo máy thành chư hầu, nhận cống nạp, làm cứ điểm', () => {
+    const s = rich('e3');
+    const t = freeTile(s)!;
+    s.dinh.push({ id: 'dx', k: 'donbinh', x: t.x, y: t.y, lv: 1 });
+    const bot = allBots(T0)[0];
+    const o = raidNow(s, bot, false, true);
+    expect(o.ok).toBe(true);
+    if (o.battle?.winner === 0) {
+      expect(s.chuHau.length).toBe(1);
+      expect(incomePerHour(s).cong).toBeGreaterThan(0);
+      expect(o.event?.conquer).toBe(true);
+    }
+    void homeCell;
+  });
+  it('bị chiếm thì thành chư hầu, khởi nghĩa thắng thì tự do', () => {
+    const v = rich('e4');
+    applyRaidAgainstMe(v, { id: 'r1', attackerId: 'lord', attackerName: 'Chủ', targetId: 'e4', targetName: 'x', win: true, loot: {}, seed: 1, t: 0, conquer: true, until: v.lastReal + 3600_000 });
+    expect(v.chuQuan?.id).toBe('lord');
+    expect(incomePerHour(v).nop).toBeGreaterThan(0);
+    tick(v, v.lastReal + 2 * 3600_000);
+    expect(v.chuQuan).toBeNull();
   });
 });

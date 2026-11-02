@@ -23,6 +23,8 @@ export class CloudflareNet extends NetBase {
   private lastTele = 0;
   private lastAct = '';
   private everWelcomed = false;
+  private rid = 0;
+  private waits = new Map<number, (r: { ok: boolean; msg: string; data?: any }) => void>();
 
   constructor(
     private server: string,
@@ -155,6 +157,14 @@ export class CloudflareNet extends NetBase {
         this.emit('chat');
         return;
       }
+      case 'mr': {
+        const w = this.waits.get(Number(m.rid));
+        if (w) {
+          this.waits.delete(Number(m.rid));
+          w({ ok: !!m.ok, msg: String(m.msg ?? ''), data: m.data });
+        }
+        return;
+      }
       case 'pong':
         this.clock(m.serverNow);
         return;
@@ -179,6 +189,17 @@ export class CloudflareNet extends NetBase {
   }
   sendChat(text: string) {
     this.send({ t: 'chat', text: text.slice(0, 140) });
+  }
+  /** Gửi yêu cầu chợ/thương hội, chờ server trả lời. */
+  market(op: string, args: Record<string, unknown> = {}) {
+    const rid = ++this.rid;
+    return new Promise<{ ok: boolean; msg: string; data?: any }>((done) => {
+      this.waits.set(rid, done);
+      this.send({ t: 'm', op, rid, ...args });
+      setTimeout(() => {
+        if (this.waits.delete(rid)) done({ ok: false, msg: 'Chợ không trả lời, thử lại sau.' });
+      }, 15_000);
+    });
   }
   sendAction(a: Action, at: number, h: string) {
     this.send({ t: 'a', a, at, h });

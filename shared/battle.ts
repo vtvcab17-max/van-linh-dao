@@ -106,7 +106,12 @@ export interface TeamSpec {
   hero?: string; // tên chủ đảo (nhân vật "an" mang tên người chơi)
   /** sức mạnh cộng thêm từ trang bị (0.1 = +10%) */
   gear?: { atk: number; def: number; hp: number };
+  /** thành trì khi giữ đảo: cấp các tháp canh, đồn binh, máu tường thêm */
+  fort?: { thap: number[]; don: number[]; tuongHp: number };
 }
+
+const THAP: UnitBase = { name: 'Xạ Thủ Tháp Canh', hp: 70, atk: 15, def: 6, spd: 9, skill: 'samset', row: 'back' };
+const DON: UnitBase = { name: 'Lính Đồn', hp: 150, atk: 12, def: 13, spd: 8, skill: 'thietcot', row: 'front' };
 
 function applyGear(u: BUnit, g?: { atk: number; def: number; hp: number }) {
   if (!g || u.wall) return u;
@@ -123,7 +128,15 @@ export function teamFromSpec(spec: TeamSpec, side: 0 | 1): BUnit[] {
     const base = c.k === 'an' && spec.hero ? { ...COMPANIONS.an, name: spec.hero } : COMPANIONS[c.k];
     out.push(applyGear(makeUnit(base, c.k, c.lv, side, i, bonus), spec.gear));
   });
-  if (spec.raoTier) out.push(makeWall(spec.raoTier, side, out.length));
+  if (spec.fort) {
+    for (const lv of spec.fort.don.slice(0, 2)) out.push(makeUnit(DON, 'don', 1 + (lv - 1) * 6, side, out.length));
+    for (const lv of spec.fort.thap.slice(0, 4)) out.push(makeUnit(THAP, 'thap', 1 + (lv - 1) * 6, side, out.length));
+  }
+  if (spec.raoTier) {
+    const w = makeWall(spec.raoTier, side, out.length);
+    if (spec.fort?.tuongHp) w.maxHp = w.hp = w.maxHp + spec.fort.tuongHp;
+    out.push(w);
+  }
   return out;
 }
 

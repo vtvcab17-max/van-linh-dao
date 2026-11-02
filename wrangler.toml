@@ -38,9 +38,17 @@ class_name = "Directory"
 tag = "v1"
 new_sqlite_classes = ["HaiKhu"]
 
+[[durable_objects.bindings]]
+name = "CHO"
+class_name = "Cho"
+
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Directory"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Cho"]
 
 [observability]
 enabled = true

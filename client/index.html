@@ -320,6 +320,21 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 .bxh li small { display: block; font-size: 11.5px; color: var(--paper-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bxh li > span { font: 20px/1 var(--font-pixel); color: var(--gold); text-align: right; }
 .bxh li > span small { display: inline; font-size: 13px; }
+
+#income { background: transparent; box-shadow: none; color: var(--gold); padding: 4px 7px; font-weight: normal; }
+#vassal { display: flex; flex-direction: column; text-align: left; padding: 5px 10px; max-width: min(320px, 62vw); box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--ink); }
+#vassal b { font: 18px/1 var(--font-pixel); color: var(--gold); } #vassal b.bad { color: #ff9b8a; } #vassal span { font-size: 12px; color: var(--paper-dim); }
+.scrolltabs { display: flex; flex: none; overflow-x: auto; gap: 6px; scrollbar-width: none; margin-bottom: 6px; padding: 2px; } .scrolltabs::-webkit-scrollbar { display: none; }
+.scrolltabs button { flex: none; padding: 6px 10px; }
+.money { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; } .money img { width: 20px; image-rendering: pixelated; }
+.mk { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-direction: column; gap: 5px; max-height: 44vh; overflow-y: auto; }
+.mk li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 8px; background: rgba(0,0,0,.22); border-radius: 5px; flex-wrap: wrap; }
+.mk li > div:first-child { min-width: 0; } .mk small { display: block; color: var(--paper-dim); font-size: 11.5px; }
+.mk-r { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .mk-r span { font-size: 12px; text-align: right; } .mk-r b { font: 19px/1 var(--font-pixel); color: var(--gold); }
+.mk-r input, .mk-form input, .mk-form select, .mk-search input, .mk-search select { width: 74px; background: var(--ink); border: 2px solid var(--gold-dim); border-radius: 5px; padding: 5px; color: var(--paper); }
+.mk-search, .mk-form { display: flex; gap: 6px; flex-wrap: wrap; } .mk-search input[name=q] { flex: 1; min-width: 140px; } .mk-form select { width: auto; flex: 1; }
+.stack select { background: var(--ink); border: 2px solid var(--gold-dim); border-radius: 5px; padding: 8px; color: var(--paper); }
+.gear.special { background: linear-gradient(90deg, rgba(232,184,79,.18), transparent); border-radius: 5px; } .tag { color: var(--gold); font: 14px var(--font-pixel); }
 </style>
 </head>
 <body>
@@ -327,16 +342,18 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 <div id="hud">
   <header id="top" class="panel">
     <div class="me"><button id="meAv" type="button" class="av-btn" aria-label="Chỉnh nhân vật"><img alt=""></button><div class="who"><b id="islandName">Vạn Linh Đảo</b><span id="title"></span></div></div>
-    <div class="right"><span id="mode" class="chip">...</span><button id="btnSettings" type="button">Cài đặt</button></div>
+    <div class="right"><button id="income" type="button" class="chip" title="Thu nhập mỗi giờ"></button><span id="mode" class="chip">...</span><button id="btnSettings" type="button">Cài đặt</button></div>
     <div id="res" class="res"></div>
   </header>
   <div class="row-mid">
     <div class="col-left">
       <div id="quest" class="panel" hidden></div>
       <button id="voyage" type="button" class="panel" hidden></button>
+      <button id="vassal" type="button" class="panel" hidden></button>
     </div>
     <div id="tools" class="tools">
       <button id="btnExpand" type="button">Khai hoang</button>
+      <button id="btnBuild" type="button">Xây dựng</button>
       <button id="btnSpeed" type="button">Tốc độ x1</button>
     </div>
   </div>
@@ -347,7 +364,7 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
     <button type="button" data-tab="team">Đội</button>
     <button type="button" data-tab="bxh">BXH</button>
     <button type="button" data-tab="chat">Chat</button>
-    <button type="button" data-tab="feedback">Góp ý</button>
+    <button type="button" data-tab="cho">Chợ</button>
   </nav>
 </div>
 <div id="zoombar" class="panel">

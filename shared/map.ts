@@ -4,8 +4,8 @@ import { BOTS } from './bots';
 import { BOSS_CELL } from './boss';
 import { hashStr } from './rng';
 
-export const SEA_COLS = 40;
-export const SEA_ROWS = 24;
+import { SEA_COLS, SEA_ROWS } from './mapsize';
+export { SEA_COLS, SEA_ROWS };
 
 type Cell = { x: number; y: number };
 const far = (a: Cell, b: Cell) => Math.abs(a.x - b.x) >= 6 || Math.abs(a.y - b.y) >= 4;

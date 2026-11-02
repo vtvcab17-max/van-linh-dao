@@ -5,6 +5,8 @@ import { charCanvas, drawChest, drawCuoc, drawEmote, drawIcon, drawLeu, drawNode
 import { opaqueBox } from './buildings';
 import { drawSeaIsland, miniRadius, type MiniKind } from './islands';
 import { avatarTexKey, drawAvatar } from './avatar';
+import { drawDinh, drawMerchant } from './dinh';
+import type { BKey } from '../../../shared/economy';
 import type { Canvas } from './pixel';
 import { enhance, HD } from './hd';
 
@@ -48,6 +50,14 @@ export function preloadAll(scene: Phaser.Scene) {
     for (const k of ['an', 'ngoc', 'ha', 'chau', 'rua', 'cuagai', 'sualua', 'khida', 'canoc', 'haitac', 'baytheo', 'cuada', 'thuytinh', 'thuybinh']) ensureTex(scene, `ch-${k}`, () => charCanvas(k));
   for (let t = 1; t <= 5; t++) ensureTex(scene, `ch-rao${t}`, () => charCanvas(`rao${t}`));
   for (let t = 1; t <= 5; t++) ensureTex(scene, `boat-${t}`, () => drawThuyen(t, false, 'thuong'));
+}
+
+/** Nhà cửa, thành trì theo loại và cấp. */
+export function dinhTex(scene: Phaser.Scene, k: BKey, lv: number): string {
+  return ensureTex(scene, `dinh-${k}-${lv}`, () => drawDinh(k, lv));
+}
+export function merchantTex(scene: Phaser.Scene, id: string, color: string): string {
+  return ensureTex(scene, `merchant-${id}`, () => drawMerchant(color));
 }
 
 /** Nhân vật chủ đảo theo dáng vẻ đã chỉnh. */

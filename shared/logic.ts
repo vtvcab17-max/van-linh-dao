@@ -36,6 +36,12 @@ import { hashStr, mulberry32, pick, rint, weighted, type Rng } from './rng';
 import { avatarFrom, cleanAvatar, type Avatar } from './avatar';
 import { LV_LABEL, ASCEND_REWARD, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, cleanGear, GEAR, GEAR_KEYS, gearBonus, gearPower, noGear, weekOf, type GearKey, type GearSet } from './boss';
 import { teamFromBoss } from './battle';
+import { islandCell } from './map';
+import { cleanDef } from './economy';
+import {
+  B_KEYS, BUILDINGS, bLevel, bSum, dayOf, defSpecOf, fortLevel, FORT_NAMES, ITEMS, MAX_VASSALS, PORT_MULT, routePeriod, SHOP_BASE, shopSpecial, tollPerHour, tributePerHour, VASSAL_MS, VASSAL_TOLL_SHARE,
+  type BKey, type DefSpec, type Dinh, type GoodKey, type ItemKey, type Lord, type Vassal,
+} from './economy';
 
 export type Mood = 'vui' | 'thuong' | 'doi';
 export interface LvState {
@@ -106,6 +112,22 @@ export interface PlayerState {
   asc: number;
   /** Dành sẵn cho Thượng Giới (bản sau). Để trống. */
   thuongGioi: Record<string, unknown>;
+  /** Nhà cửa, thành trì đặt trên đảo. */
+  dinh: Dinh[];
+  /** Túi vật phẩm. */
+  bag: Partial<Record<ItemKey, number>>;
+  /** Đảo đã thôn tính (chư hầu). */
+  chuHau: Vassal[];
+  /** Đảo mình đang bị ai thôn tính. */
+  chuQuan: Lord | null;
+  /** Thuế: phần lẻ đang tích, tổng thu hôm nay. */
+  thue: { acc: number; day: number; today: number; rate: number };
+  /** Cửa hàng: đã mua trong ngày. */
+  shop: { day: number; bought: Record<string, number> };
+  /** Đội thợ thêm (Lệnh Bài Thủy Sư). */
+  slotsBonus: number;
+  /** Thương hội (server ghi). */
+  guild: { id: string; name: string; tag: string; lv: number } | null;
 }
 
 export interface Build {
@@ -119,6 +141,10 @@ export interface Build {
 export interface Voyage {
   id: string;
   kind: 'wild' | 'island' | 'boss';
+  /** xuất phát từ đâu (đảo nhà hoặc cứ điểm chư hầu) */
+  from?: { x: number; y: number };
+  /** đánh chiếm thành chư hầu */
+  conquer?: boolean;
   /** trang bị chở theo (chỉ khi đánh Thủy Tinh) */
   carry?: GearSet;
   targetId: string;
@@ -196,7 +222,7 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     lastReal: now,
     gt: 0,
     speed: 1,
-    res: { co: 10, la: 0, tre: 6, go: 0, cui: 0, da: 6, sat: 0, so: 20, ngoc: 0 },
+    res: { co: 10, la: 0, tre: 6, go: 0, cui: 0, da: 6, sat: 0, so: 20, ngoc: 0, tien: 50 },
     land,
     nodes: [],
     lv: {
@@ -229,6 +255,14 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     boss: { week: weekOf(now), best: 0, tries: 0, won: false },
     asc: 0,
     thuongGioi: {},
+    dinh: [],
+    bag: {},
+    chuHau: [],
+    chuQuan: null,
+    thue: { acc: 0, day: dayOf(now), today: 0, rate: 0 },
+    shop: { day: dayOf(now), bought: {} },
+    slotsBonus: 0,
+    guild: null,
   };
   // mỗi đảo một hình dạng riêng, sinh từ mã đảo
   const shape = startShape(seed);
@@ -292,7 +326,7 @@ export function startShape(seed: number): { land: [number, number][]; spots: [nu
 
 // ---------- tính toán phụ ----------
 export const tierIdx = (s: PlayerState, k: LvKey) => Math.max(0, Math.min(4, s.lv[k].tier - 1));
-export const storageCap = (s: PlayerState) => EFFECTS.storageCap[tierIdx(s, 'leu')];
+export const storageCap = (s: PlayerState) => Math.round(EFFECTS.storageCap[tierIdx(s, 'leu')] * (1 + 0.3 * bSum(s.dinh, 'khothoc')));
 export const landCap = (s: PlayerState) => EFFECTS.landCap[tierIdx(s, 'leu')];
 export const protectAmt = (s: PlayerState) => EFFECTS.protect[tierIdx(s, 'leu')];
 export const chestSlots = (s: PlayerState) => EFFECTS.chestSlots[tierIdx(s, 'leu')];
@@ -368,7 +402,12 @@ export function teamSpec(s: PlayerState, defending: boolean): TeamSpec {
     cuocTier: s.lv.cuoc.tier,
     raoTier: defending ? s.lv.rao.tier : undefined,
     hero: s.name,
-    gear: gearBonus(s.kho),
+    gear: (() => {
+      const g = gearBonus(s.kho);
+      g.atk += 0.05 * Math.min(3, s.bag.vayrong ?? 0);
+      return g;
+    })(),
+    fort: defending ? defSpecOf(s.dinh) : undefined,
   };
 }
 
@@ -404,7 +443,20 @@ export function occupied(s: PlayerState, x: number, y: number): boolean {
   if (LAND_LV.some((k) => LV_POS[k].x === x && LV_POS[k].y === y)) return true;
   if (s.nodes.some((n) => n.x === x && n.y === y)) return true;
   if (s.chests.some((c) => c.x === x && c.y === y)) return true;
+  if (s.dinh.some((d) => d.x === x && d.y === y)) return true;
   return false;
+}
+
+/** Thu nhập mỗi giờ: nhà dân, thuế thương thuyền, cống nạp của chư hầu; trừ phần phải nộp cho chủ. */
+export function incomePerHour(s: PlayerState, now = s.lastReal) {
+  const period = routePeriod(now);
+  const bonus = (s.bag.trongdong ? 0.25 : 0) + (s.guild ? 0.05 * s.guild.lv : 0);
+  const dan = bSum(s.dinh, 'nhadan') * 4;
+  const toll = tollPerHour(homeCell(s), period, bLevel(s.dinh, 'tramthue'), bonus);
+  let cong = 0;
+  for (const v of s.chuHau) if (v.until > now) cong += tributePerHour(v.power) + tollPerHour(v.cell, period, v.port) * VASSAL_TOLL_SHARE;
+  const nop = s.chuQuan && s.chuQuan.until > now ? tributePerHour(power(s)) : 0;
+  return { dan, toll, cong, nop, total: dan + toll + cong - nop };
 }
 
 // ---------- vòng thời gian ----------
@@ -415,12 +467,38 @@ export function tick(s: PlayerState, now: number): string[] {
   // thứ Hai: Thủy Tinh hồi sinh, thành tích tuần làm mới (số lần phi thăng giữ nguyên)
   const wk = weekOf(now);
   if (s.boss.week !== wk) s.boss = { week: wk, best: 0, tries: 0, won: false };
+  // chư hầu hết hạn: tự do
+  s.chuHau = s.chuHau.filter((v) => v.until > now);
+  if (s.chuQuan && s.chuQuan.until <= now) {
+    notes.push(`Hết thời hạn cống nạp, ${s.islandName} được tự do.`);
+    s.chuQuan = null;
+  }
+  // tiền thuế, cống nạp (tính theo giờ trong game)
+  const inc = incomePerHour(s, now);
+  s.thue.rate = inc.total;
+  const day = dayOf(now);
+  if (s.thue.day !== day) s.thue = { acc: 0, day, today: 0, rate: inc.total };
+  s.thue.acc += (inc.total * dtReal * s.speed) / 3600_000;
+  if (s.thue.acc >= 1 || s.thue.acc <= -1) {
+    const whole = Math.trunc(s.thue.acc);
+    s.thue.acc -= whole;
+    s.res.tien = Math.max(0, s.res.tien + whole);
+    if (whole > 0) s.thue.today += whole;
+  }
+  // nhà cửa, thành trì xây xong
+  for (const d of s.dinh)
+    if (d.doneAt !== undefined && s.gt + dtReal * s.speed >= d.doneAt) {
+      d.lv = d.to ?? d.lv + 1;
+      d.to = undefined;
+      d.doneAt = undefined;
+      notes.push(`Xây xong ${BUILDINGS[d.k].names[d.lv - 1]}.`);
+    }
   const dt = dtReal * s.speed;
   s.gt += dt;
   const min = dt / 60_000;
   for (const k of LV_KEYS) {
     const l = s.lv[k];
-    l.hunger = Math.min(100, l.hunger + HUNGER_PER_MIN * min);
+    l.hunger = Math.min(100, l.hunger + HUNGER_PER_MIN * min * (1 - 0.15 * bLevel(s.dinh, 'den')));
     if (l.mood !== 'thuong' && s.gt >= l.moodUntil) l.mood = 'thuong';
   }
   let guard = 0;
@@ -444,7 +522,20 @@ export function tick(s: PlayerState, now: number): string[] {
   return notes;
 }
 
-export const buildSlots = (s: PlayerState) => (s.lv.leu.tier >= 3 ? 2 : 1);
+export const buildSlots = (s: PlayerState) => (s.lv.leu.tier >= 3 ? 2 : 1) + Math.min(2, s.slotsBonus);
+/** Số đội thợ đang bận (tiến hóa linh vật + xây nhà cửa, thành trì). */
+export const busySlots = (s: PlayerState) => s.builds.length + s.dinh.filter((d) => d.doneAt !== undefined).length;
+
+/** Ô của đảo mình trên hải đồ chung. */
+export const homeCell = (s: PlayerState) => islandCell(s.id);
+/** Nơi thuyền có thể xuất phát: đảo nhà và các chư hầu còn hạn (cứ điểm). */
+export function bases(s: PlayerState): { x: number; y: number; name: string }[] {
+  return [{ ...homeCell(s), name: s.islandName }, ...s.chuHau.filter((v) => v.until > s.lastReal).map((v) => ({ ...v.cell, name: v.islandName }))];
+}
+/** Cứ điểm gần đích nhất. */
+export function nearestBase(s: PlayerState, to: { x: number; y: number }) {
+  return bases(s).reduce((b, c) => (Math.hypot(c.x - to.x, c.y - to.y) < Math.hypot(b.x - to.x, b.y - to.y) ? c : b));
+}
 export function buildMs(lv: LvKey, fromTier: number): number {
   return Math.round(BUILD_MS[fromTier - 1] * BUILD_FACTOR[lv]);
 }
@@ -479,7 +570,8 @@ function buildTick(s: PlayerState): string[] {
 }
 
 export function sailMs(s: PlayerState, to: { x: number; y: number }, mul = 1): number {
-  const dist = Math.max(1, Math.hypot(to.x - HOME_CELL.x, to.y - HOME_CELL.y));
+  const from = nearestBase(s, to);
+  const dist = Math.max(1, Math.hypot(to.x - from.x, to.y - from.y));
   return Math.round((dist * EFFECTS.sailSecPerCell[tierIdx(s, 'thuyen')] * 1000 * mul) / moodMult(s.lv.thuyen));
 }
 
@@ -497,7 +589,9 @@ export function bossCheck(s: PlayerState): string | null {
 export function fightBoss(s: PlayerState, carry: GearSet): Outcome {
   const week = weekOf(s.lastReal);
   const form = bossOf(week);
-  const spec = { ...teamSpec(s, false), gear: gearBonus(carry) };
+  const gb = gearBonus(carry);
+  gb.atk += 0.05 * bLevel(s.dinh, 'den') + 0.05 * Math.min(3, s.bag.vayrong ?? 0);
+  const spec = { ...teamSpec(s, false), gear: gb };
   const r = rngOf(s);
   const real = simulate(teamFromSpec(spec, 0), teamFromBoss(form, 1), r, 40);
   s.stats.battles++;
@@ -510,6 +604,8 @@ export function fightBoss(s: PlayerState, carry: GearSet): Outcome {
     s.stats.wins++;
     s.boss.won = true;
     s.asc++;
+    const relic: ItemKey = s.bag.trongdong ? 'vayrong' : 'trongdong';
+    s.bag[relic] = (s.bag[relic] ?? 0) + 1;
     log(s, `PHI THĂNG! Đánh bại ${form.name} · ${form.title}.`);
     return { ok: true, msg: `Đánh bại ${form.name} · ${form.title}! Bạn đã phi thăng.`, battle: real, gained: { ...ASCEND_REWARD }, levelUps: ups, boss: { dmg, win, form: form.key } };
   }
@@ -557,7 +653,7 @@ function voyageTick(s: PlayerState): string[] {
       const w = WILDS.find((x) => x.id === v.targetId)!;
       o = fightWild(s, w, true);
     } else {
-      o = raid(s, v.target!, true);
+      o = raid(s, v.target!, true, !!v.conquer);
       if (o.event) s.outbox.push(o.event);
     }
     if (v.kind !== 'boss') {
@@ -589,7 +685,12 @@ export type Action =
   | { t: 'expand'; x: number; y: number }
   | { t: 'chest'; id: string }
   | { t: 'sail'; kind: 'wild'; id: string }
-  | { t: 'sail'; kind: 'island'; target: IslandPub; to: { x: number; y: number } }
+  | { t: 'sail'; kind: 'island'; target: IslandPub; to: { x: number; y: number }; conquer?: boolean }
+  | { t: 'xay'; k: BKey; x: number; y: number }
+  | { t: 'nang'; id: string }
+  | { t: 'pha'; id: string }
+  | { t: 'mua'; offer: string }
+  | { t: 'dung'; item: ItemKey }
   | { t: 'sail'; kind: 'boss'; carry: Partial<GearSet> }
   | { t: 'craft'; g: GearKey }
   | { t: 'rename'; name: string; island: string }
@@ -609,6 +710,7 @@ export interface Outcome {
   levelUps?: CompKey[];
   event?: RaidEvent;
   boss?: { dmg: number; win: boolean; form: string };
+  item?: ItemKey;
 }
 
 const fail = (msg: string): Outcome => ({ ok: false, msg });
@@ -707,7 +809,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
       const l = s.lv[a.lv];
       if (l.tier >= 5) return fail('Đã ở bậc cao nhất.');
       if (buildOf(s, a.lv)) return fail('Công trình này đang xây rồi.');
-      if (s.builds.length >= buildSlots(s)) return fail(buildSlots(s) > 1 ? 'Cả hai đội thợ đều đang bận.' : 'Thợ đang bận xây công trình khác. Nhà chính bậc 3 có thêm đội thợ thứ hai.');
+      if (busySlots(s) >= buildSlots(s)) return fail(buildSlots(s) > 1 ? 'Cả hai đội thợ đều đang bận.' : 'Thợ đang bận xây công trình khác. Nhà chính bậc 3 có thêm đội thợ thứ hai.');
       if (l.xp < XP_TO_NEXT[l.tier - 1]) return fail('Chưa đủ linh khí.');
       const cost = EVOLVE_COST[l.tier - 1];
       if (!canPay(s, cost)) return fail('Chưa đủ nguyên liệu để tiến hóa.');
@@ -747,7 +849,9 @@ export function apply(s: PlayerState, a: Action): Outcome {
       const got = addRes(s, rollChest(s, c.ci, r));
       s.stats.chests++;
       const q = doneQuest(s, 'q_chest');
-      return { ok: true, msg: `Mở ${CHESTS[c.ci].name}`, gained: got, chest: c.ci, quest: q ?? undefined };
+      const drop = rareDrop(r, c.ci);
+      if (drop) s.bag[drop] = (s.bag[drop] ?? 0) + 1;
+      return { ok: true, msg: `Mở ${CHESTS[c.ci].name}${drop ? `. Có ${ITEMS[drop].name}!` : ''}`, gained: got, chest: c.ci, quest: q ?? undefined, item: drop ?? undefined };
     }
     case 'sail': {
       if (s.voyage) return fail(s.voyage.phase === 'di' ? 'Thuyền đang trên đường đi.' : 'Thuyền đang trên đường về bến.');
@@ -763,7 +867,8 @@ export function apply(s: PlayerState, a: Action): Outcome {
         for (const k of GEAR_KEYS) s.kho[k] -= want[k];
         const form = bossOf(weekOf(s.lastReal));
         const one = sailMs(s, BOSS_CELL, BOSS_TRAVEL_MUL);
-        s.voyage = { id: nid(s, 'v'), kind: 'boss', targetId: 'thuytinh', targetName: `Mắt Bão · ${form.name}`, to: { ...BOSS_CELL }, departAt: s.gt, arriveAt: s.gt + one, returnAt: s.gt + one * 2, phase: 'di', loot: {}, carry: want };
+        const bf = nearestBase(s, BOSS_CELL);
+        s.voyage = { from: { x: bf.x, y: bf.y }, id: nid(s, 'v'), kind: 'boss', targetId: 'thuytinh', targetName: `Mắt Bão · ${form.name}`, to: { ...BOSS_CELL }, departAt: s.gt, arriveAt: s.gt + one, returnAt: s.gt + one * 2, phase: 'di', loot: {}, carry: want };
         log(s, 'Thuyền vượt bão đi đánh Thủy Tinh.');
         return { ok: true, msg: `${LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1]} vượt bão ra Mắt Bão. Sống chết có số!` };
       }
@@ -776,7 +881,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
         targetId = w.id;
         targetName = w.name;
       } else {
-        const err = raidCheck(s, a.target);
+        const err = raidCheck(s, a.target) ?? (a.conquer ? conquerCheck(s, a.target) : null);
         if (err) return fail(err);
         to = { x: Math.round(a.to.x), y: Math.round(a.to.y) };
         targetId = a.target.id;
@@ -784,7 +889,8 @@ export function apply(s: PlayerState, a: Action): Outcome {
         target = a.target;
       }
       const one = sailMs(s, to);
-      s.voyage = { id: nid(s, 'v'), kind: a.kind, targetId, targetName, target, to, departAt: s.gt, arriveAt: s.gt + one, returnAt: s.gt + one * 2, phase: 'di', loot: {} };
+      const from = nearestBase(s, to);
+      s.voyage = { id: nid(s, 'v'), kind: a.kind, targetId, targetName, target, to, from: { x: from.x, y: from.y }, departAt: s.gt, arriveAt: s.gt + one, returnAt: s.gt + one * 2, phase: 'di', loot: {}, conquer: a.kind === 'island' && !!a.conquer };
       log(s, `Thuyền rời bến đi ${targetName}.`);
       return { ok: true, msg: `${LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1]} rời bến đi ${targetName}.` };
     }
@@ -796,13 +902,88 @@ export function apply(s: PlayerState, a: Action): Outcome {
       s.islandName = island || `Đảo của ${name}`;
       return { ok: true, msg: 'Đã đổi tên.' };
     }
+    case 'xay': {
+      const b = BUILDINGS[a.k];
+      if (!b) return fail('Không có công trình này.');
+      if (s.lv.leu.tier < b.needLeu) return fail(`Cần Nhà chính bậc ${b.needLeu}.`);
+      if (s.dinh.filter((d) => d.k === a.k).length >= b.max) return fail(`Đảo chỉ có chỗ cho ${b.max} ${b.names[0]}.`);
+      if (!isLand(s, a.x, a.y) || occupied(s, a.x, a.y)) return fail('Ô này không xây được. Chọn ô đất trống.');
+      if (busySlots(s) >= buildSlots(s)) return fail('Thợ đang bận hết. Chờ xây xong hoặc dùng Lệnh Bài Thủy Sư.');
+      if (!canPay(s, b.cost[0])) return fail('Chưa đủ vật liệu.');
+      pay(s, b.cost[0]);
+      s.dinh.push({ id: nid(s, 'd'), k: a.k, x: a.x, y: a.y, lv: 0, to: 1, doneAt: s.gt + b.ms[0] });
+      return { ok: true, msg: `Bắt đầu xây ${b.names[0]}.` };
+    }
+    case 'nang': {
+      const d = s.dinh.find((x) => x.id === a.id);
+      if (!d) return fail('Không thấy công trình.');
+      const b = BUILDINGS[d.k];
+      if (d.doneAt !== undefined) return fail('Đang xây dở.');
+      if (d.lv >= 3) return fail('Đã cấp cao nhất.');
+      if (d.lv + 1 >= 3 && s.lv.leu.tier < Math.min(5, b.needLeu + 2)) return fail(`Cần Nhà chính bậc ${Math.min(5, b.needLeu + 2)} để lên cấp 3.`);
+      if (busySlots(s) >= buildSlots(s)) return fail('Thợ đang bận hết.');
+      if (!canPay(s, b.cost[d.lv])) return fail('Chưa đủ vật liệu.');
+      pay(s, b.cost[d.lv]);
+      d.to = d.lv + 1;
+      d.doneAt = s.gt + b.ms[d.lv];
+      return { ok: true, msg: `Nâng cấp lên ${b.names[d.lv]}.` };
+    }
+    case 'pha': {
+      const i = s.dinh.findIndex((x) => x.id === a.id);
+      if (i < 0) return fail('Không thấy công trình.');
+      const d = s.dinh[i];
+      const back: Partial<Record<ResKey, number>> = {};
+      for (const [k, v] of Object.entries(BUILDINGS[d.k].cost[Math.max(0, d.lv - 1)])) back[k as ResKey] = Math.floor((v ?? 0) * 0.3);
+      s.dinh.splice(i, 1);
+      addRes(s, back);
+      return { ok: true, msg: `Đã dỡ ${BUILDINGS[d.k].names[Math.max(0, d.lv - 1)]}, thu hồi một phần vật liệu.` };
+    }
+    case 'mua': {
+      const day = dayOf(s.lastReal);
+      if (s.shop.day !== day) s.shop = { day, bought: {} };
+      const o = [...SHOP_BASE, shopSpecial(day)].find((x) => x.id === a.offer);
+      if (!o) return fail('Món này hết bán rồi.');
+      if (o.daily && (s.shop.bought[o.id] ?? 0) >= o.daily) return fail('Hôm nay đã mua đủ món này.');
+      const price = shopPrice(s, o.price);
+      if (s.res.tien < price) return fail('Không đủ tiền đồng.');
+      s.res.tien -= price;
+      s.shop.bought[o.id] = (s.shop.bought[o.id] ?? 0) + 1;
+      giveGood(s, o.good, o.n);
+      return { ok: true, msg: `Đã mua ${o.n > 1 ? o.n + ' ' : ''}${goodLabel(o.good)}.` };
+    }
+    case 'dung': {
+      const it = ITEMS[a.item];
+      if (!it || !it.use) return fail('Vật này không dùng được.');
+      if ((s.bag[a.item] ?? 0) < 1) return fail('Trong túi không còn.');
+      if (a.item === 'haido' && !s.voyage) return fail('Thuyền đang ở bến, chưa cần hải đồ.');
+      if (a.item === 'lenhbai' && s.slotsBonus >= 2) return fail('Đã có đủ 2 Lệnh Bài.');
+      s.bag[a.item] = (s.bag[a.item] ?? 0) - 1;
+      if (a.item === 'banhchung') for (const k of LV_KEYS) s.lv[k].hunger = 0;
+      if (a.item === 'ruounep')
+        for (const k of LV_KEYS) {
+          s.lv[k].mood = 'vui';
+          s.lv[k].moodUntil = s.gt + 30 * 60_000;
+        }
+      if (a.item === 'haido' && s.voyage) {
+        const v = s.voyage;
+        const end = v.phase === 'di' ? v.arriveAt : v.returnAt;
+        const cut = Math.max(0, Math.floor((end - s.gt) / 2));
+        if (v.phase === 'di') v.arriveAt -= cut;
+        v.returnAt -= cut;
+      }
+      if (a.item === 'goquy') addRes(s, { go: 150, cui: 80 });
+      if (a.item === 'ngoctraiden') addRes(s, { ngoc: 4 });
+      if (a.item === 'lenhbai') s.slotsBonus++;
+      return { ok: true, msg: `Đã dùng ${it.name}.` };
+    }
     case 'craft': {
       const g = GEAR[a.g];
       if (!g) return fail('Không có trang bị này.');
       if (s.lv[g.need.lv].tier < g.need.tier) return fail(`Cần ${LV_LABEL[g.need.lv]} bậc ${g.need.tier} để chế tạo.`);
       if (s.kho[a.g] >= g.max) return fail(`Kho chỉ chứa tối đa ${g.max} ${g.name}.`);
-      if (!canPay(s, g.cost)) return fail('Chưa đủ tài nguyên.');
-      pay(s, g.cost);
+      const cost = craftCost(s, a.g);
+      if (!canPay(s, cost)) return fail('Chưa đủ tài nguyên.');
+      pay(s, cost);
       s.kho[a.g]++;
       log(s, `Chế tạo ${g.name}.`);
       return { ok: true, msg: `Đã chế tạo ${g.name}.` };
@@ -875,6 +1056,16 @@ export interface IslandPub {
   boss?: { week: number; best: number; won: boolean };
   /** số lần phi thăng */
   asc?: number;
+  /** thành trì khi giữ đảo */
+  def?: DefSpec;
+  /** cấp thành trì, cấp trạm thuế */
+  fort?: number;
+  port?: number;
+  /** đang là chư hầu của ai */
+  lord?: { id: string; name: string } | null;
+  /** số chư hầu */
+  vassals?: number;
+  guild?: string;
 }
 
 export function publicOf(s: PlayerState): IslandPub {
@@ -900,6 +1091,12 @@ export function publicOf(s: PlayerState): IslandPub {
     gear: { ...s.kho },
     boss: { week: s.boss.week, best: s.boss.best, won: s.boss.won },
     asc: s.asc,
+    def: defSpecOf(s.dinh),
+    fort: fortLevel(s.dinh),
+    port: bLevel(s.dinh, 'tramthue'),
+    lord: s.chuQuan && s.chuQuan.until > s.lastReal ? { id: s.chuQuan.id, name: s.chuQuan.name } : null,
+    vassals: s.chuHau.length,
+    guild: s.guild?.tag,
   };
 }
 
@@ -913,6 +1110,12 @@ export interface RaidEvent {
   loot: Partial<Record<ResKey, number>>;
   seed: number;
   t: number;
+  /** đánh chiếm thành chư hầu */
+  conquer?: boolean;
+  /** chư hầu khởi nghĩa đánh thắng chủ */
+  liberate?: boolean;
+  until?: number;
+  attackerIsland?: string;
 }
 
 export function raidSeed(attackerId: string, targetId: string, n: number) {
@@ -922,7 +1125,7 @@ export function raidSeed(attackerId: string, targetId: string, n: number) {
 /** Tính trận đột kích từ hai bản công khai — server dùng đúng hàm này để kiểm lại. */
 export function resolveRaid(att: TeamSpec, target: IslandPub, seed: number): { battle: BattleResult; loot: Partial<Record<ResKey, number>> } {
   const r = mulberry32(seed);
-  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear) };
+  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear), fort: target.bot ? undefined : cleanDef(target.def) };
   const battle = simulate(teamFromSpec(att, 0), teamFromSpec(defSpec, 1), r);
   const loot: Partial<Record<ResKey, number>> = {};
   if (battle.winner === 0) {
@@ -934,6 +1137,16 @@ export function resolveRaid(att: TeamSpec, target: IslandPub, seed: number): { b
   return { battle, loot };
 }
 
+/** Đánh chiếm: cần Đồn binh, còn chỗ giữ chư hầu. */
+export function conquerCheck(s: PlayerState, target: IslandPub): string | null {
+  const don = bLevel(s.dinh, 'donbinh');
+  if (!don) return 'Cần xây Trại Lính (Đồn binh) để đánh chiếm đảo.';
+  if (s.lv.leu.tier < 3) return 'Cần Nhà chính bậc 3 để giữ chư hầu.';
+  if (s.chuHau.some((v) => v.id === target.id)) return 'Đảo này đã là chư hầu của bạn.';
+  if (s.chuHau.length >= MAX_VASSALS[don]) return `Đồn binh cấp ${don} chỉ giữ được ${MAX_VASSALS[don]} chư hầu.`;
+  return null;
+}
+
 export function raidCheck(s: PlayerState, target: IslandPub): string | null {
   if (target.id === s.id) return 'Không tự đột kích đảo mình được.';
   if ((s.raidCd[target.id] ?? 0) > s.gt) return 'Vừa đột kích đảo này rồi, để họ nghỉ một chút.';
@@ -943,9 +1156,10 @@ export function raidCheck(s: PlayerState, target: IslandPub): string | null {
 }
 
 /** Đánh trận đột kích ngay. holdLoot = true: chiến lợi phẩm nằm trên thuyền, về bến mới cộng. */
-export function raid(s: PlayerState, target: IslandPub, holdLoot = false): Outcome & { event?: RaidEvent } {
-  const err = raidCheck(s, target);
+export function raid(s: PlayerState, target: IslandPub, holdLoot = false, conquer = false): Outcome & { event?: RaidEvent } {
+  const err = raidCheck(s, target) ?? (conquer ? conquerCheck(s, target) : null);
   if (err) return fail(err);
+  const liberate = !!s.chuQuan && s.chuQuan.id === target.id && s.chuQuan.until > s.lastReal;
   s.stats.raids++;
   const seed = raidSeed(s.id, target.id, s.stats.raids + s.seq);
   const spec = teamSpec(s, false);
@@ -967,7 +1181,20 @@ export function raid(s: PlayerState, target: IslandPub, holdLoot = false): Outco
     loot: win ? loot : {},
     seed,
     t: Date.now(),
+    conquer: conquer && win,
+    liberate: liberate && win,
+    until: s.lastReal + VASSAL_MS,
+    attackerIsland: s.islandName,
   };
+  if (win && liberate) {
+    s.chuQuan = null;
+    log(s, `Khởi nghĩa thắng lợi! ${s.islandName} thoát ách ${target.name}.`);
+  }
+  if (win && conquer) {
+    s.chuHau = s.chuHau.filter((v) => v.id !== target.id);
+    s.chuHau.push({ id: target.id, name: target.name, islandName: target.islandName, cell: islandCell(target.id), power: target.power, port: target.port ?? 0, until: s.lastReal + VASSAL_MS, bot: !!target.bot });
+    log(s, `Thôn tính ${target.islandName}: thành chư hầu 72 giờ.`);
+  }
   return {
     ok: true,
     msg: win ? `Đột kích thành công ${target.islandName}!` : `${target.islandName} giữ đảo thành công.`,
@@ -1002,14 +1229,20 @@ export function applyRaidAgainstMe(s: PlayerState, ev: RaidEvent): string | null
     }
   }
   s.stats.robbed++;
-  const text = `${ev.attackerName} đột kích đảo bạn${lost.length ? `, lấy mất ${lost.join(', ')}` : ''}.`;
+  if (ev.liberate) s.chuHau = s.chuHau.filter((v) => v.id !== ev.attackerId);
+  if (ev.conquer) s.chuQuan = { id: ev.attackerId, name: ev.attackerName, islandName: ev.attackerIsland ?? ev.attackerName, until: ev.until ?? s.lastReal + VASSAL_MS };
+  const text = ev.liberate
+    ? `${ev.attackerName} khởi nghĩa đánh thắng, thoát khỏi ách chư hầu${lost.length ? ` và lấy ${lost.join(', ')}` : ''}.`
+    : ev.conquer
+      ? `${ev.attackerName} đánh chiếm đảo bạn! Đảo thành chư hầu, phải cống nạp 72 giờ. Đánh thắng họ để khởi nghĩa.${lost.length ? ` Mất ${lost.join(', ')}.` : ''}`
+      : `${ev.attackerName} đột kích đảo bạn${lost.length ? `, lấy mất ${lost.join(', ')}` : ''}.`;
   log(s, text);
   return text;
 }
 
 /** Dấu vân tay ngắn của trạng thái: client và server so nhau để phát hiện lệch. */
 export function digest(s: PlayerState): string {
-  const parts = [s.rngN, s.seq, landCount(s), ...RES_KEYS.map((k) => s.res[k]), ...LV_KEYS.map((k) => `${s.lv[k].tier}:${s.lv[k].xp}`), s.builds.length, s.voyage?.id ?? '-', s.chests.length];
+  const parts = [s.rngN, s.seq, landCount(s), ...RES_KEYS.filter((k) => k !== 'tien').map((k) => s.res[k]), ...LV_KEYS.map((k) => `${s.lv[k].tier}:${s.lv[k].xp}`), s.builds.length, s.voyage?.id ?? '-', s.chests.length];
   return hashStr(parts.join('|')).toString(36);
 }
 
@@ -1026,3 +1259,55 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   merged.lv = { ...fresh.lv, ...s.lv };
   return merged;
 }
+
+
+// ---------- kinh tế: giá, hàng hóa, rơi đồ ----------
+export function craftCost(s: PlayerState, g: GearKey): Partial<Record<ResKey, number>> {
+  const k = 1 - 0.1 * bLevel(s.dinh, 'xuongren');
+  const out: Partial<Record<ResKey, number>> = {};
+  for (const [r, v] of Object.entries(GEAR[g].cost)) out[r as ResKey] = Math.ceil((v ?? 0) * k);
+  return out;
+}
+export const shopPrice = (s: PlayerState, base: number) => Math.ceil(base * (1 - 0.05 * bLevel(s.dinh, 'cho')));
+
+export function goodLabel(g: GoodKey | string): string {
+  if (g.startsWith('g_')) return GEAR[g.slice(2) as GearKey].name;
+  if (g in ITEMS) return ITEMS[g as ItemKey].name;
+  return RES[g as ResKey]?.name ?? g;
+}
+/** Có bao nhiêu món hàng này trong đảo. */
+export function haveGood(s: PlayerState, g: string): number {
+  if (g.startsWith('g_')) return s.kho[g.slice(2) as GearKey] ?? 0;
+  if (g in ITEMS) return s.bag[g as ItemKey] ?? 0;
+  return s.res[g as ResKey] ?? 0;
+}
+export function takeGood(s: PlayerState, g: string, n: number): boolean {
+  if (n <= 0 || haveGood(s, g) < n) return false;
+  if (g.startsWith('g_')) s.kho[g.slice(2) as GearKey] -= n;
+  else if (g in ITEMS) s.bag[g as ItemKey] = (s.bag[g as ItemKey] ?? 0) - n;
+  else s.res[g as ResKey] -= n;
+  return true;
+}
+/** Nhận hàng (trang bị vượt giới hạn kho đổi ra tiền theo giá trị). */
+export function giveGood(s: PlayerState, g: string, n: number) {
+  if (g.startsWith('g_')) {
+    const k = g.slice(2) as GearKey;
+    const room = Math.max(0, GEAR[k].max - s.kho[k]);
+    s.kho[k] += Math.min(room, n);
+  } else if (g in ITEMS) s.bag[g as ItemKey] = (s.bag[g as ItemKey] ?? 0) + n;
+  else s.res[g as ResKey] = (s.res[g as ResKey] ?? 0) + n; // hàng mua về không bị giới hạn kho
+}
+
+/** Vật phẩm hiếm rơi từ hòm (hòm càng quý càng dễ ra đồ hiếm). */
+export function rareDrop(r: Rng, ci: number): ItemKey | null {
+  const roll = r();
+  if (roll < 0.002 * (ci + 1)) return 'vayrong';
+  if (roll < 0.01 * (ci + 1)) return 'lenhbai';
+  if (roll < 0.03 * (ci + 1)) return 'ngoctraiden';
+  if (roll < 0.06 * (ci + 1)) return 'haido';
+  if (roll < 0.1 * (ci + 1)) return 'goquy';
+  return null;
+}
+
+export const fortName = (s: PlayerState) => FORT_NAMES[fortLevel(s.dinh)];
+export { B_KEYS, BUILDINGS, PORT_MULT };

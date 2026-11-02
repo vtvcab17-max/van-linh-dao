@@ -81,6 +81,71 @@ Chế tạo từ tài nguyên, cần công trình đủ bậc. Trang bị cất 
 
 Mọi thứ nối với nhau: tài nguyên → công trình → trang bị và đồng đội → đánh đảo, đột kích → Thủy Tinh. Thua Thủy Tinh thì phải quay lại vòng chơi để xây lại thuyền và rèn lại trang bị.
 
+## Nhà cửa và thành trì
+
+Bấm **Xây dựng** trên đảo, chọn công trình rồi chạm một ô đất trống (viền xanh). Chạm công trình đã xây để nâng cấp hoặc phá. Mỗi công trình có 3 cấp, mỗi cấp một hình dáng riêng.
+
+| Nhóm | Công trình (cấp 1 → 3) | Tác dụng |
+| --- | --- | --- |
+| Nhà cửa | Lều Ngư Dân → Nhà Ba Gian → Nhà Ngói Năm Gian | Dân nộp thuế +4 tiền/giờ mỗi cấp |
+| Nhà cửa | Miếu Thổ Thần → Đền Sơn Tinh → Đền Hùng | Linh vật đói chậm hơn, đánh Thủy Tinh mạnh hơn |
+| Kinh tế | Vựa Thóc → Kho Lẫm → Kho Đụn | Kho chứa +30% mỗi cấp |
+| Kinh tế | Sạp Chợ Phiên → Chợ Làng → Chợ Phố Hội | Cửa hàng rẻ hơn, phí chợ thấp hơn |
+| Kinh tế | Cầu Tàu Gỗ → Bến Cảng Đá → Thương Cảng | Nhân thuế thương thuyền ×1 / ×1,6 / ×2,3 |
+| Kinh tế | Lò Rèn → Xưởng Rèn → Lò Đúc Đồng | Rèn trang bị rẻ hơn 10% mỗi cấp |
+| Thành trì | Chòi Canh → Tháp Canh Gạch → Vọng Lâu Nỏ Thần | Thêm xạ thủ trên tháp khi giữ đảo |
+| Thành trì | Tường Rào Đất → Tường Đá Ong → Thành Gạch Vồ | Lũy tre thêm 150 máu mỗi cấp |
+| Thành trì | Trại Lính → Đồn Binh → Thủy Trại | Thêm lính đồn; cần có để đánh chiếm đảo, giữ được nhiều chư hầu hơn |
+
+Tổng công trình quyết định danh hiệu đảo: Đảo Trống → Xóm Đảo → Làng Lũy → Đồn Lũy → Thành Trì → Kinh Thành.
+
+## Đánh chiếm, chư hầu và cứ điểm
+
+- **Cướp**: đột kích đảo khác để lấy tài nguyên như trước.
+- **Đánh chiếm**: cần Trại Lính. Thắng thì đảo kia thành **chư hầu** trong 72 giờ:
+  - chư hầu nộp cống tiền mỗi giờ và chia 50% thuế thương thuyền cho chủ;
+  - đảo chư hầu là **cứ điểm**: thuyền xuất phát từ cứ điểm gần nhất nên đi xa nhanh hơn.
+- Số chư hầu tối đa theo cấp Trại Lính: 1 / 2 / 4.
+- Chư hầu có thể tự đánh lại chủ hoặc nhờ đảo khác đến **giải phóng**.
+- Tháp canh, tường và đồn binh ra trận khi bị đánh, nên đảo có thành trì khó bị chiếm hơn.
+
+## Tuyến buôn và tiền thuế
+
+- 5 nhà buôn NPC (Hội An, Phố Hiến, Chợ Lớn, Vân Đồn, Thị Nại) chạy thuyền trên Hải Khu. Cứ **6 giờ** họ đổi sang tuyến mới, mỗi lần một khác.
+- Đảo nằm trong 2,5 ô quanh tuyến buôn thu **thuế** mỗi giờ. Trạm thuế càng cao thu càng nhiều.
+- Tiền đồng cũng đến từ nhà dân và cống nạp của chư hầu. Xem chi tiết trong **Chợ → Lãnh địa**.
+- Chạm thuyền buôn trên biển để xem họ chở hàng gì.
+
+## Cửa hàng, chợ thế giới, đấu giá, thương hội
+
+Tất cả nằm trong tab **Chợ**:
+
+- **Cửa hàng**: hàng bán sẵn bằng tiền đồng, mỗi ngày có món đặc biệt.
+- **Túi đồ**: vật phẩm và đồ hiếm. Đồ hiếm rơi từ rương, trận đánh và thương buôn:
+
+  | Độ hiếm | Vật phẩm |
+  | --- | --- |
+  | Thường | Bánh Chưng, Rượu Nếp Cái Hoa Vàng |
+  | Hiếm | Hải Đồ Cổ, Gỗ Trầm Hương |
+  | Quý | Ngọc Trai Đen, Lệnh Bài Thủy Sư (+1 đội thợ) |
+  | Huyền thoại | Vảy Rồng Lạc Long (+5% công), Trống Đồng Đông Sơn (+25% thuế) |
+
+- **Chợ thế giới**: chung cho mọi Hải Khu. Có các chức năng:
+  - tìm kiếm theo tên, lọc theo loại, sắp theo giá hoặc độ mới;
+  - mua lẻ từng phần.
+- **Đặt mua**: đưa giá mua, tiền được giữ ký quỹ; ai có hàng thì bán thẳng vào lệnh.
+- **Đăng bán**: bán giá cố định hoặc **đấu giá**.
+  - Mỗi lần trả giá phải cao hơn ít nhất 5%.
+  - Ai trả giá ở 2 phút cuối thì phiên được gia hạn.
+  - Người bị trả vượt được hoàn tiền.
+- **Của tôi**: xem và gỡ các đơn của mình.
+- **Thương hội**:
+  - lập hội tốn 1000 tiền;
+  - thành viên góp tiền để lên cấp hội;
+  - hội viên được giảm 1% phí chợ;
+  - mỗi cấp hội cho hội viên thêm 5% thuế thương thuyền và thêm chỗ cho người mới.
+- Mọi giao dịch đều giữ hàng hoặc tiền trước (ký quỹ). Tiền bán được gửi về hộp thư và vào túi ngay khi bạn online.
+
 ## Bảng xếp hạng
 
 Ba bảng trong mỗi Hải Khu:
@@ -112,9 +177,9 @@ Người đã phi thăng có quyền vào Thượng Giới. Phần này **đang 
 
 | Thư mục | Nội dung |
 | --- | --- |
-| `shared/` | Luật chơi dùng chung client và server: dữ liệu, trận đánh, đột kích, `boss.ts` (Thủy Tinh, trang bị), `avatar.ts`, `map.ts`, `thuonggioi.ts` |
+| `shared/` | Luật chơi dùng chung client và server: dữ liệu, trận đánh, đột kích, `economy.ts` (công trình, tuyến buôn, vật phẩm, chư hầu), `boss.ts` (Thủy Tinh, trang bị), `avatar.ts`, `map.ts`, `thuonggioi.ts` |
 | `client/` | Game (Phaser 3 + TypeScript). Đồ họa trong `client/src/art/`, trailer trong `client/src/trailer.ts` |
-| `server/` | Cloudflare Worker + Durable Object: `Directory` (chia Hải Khu) và `HaiKhu` (giữ đảo, chạy luật chơi) |
+| `server/` | Cloudflare Worker + Durable Object: `Directory` (chia Hải Khu), `HaiKhu` (giữ đảo, chạy luật chơi) và `Cho` (chợ thế giới, đấu giá, thương hội) |
 | `tests/` | Test luật chơi, Thủy Tinh, đăng nhập (vitest) |
 | `tools/` | Bot chơi thử, mô phỏng cân bằng, test server, bảng xem đồ họa |
 
