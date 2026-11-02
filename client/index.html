@@ -57,6 +57,8 @@ header#top { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padd
 .r img { width: 24px; height: auto; image-rendering: pixelated; }
 .r.full b { color: var(--danger); }
 .r.bump b { animation: bump .35s ease-out; display: inline-block; }
+button.pulse { animation: pulse 1.2s ease-in-out infinite; border-color: var(--gold); }
+@keyframes pulse { 50% { box-shadow: 0 0 0 2px var(--ink), 0 0 0 6px rgba(246,211,77,.55), 0 3px 0 var(--ink); } }
 @keyframes bump { 40% { transform: translateY(-3px); color: var(--gold); } }
 
 .row-mid { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }

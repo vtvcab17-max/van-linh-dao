@@ -6,10 +6,30 @@ import { opaqueBox } from './buildings';
 import { drawSeaIsland, miniRadius, type MiniKind } from './islands';
 import { avatarTexKey, drawAvatar } from './avatar';
 import type { Canvas } from './pixel';
+import { enhance, HD } from './hd';
 
-export function ensureTex(scene: Phaser.Scene, key: string, make: () => Canvas): string {
-  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, make());
+export { HD };
+
+/**
+ * Tạo texture một lần. Mặc định hình được nâng lên kiểu 32-bit (gấp đôi chi tiết),
+ * nên ảnh trong game phải setScale(1 / HD) để giữ đúng kích thước.
+ */
+export function ensureTex(scene: Phaser.Scene, key: string, make: () => Canvas, raw = false): string {
+  if (!scene.textures.exists(key)) scene.textures.addCanvas(key, raw ? make() : enhance(make()));
   return key;
+}
+
+/** Phóng ảnh đã nâng cấp để hiện trên giao diện DOM (scale tính theo điểm ảnh gốc). */
+function hdUrl(src: Canvas, scale: number): string {
+  const e = enhance(src);
+  const k = Math.max(1, Math.round(scale / HD));
+  const c = document.createElement('canvas');
+  c.width = e.width * k;
+  c.height = e.height * k;
+  const ctx = c.getContext('2d')!;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(e, 0, 0, c.width, c.height);
+  return c.toDataURL();
 }
 
 export function lvTex(scene: Phaser.Scene, lv: LvKey, tier: number, blink: boolean, mood: 'vui' | 'thuong' | 'doi'): string {
@@ -25,9 +45,7 @@ export function preloadAll(scene: Phaser.Scene) {
   for (const k of ['grass', 'palm', 'bamboo', 'rock', 'scrap', 'drift']) ensureTex(scene, `node-${k}`, () => drawNode(k));
   for (let i = 0; i < 6; i++) ensureTex(scene, `chest-${i}`, () => drawChest(i));
   for (const e of ['vui', 'doi', 'doi_bung', 'nghe'] as const) ensureTex(scene, `emo-${e}`, () => drawEmote(e));
-  ensureTex(scene, 'water0', () => drawWater(0));
-  ensureTex(scene, 'water1', () => drawWater(1));
-  for (const k of ['an', 'ngoc', 'ha', 'chau', 'rua', 'cuagai', 'sualua', 'khida', 'canoc', 'haitac', 'baytheo', 'cuada']) ensureTex(scene, `ch-${k}`, () => charCanvas(k));
+    for (const k of ['an', 'ngoc', 'ha', 'chau', 'rua', 'cuagai', 'sualua', 'khida', 'canoc', 'haitac', 'baytheo', 'cuada']) ensureTex(scene, `ch-${k}`, () => charCanvas(k));
   for (let t = 1; t <= 5; t++) ensureTex(scene, `ch-rao${t}`, () => charCanvas(`rao${t}`));
   for (let t = 1; t <= 5; t++) ensureTex(scene, `boat-${t}`, () => drawThuyen(t, false, 'thuong'));
 }
@@ -57,7 +75,7 @@ const urlCache = new Map<string, string>();
 export function iconUrl(key: string): string {
   let u = urlCache.get('i' + key);
   if (!u) {
-    u = drawIcon(key).toDataURL();
+    u = hdUrl(drawIcon(key), HD);
     urlCache.set('i' + key, u);
   }
   return u;
@@ -65,14 +83,7 @@ export function iconUrl(key: string): string {
 export function portraitUrl(key: string): string {
   let u = urlCache.get('p' + key);
   if (!u) {
-    const src = charCanvas(key);
-    const c = document.createElement('canvas');
-    c.width = src.width * 3;
-    c.height = src.height * 3;
-    const ctx = c.getContext('2d')!;
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(src, 0, 0, c.width, c.height);
-    u = c.toDataURL();
+    u = hdUrl(charCanvas(key), 4);
     urlCache.set('p' + key, u);
   }
   return u;
@@ -80,14 +91,7 @@ export function portraitUrl(key: string): string {
 export function canvasUrl(key: string, make: () => Canvas, scale = 2): string {
   let u = urlCache.get('c' + key);
   if (!u) {
-    const src = make();
-    const c = document.createElement('canvas');
-    c.width = src.width * scale;
-    c.height = src.height * scale;
-    const ctx = c.getContext('2d')!;
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(src, 0, 0, c.width, c.height);
-    u = c.toDataURL();
+    u = hdUrl(make(), scale);
     urlCache.set('c' + key, u);
   }
   return u;
@@ -95,18 +99,26 @@ export function canvasUrl(key: string, make: () => Canvas, scale = 2): string {
 
 /** Mặt nước dựng sẵn thành ảnh lớn (rẻ hơn TileSprite khi vẽ mỗi khung hình). */
 export function waterTex(scene: Phaser.Scene, w: number, h: number, frame: number, tint = ''): string {
+  // w, h tính theo điểm ảnh gốc; ảnh thật lớn gấp HD lần
   return ensureTex(scene, `wbig-${w}x${h}-${frame}${tint}`, () => {
-    const tile = drawWater(frame);
+    // ô nước lặp lại: phóng thẳng (không làm mịn mép) để ghép không lộ đường nối
+    const base = drawWater(frame);
+    const tile = document.createElement('canvas');
+    tile.width = base.width * HD;
+    tile.height = base.height * HD;
+    const tc = tile.getContext('2d')!;
+    tc.imageSmoothingEnabled = false;
+    tc.drawImage(base, 0, 0, tile.width, tile.height);
     const c = document.createElement('canvas');
-    c.width = w;
-    c.height = h;
+    c.width = w * HD;
+    c.height = h * HD;
     const ctx = c.getContext('2d')!;
-    for (let y = 0; y < h; y += 32) for (let x = 0; x < w; x += 32) ctx.drawImage(tile, x, y);
+    for (let y = 0; y < c.height; y += tile.height) for (let x = 0; x < c.width; x += tile.width) ctx.drawImage(tile, x, y);
     if (tint) {
       ctx.globalCompositeOperation = 'multiply';
       ctx.fillStyle = tint;
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillRect(0, 0, c.width, c.height);
     }
     return c;
-  });
+  }, true);
 }

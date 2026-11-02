@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { SKILLS } from '../../../shared/data';
 import type { BattleResult, BEvent, BUnit } from '../../../shared/battle';
 import { drawBattleBg } from '../art/sprites';
-import { avatarTex, ensureTex } from '../art/textures';
+import { avatarTex, ensureTex, HD } from '../art/textures';
 import { avatarFrom } from '../../../shared/avatar';
 import { pubAvatar } from '../ui';
 import type { Store } from '../store';
@@ -63,7 +63,7 @@ export class BattleScene extends Phaser.Scene {
     this.res = z * rs * (window.devicePixelRatio || 1);
     const bgKey = `bbg-${this.W}x${this.H}`;
     ensureTex(this, bgKey, () => drawBattleBg(this.W, this.H));
-    this.add.image(0, 0, bgKey).setOrigin(0);
+    this.add.image(0, 0, bgKey).setOrigin(0).setScale(1 / HD);
     const b = this.data0.battle;
     this.layout(b.a, 0);
     this.layout(b.b, 1);
@@ -85,7 +85,7 @@ export class BattleScene extends Phaser.Scene {
         const x = Math.round(mid + (side === 0 ? -dx : dx));
         const y = Math.round(groundY + 14 + i * 20 - (list.length - 1) * 10);
         const key = u.key === 'an' ? this.heroTex(u, side) : u.key === 'cuada' ? 'ch-cuada' : `ch-${u.key}`;
-        const img = this.add.image(x, y, key).setOrigin(0.5, 1).setDepth(y);
+        const img = this.add.image(x, y, key).setOrigin(0.5, 1).setDepth(y).setScale(1 / HD);
         if (side === 1 && !u.wall) img.setFlipX(true);
         const bar = this.add.graphics().setDepth(1000);
         const v: UnitView = { u, img, bar, hp: u.hp, x, y };
@@ -108,7 +108,7 @@ export class BattleScene extends Phaser.Scene {
   private drawBar(v: UnitView) {
     const w = 16;
     const x = v.x - w / 2;
-    const y = v.y - v.img.height - 4;
+    const y = v.y - v.img.displayHeight - 4;
     v.bar.clear();
     v.bar.fillStyle(0x1d1b2a, 1).fillRect(x - 1, y - 1, w + 2, 4);
     const pct = Math.max(0, v.hp / v.u.maxHp);
@@ -135,7 +135,7 @@ export class BattleScene extends Phaser.Scene {
     switch (ev.k) {
       case 'hit':
       case 'skill': {
-        if (ev.s) this.pop(a.x, a.y - a.img.height - 6, SKILLS[ev.s].name, '#f6d34d', 9);
+        if (ev.s) this.pop(a.x, a.y - a.img.displayHeight - 6, SKILLS[ev.s].name, '#f6d34d', 9);
         this.tweens.add({ targets: a.img, x: a.x + 10 * dir, duration: 90 / Math.min(this.speed, 3), yoyo: true });
         (ev.t ?? []).forEach((tid, i) => {
           const t = this.views.get(tid);
@@ -150,7 +150,7 @@ export class BattleScene extends Phaser.Scene {
           t.img.setTintFill(0xffffff);
           this.time.delayedCall(70, () => t.img.clearTint());
           this.tweens.add({ targets: t.img, x: t.x + 2 * dir, duration: 40, yoyo: true, repeat: 1 });
-          this.pop(t.x, t.y - t.img.height, `${ev.crit ? 'BẠO ' : ''}-${ev.v?.[i] ?? 0}`, ev.crit ? '#ff9b3a' : '#ffffff', ev.crit ? 12 : 10);
+          this.pop(t.x, t.y - t.img.displayHeight, `${ev.crit ? 'BẠO ' : ''}-${ev.v?.[i] ?? 0}`, ev.crit ? '#ff9b3a' : '#ffffff', ev.crit ? 12 : 10);
         });
         return 420;
       }
@@ -159,24 +159,24 @@ export class BattleScene extends Phaser.Scene {
         if (t) {
           t.hp = Math.max(0, t.hp - (ev.v?.[0] ?? 0));
           this.drawBar(t);
-          this.pop(t.x, t.y - t.img.height + 4, `gai -${ev.v?.[0]}`, '#a6d86e', 8);
+          this.pop(t.x, t.y - t.img.displayHeight + 4, `gai -${ev.v?.[0]}`, '#a6d86e', 8);
         }
         return 200;
       }
       case 'heal': {
         const t = this.views.get(ev.t?.[0] ?? '');
-        this.pop(a.x, a.y - a.img.height - 6, SKILLS.lalanh.name, '#a6d86e', 9);
+        this.pop(a.x, a.y - a.img.displayHeight - 6, SKILLS.lalanh.name, '#a6d86e', 9);
         if (t) {
           t.hp = Math.min(t.u.maxHp, t.hp + (ev.v?.[0] ?? 0));
           this.drawBar(t);
-          this.pop(t.x, t.y - t.img.height, `+${ev.v?.[0]}`, '#7cff9a', 11);
+          this.pop(t.x, t.y - t.img.displayHeight, `+${ev.v?.[0]}`, '#7cff9a', 11);
           t.img.setTint(0x9dff9d);
           this.time.delayedCall(220, () => t.img.clearTint());
         }
         return 420;
       }
       case 'buff': {
-        if (ev.s) this.pop(a.x, a.y - a.img.height - 6, SKILLS[ev.s].name, '#f6d34d', 10);
+        if (ev.s) this.pop(a.x, a.y - a.img.displayHeight - 6, SKILLS[ev.s].name, '#f6d34d', 10);
         for (const id of ev.t ?? []) {
           const t = this.views.get(id);
           if (!t) continue;
@@ -188,7 +188,7 @@ export class BattleScene extends Phaser.Scene {
       case 'dot': {
         a.hp = Math.max(0, a.hp - (ev.v?.[0] ?? 0));
         this.drawBar(a);
-        this.pop(a.x, a.y - a.img.height, `-${ev.v?.[0]}`, '#ff8a5a', 9);
+        this.pop(a.x, a.y - a.img.displayHeight, `-${ev.v?.[0]}`, '#ff8a5a', 9);
         a.img.setTint(0xff9a6a);
         this.time.delayedCall(160, () => a.img.clearTint());
         return 260;

@@ -2,6 +2,7 @@
 // Mỗi lớp là bản đồ ký tự 16x20, tô màu theo lựa chọn của người chơi.
 import { HAIR_COLORS, OUTFIT_COLORS, SKINS, avatarKey, type Avatar } from '../../../shared/avatar';
 import { canvas, Pen, type Canvas } from './pixel';
+import { enhance, HD } from './hd';
 
 const W = 16;
 export const AV_H = 20;
@@ -191,10 +192,11 @@ export function avatarUrl(a: Avatar, scale = 3, head = false): string {
   const key = `${avatarKey(a)}:${scale}:${head ? 1 : 0}`;
   let u = urlCache.get(key);
   if (!u) {
-    const src = drawAvatar(a);
-    const sh = head ? 12 : AV_H;
-    const [c, ctx] = canvas(W * scale, sh * scale);
-    ctx.drawImage(src, 0, 0, W, sh, 0, 0, W * scale, sh * scale);
+    const src = enhance(drawAvatar(a));
+    const sh = (head ? 12 : AV_H) * HD;
+    const k = Math.max(1, Math.round(scale / HD));
+    const [c, ctx] = canvas(W * HD * k, sh * k);
+    ctx.drawImage(src, 0, 0, W * HD, sh, 0, 0, W * HD * k, sh * k);
     u = c.toDataURL();
     urlCache.set(key, u);
   }

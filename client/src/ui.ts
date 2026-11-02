@@ -311,6 +311,9 @@ export class UI {
     el.hidden = !q || this.tab !== 'island';
     if (q) el.innerHTML = `<img src="${portraitUrl('rua')}" alt=""><span><small>Rùa Vàng dặn</small>${esc(q.text)}</span>`;
     el.onclick = () => this.openRua();
+    // nhiệm vụ cần bấm nút trên giao diện: nút đó nhấp nháy để người mới biết bấm vào đâu
+    $('#btnExpand').classList.toggle('pulse', q?.id === 'q_expand');
+    $('#nav [data-tab="sea"]').classList.toggle('pulse', q?.id === 'q_fight' || q?.id === 'q_raid');
   }
 
   renderChatBadge() {

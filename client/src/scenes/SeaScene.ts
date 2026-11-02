@@ -5,7 +5,7 @@ import { islandCell } from '../../../shared/map';
 import type { Store } from '../store';
 import type { UI } from '../ui';
 import { zoomFor } from './IslandScene';
-import { seaIslandTex, waterTex } from '../art/textures';
+import { HD, seaIslandTex, waterTex } from '../art/textures';
 import { miniRadius, type MiniKind } from '../art/islands';
 import { CamCtl } from './camctl';
 
@@ -45,10 +45,10 @@ export class SeaScene extends Phaser.Scene {
     const S = Math.max(COLS, ROWS) * T + 192; // hình vuông: phủ kín cả màn ngang lẫn dọc
     this.cameras.main.setRoundPixels(true);
     waterTex(this, S, S, 1, '#b8d6ff');
-    this.water = this.add.image(-96, -96, waterTex(this, S, S, 0, '#b8d6ff')).setOrigin(0).setDepth(-10);
+    this.water = this.add.image(-96, -96, waterTex(this, S, S, 0, '#b8d6ff')).setOrigin(0).setDepth(-10).setScale(1 / HD);
     this.layer = this.add.container(0, 0);
     this.route = this.add.graphics().setDepth(5);
-    this.boat = this.add.image(0, 0, 'boat-1').setOrigin(0.5, 0.85).setDepth(10).setVisible(false);
+    this.boat = this.add.image(0, 0, 'boat-1').setOrigin(0.5, 0.85).setDepth(10).setVisible(false).setScale(1 / HD);
     this.tweens.add({ targets: this.boat, angle: { from: -4, to: 4 }, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     this.time.addEvent({ delay: 800, loop: true, callback: () => this.water.setTexture(waterTex(this, S, S, (this.waterF ^= 1), '#b8d6ff')) });
     this.ctl = new CamCtl(this, {
@@ -188,9 +188,9 @@ export class SeaScene extends Phaser.Scene {
   /** Một hòn đảo trên hải đồ; trả về khoảng cách từ tâm tới mép dưới để đặt nhãn. */
   private island(id: string, x: number, y: number, kind: MiniKind, land: number, tier: number, onTap: () => void, online = false): number {
     const R = miniRadius(land);
-    const img = this.add.image(x, y, seaIslandTex(this, id, land, kind, tier));
-    const hit = R * 2 + 6;
-    img.setInteractive({ hitArea: new Phaser.Geom.Rectangle((img.width - hit) / 2, (img.height - hit) / 2 + 2, hit, hit), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
+    const img = this.add.image(x, y, seaIslandTex(this, id, land, kind, tier)).setScale(1 / HD);
+    const hit = (R * 2 + 6) * HD;
+    img.setInteractive({ hitArea: new Phaser.Geom.Rectangle((img.width - hit) / 2, (img.height - hit) / 2 + 2 * HD, hit, hit), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
     img.on('pointerup', () => !this.dragged && onTap());
     this.layer.add(img);
     if (online) {

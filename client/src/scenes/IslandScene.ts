@@ -1,9 +1,13 @@
 import Phaser from 'phaser';
 import { GRID, LINH_VAT, LV_KEYS, NODES, type LvKey } from '../../../shared/data';
-import { dockPos, isLand, landCount, landCap, LV_POS, type PlayerState } from '../../../shared/logic';
+import { currentQuest, dockPos, isLand, landCount, landCap, LV_POS, type PlayerState } from '../../../shared/logic';
+import { canvas, Pen } from '../art/pixel';
 import { CamCtl } from './camctl';
 import { drawIsland, drawScaffold, LV_SIZE } from '../art/sprites';
-import { avatarTex, ensureTex, lvTex, preloadAll, texBox, waterTex } from '../art/textures';
+import { avatarTex, ensureTex, HD, lvTex, preloadAll, texBox, waterTex } from '../art/textures';
+
+/** Hình vẽ chi tiết gấp HD lần nên thu lại cho đúng kích thước trong thế giới. */
+const Q = 1 / HD;
 import { hashStr } from '../../../shared/rng';
 import type { Store } from '../store';
 import type { UI } from '../ui';
@@ -42,6 +46,7 @@ export class IslandScene extends Phaser.Scene {
   private buildLabels = new Map<LvKey, HTMLElement>();
   private lastBuildText = 0;
   private bounds = { x: 0, y: 0, w: WORLD, h: WORLD };
+  private guide!: Phaser.GameObjects.Image;
 
   private get dragged() {
     return this.ctl?.dragged ?? false;
@@ -63,31 +68,33 @@ export class IslandScene extends Phaser.Scene {
       region: () => this.bounds,
       onPastMin: () => this.ui.goSea(),
     });
-    this.water = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setDepth(-20);
+    this.water = this.add.image(0, 0, '__DEFAULT').setOrigin(0).setDepth(-20).setScale(Q);
     this.expandGfx = this.add.graphics().setDepth(5000);
     for (const k of LV_KEYS) {
       const p = LV_POS[k];
-      const img = this.add.image(wx(p.x) + 8, wx(p.y) + 15, '__DEFAULT').setOrigin(0.5, 1).setDepth(wx(p.y) + 15);
+      const img = this.add.image(wx(p.x) + 8, wx(p.y) + 15, '__DEFAULT').setOrigin(0.5, 1).setDepth(wx(p.y) + 15).setScale(Q);
       // vùng chạm vừa khít phần có hình của từng bậc (đặt lại mỗi khi đổi hình), không che các ô phía sau
       img.setInteractive({ hitArea: new Phaser.Geom.Rectangle(0, 0, 1, 1), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true });
       img.on('pointerup', () => !this.dragged && this.ui.openLv(k));
       this.lvs[k] = img;
-      this.emotes[k] = this.add.image(img.x, img.y - 30, 'emo-vui').setDepth(4000).setVisible(false);
+      this.emotes[k] = this.add.image(img.x, img.y - 30, 'emo-vui').setDepth(4000).setVisible(false).setScale(Q);
       const { w: sw, h: sh } = LV_SIZE[k];
-      this.scaffolds[k] = this.add.image(img.x, img.y, ensureTex(this, `scaf-${sw}x${sh}`, () => drawScaffold(sw, sh))).setOrigin(0.5, 1).setVisible(false);
+      this.scaffolds[k] = this.add.image(img.x, img.y, ensureTex(this, `scaf-${sw}x${sh}`, () => drawScaffold(sw, sh))).setOrigin(0.5, 1).setVisible(false).setScale(Q);
       this.blinkUntil[k] = 0;
     }
     this.tweens.add({ targets: this.lvs.thuyen, angle: { from: -2, to: 2 }, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     // nhân vật chủ đảo (nam/nữ, theo dáng vẻ người chơi tự chỉnh); chạm vào để chỉnh
-    this.an = this.add.image(wx(11) + 8, wx(12) + 15, avatarTex(this, this.store.s.avatar)).setOrigin(0.5, 1);
+    this.an = this.add.image(wx(11) + 8, wx(12) + 15, avatarTex(this, this.store.s.avatar)).setOrigin(0.5, 1).setScale(Q);
     this.an.setInteractive({ useHandCursor: true }).on('pointerup', () => !this.dragged && this.ui.openAvatar());
     this.events.on('wake', () => this.enterFromSea());
-    this.rua = this.add.image(wx(9) + 8, wx(14) + 12, 'ch-rua').setOrigin(0.5, 1).setDepth(wx(14));
+    this.rua = this.add.image(wx(9) + 8, wx(14) + 12, 'ch-rua').setOrigin(0.5, 1).setDepth(wx(14)).setScale(Q);
     const labelsBox = () => document.getElementById('buildlabels');
     this.events.on('sleep', () => labelsBox()?.setAttribute('hidden', ''));
     this.events.on('wake', () => labelsBox()?.removeAttribute('hidden'));
     this.rua.setInteractive({ useHandCursor: true }).on('pointerup', () => !this.dragged && this.ui.openRua());
 
+    // mũi tên vàng chỉ chỗ cần bấm theo nhiệm vụ Rùa Vàng
+    this.guide = this.add.image(0, 0, ensureTex(this, 'guide-arrow', drawGuideArrow)).setOrigin(0.5, 1).setDepth(6000).setScale(Q).setVisible(false);
     this.time.addEvent({ delay: 700, loop: true, callback: () => this.water.setTexture(`iw${(this.waterF ^= 1)}-${this.islandVer}`) });
     this.time.addEvent({ delay: 400, loop: true, callback: () => this.blinkTick() });
 
@@ -177,7 +184,7 @@ export class IslandScene extends Phaser.Scene {
   lvTop(k: LvKey) {
     const img = this.lvs[k];
     const b = texBox(this, img.texture.key);
-    return img.y - (img.height - b.y);
+    return img.y - (img.height - b.y) * img.scaleY;
   }
   lvAnchor(k: LvKey) {
     const img = this.lvs[k];
@@ -206,7 +213,7 @@ export class IslandScene extends Phaser.Scene {
       this.ui.floatAt(at.x, at.y, `${NODES[n.kind].name}: còn ${left}s`, 'muted');
       return;
     }
-    if (img) this.tweens.add({ targets: img, scaleY: 0.8, duration: 80, yoyo: true });
+    if (img) this.tweens.add({ targets: img, scaleY: 0.8 * Q, duration: 80, yoyo: true });
     this.ui.floatGains(at.x, at.y, o.gained ?? {});
     if (o.msg) this.ui.toast(o.msg);
     if (o.quest) this.ui.questDone(o.quest);
@@ -222,7 +229,7 @@ export class IslandScene extends Phaser.Scene {
     if (!o.ok) return;
     if (img) {
       this.chests.delete(id);
-      this.tweens.add({ targets: img, y: img.y - 10, alpha: 0, scale: 1.5, duration: 450, onComplete: () => img.destroy() });
+      this.tweens.add({ targets: img, y: img.y - 10, alpha: 0, scale: 1.5 * Q, duration: 450, onComplete: () => img.destroy() });
     }
     this.ui.chestOpened(o, at);
     if (o.quest) this.ui.questDone(o.quest);
@@ -366,14 +373,14 @@ export class IslandScene extends Phaser.Scene {
       // nước + đảo gộp thành một ảnh duy nhất cho mỗi khung sóng → chỉ một lớp phủ kín màn hình
       const prev = this.islandVer;
       const ver = ++this.islandVer;
-      const isl = drawIsland(s.land, hashStr(s.id));
+      const isl = drawIsland(s.land, hashStr(s.id), HD);
       for (const f of [0, 1]) {
         const c = document.createElement('canvas');
-        c.width = WORLD;
-        c.height = WORLD;
+        c.width = WORLD * HD;
+        c.height = WORLD * HD;
         const ctx = c.getContext('2d')!;
         ctx.drawImage(this.textures.get(waterTex(this, WORLD, WORLD, f)).getSourceImage() as HTMLCanvasElement, 0, 0);
-        ctx.drawImage(isl, PAD, PAD);
+        ctx.drawImage(isl, PAD * HD, PAD * HD);
         this.textures.addCanvas(`iw${f}-${ver}`, c);
       }
       this.water.setTexture(`iw${this.waterF}-${ver}`);
@@ -400,16 +407,16 @@ export class IslandScene extends Phaser.Scene {
       seen.add(n.id);
       let img = this.nodes.get(n.id);
       if (!img) {
-        img = this.add.image(wx(n.x) + 8, wx(n.y) + 15, `node-${n.kind}`).setOrigin(0.5, 1).setDepth(wx(n.y) + 14);
-        const tall = n.kind === 'palm' ? new Phaser.Geom.Rectangle(1, 8, 14, 24) : n.kind === 'bamboo' ? new Phaser.Geom.Rectangle(1, 4, 14, 20) : new Phaser.Geom.Rectangle(0, 0, 16, 16);
+        img = this.add.image(wx(n.x) + 8, wx(n.y) + 15, `node-${n.kind}`).setOrigin(0.5, 1).setDepth(wx(n.y) + 14).setScale(Q);
+        const tall = n.kind === 'palm' ? new Phaser.Geom.Rectangle(1 * HD, 8 * HD, 14 * HD, 24 * HD) : n.kind === 'bamboo' ? new Phaser.Geom.Rectangle(1 * HD, 4 * HD, 14 * HD, 20 * HD) : new Phaser.Geom.Rectangle(0, 0, 16 * HD, 16 * HD);
         img.setInteractive({ hitArea: tall, hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true }).on('pointerup', () => !this.dragged && this.tapNode(n.id));
         this.nodes.set(n.id, img);
-        if (this.time.now > 2000) this.tweens.add({ targets: img, scaleY: { from: 0, to: 1 }, duration: 300, ease: 'Back.out' });
+        if (this.time.now > 2000) this.tweens.add({ targets: img, scaleY: { from: 0, to: Q }, duration: 300, ease: 'Back.out' });
       }
       const ready = s.gt >= n.readyAt;
       const a = ready ? 1 : 0.38;
       if (img.alpha !== a) {
-        if (ready && img.alpha < 1) this.tweens.add({ targets: img, scaleY: { from: 0.6, to: 1 }, duration: 250, ease: 'Back.out' });
+        if (ready && img.alpha < 1) this.tweens.add({ targets: img, scaleY: { from: 0.6 * Q, to: Q }, duration: 250, ease: 'Back.out' });
         img.setAlpha(a);
       }
     }
@@ -419,7 +426,7 @@ export class IslandScene extends Phaser.Scene {
     for (const c of s.chests) {
       seenC.add(c.id);
       if (this.chests.has(c.id)) continue;
-      const img = this.add.image(wx(c.x) + 8, wx(c.y) + 14, `chest-${c.ci}`).setOrigin(0.5, 1).setDepth(wx(c.y) + 14);
+      const img = this.add.image(wx(c.x) + 8, wx(c.y) + 14, `chest-${c.ci}`).setOrigin(0.5, 1).setDepth(wx(c.y) + 14).setScale(Q);
       img.setInteractive({ useHandCursor: true }).on('pointerup', () => !this.dragged && this.tapChest(c.id));
       this.tweens.add({ targets: img, y: img.y - 2, duration: 700 + c.ci * 40, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       if (this.time.now > 2000) this.tweens.add({ targets: img, alpha: { from: 0, to: 1 }, duration: 600 });
@@ -429,7 +436,40 @@ export class IslandScene extends Phaser.Scene {
     this.syncLv();
   }
 
+  /** Chỗ mũi tên hướng dẫn cần chỉ (toạ độ thế giới) theo nhiệm vụ hiện tại. */
+  private guideAt(): { x: number; y: number } | null {
+    const s = this.store.s;
+    const q = currentQuest(s);
+    if (!q || this.expandMode) return null;
+    const node = (kind: string) => {
+      const n = s.nodes.find((x) => x.kind === kind && s.gt >= x.readyAt) ?? s.nodes.find((x) => x.kind === kind);
+      const img = n && this.nodes.get(n.id);
+      return img ? { x: img.x, y: img.y - img.displayHeight } : null;
+    };
+    const lv = (k: LvKey) => (this.lvs[k].visible ? { x: this.lvs[k].x, y: this.lvTop(k) } : null);
+    switch (q.id) {
+      case 'q_gather':
+        return node('grass');
+      case 'q_listen':
+      case 'q_feed':
+      case 'q_evolve':
+        return lv('leu');
+      case 'q_cuoc':
+        return s.res.sat > 0 ? lv('cuoc') : node('scrap');
+      case 'q_chest': {
+        const img = [...this.chests.values()][0];
+        return img ? { x: img.x, y: img.y - img.displayHeight } : null;
+      }
+      case 'q_boat':
+        return lv('thuyen');
+    }
+    return null;
+  }
+
   update(time: number) {
+    const g = this.guideAt();
+    this.guide.setVisible(!!g);
+    if (g) this.guide.setPosition(g.x, g.y - 2 - Math.round(Math.abs(Math.sin(time / 260)) * 4));
     this.ctl.clamp();
     this.updateBuildLabels(time);
     this.an.setDepth(this.an.y);
@@ -438,4 +478,17 @@ export class IslandScene extends Phaser.Scene {
       this.ui.updateBubble();
     }
   }
+}
+
+/** Mũi tên vàng nhỏ chỉ xuống. */
+function drawGuideArrow() {
+  const [c, ctx] = canvas(11, 12);
+  const p = new Pen(ctx);
+  p.rect(3, 0, 5, 6, 'k');
+  p.poly([[0, 5], [11, 5], [5.5, 12]], 'k');
+  p.rect(4, 1, 3, 5, 'l');
+  p.poly([[2, 6], [9, 6], [5.5, 10]], 'l');
+  p.px(4, 1, 'i');
+  p.px(4, 2, 'i');
+  return c;
 }

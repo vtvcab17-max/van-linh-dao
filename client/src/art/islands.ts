@@ -54,8 +54,9 @@ function smooth(x: number, y: number, seed: number, scale: number): number {
 }
 
 /** Vẽ toàn bộ hòn đảo vào một canvas (1 lệnh vẽ duy nhất trong game → rất nhẹ). */
-export function drawIsland(land: string, seed: number): Canvas {
-  const T = 16;
+export function drawIsland(land: string, seed: number, K = 1): Canvas {
+  // K: hệ số chi tiết (2 = kiểu 32-bit). Mọi khoảng cách tính theo điểm ảnh gốc nên hình đảo giữ nguyên.
+  const T = 16 * K;
   const Wd = GRID * T;
   const look = lookOf(seed);
   const r = mulberry32(hashStr(`look:${seed}`));
@@ -64,15 +65,18 @@ export function drawIsland(land: string, seed: number): Canvas {
   const [c, ctx] = canvas(Wd, Wd);
   const L = (x: number, y: number) => x >= 0 && y >= 0 && x < GRID && y < GRID && land[y * GRID + x] === '1';
   const img = ctx.createImageData(Wd, Wd);
-  const put = (x: number, y: number, hex: string, a = 255) => {
+  const put = (x: number, y: number, hex: string, a = 255, shade = 0) => {
     if (x < 0 || y < 0 || x >= Wd || y >= Wd) return;
     const i = (y * Wd + x) * 4;
-    const [cr, cg, cb] = rgb(hex);
+    let [cr, cg, cb] = rgb(hex);
+    if (shade > 0) [cr, cg, cb] = [cr + (255 - cr) * shade, cg + (255 - cg) * shade, cb + (240 - cb) * shade];
+    else if (shade < 0) [cr, cg, cb] = [cr + (58 - cr) * -shade, cg + (42 - cg) * -shade, cb + (74 - cb) * -shade];
     img.data[i] = cr;
     img.data[i + 1] = cg;
     img.data[i + 2] = cb;
     img.data[i + 3] = a;
   };
+  // lượt 1: khoảng cách có dấu tới bờ (theo điểm ảnh gốc), >0 là đất
   const dist = new Float32Array(Wd * Wd);
   for (let py = 0; py < Wd; py++)
     for (let px = 0; px < Wd; px++) {
@@ -90,62 +94,85 @@ export function drawIsland(land: string, seed: number): Canvas {
           const d = Math.hypot(px + 0.5 - cx, py + 0.5 - cy);
           if (d < dMin) dMin = d;
         }
-      // bờ uốn lượn: đẩy mép đất vào/ra theo nhiễu mượt
-      const wob = (smooth(px, py, seed, 7) - 0.5) * wobble * 2;
-      const sd = land0 ? dMin + wob : -dMin + wob; // >0: đất
-      dist[py * Wd + px] = sd;
+      dMin /= K;
+      const wob = (smooth(px / K, py / K, seed, 7) - 0.5) * wobble * 2;
+      dist[py * Wd + px] = land0 ? dMin + wob : -dMin + wob;
+    }
+  const at = (x: number, y: number) => (x >= 0 && y >= 0 && x < Wd && y < Wd ? dist[y * Wd + x] : -99);
+  // lượt 2: tô màu, có đổ sáng theo hướng trên-trái để đảo nổi khối
+  for (let py = 0; py < Wd; py++)
+    for (let px = 0; px < Wd; px++) {
+      const sd = dist[py * Wd + px];
       const n = noise(px, py, seed);
+      const bx = px / K,
+        by = py / K;
       if (sd > 0) {
-        if (sd < 1.2) put(px, py, look.sand[1]);
-        else if (sd < beach) put(px, py, n < 0.08 ? look.sand[2] : n < 0.2 ? look.sand[1] : look.sand[0]);
-        else if (sd < beach + 1) put(px, py, look.grass[1]);
+        const slope = at(px + 2 * K, py + 2 * K) - at(px - 2 * K, py - 2 * K);
+        const lit = sd < beach + 4 ? Math.max(-0.16, Math.min(0.16, slope * 0.05)) : 0;
+        if (sd < 1.2) put(px, py, look.sand[1], 255, lit - 0.08);
+        else if (sd < beach) put(px, py, n < 0.08 ? look.sand[2] : n < 0.2 ? look.sand[1] : look.sand[0], 255, lit);
+        else if (sd < beach + 1) put(px, py, look.grass[1], 255, lit - 0.06);
         else {
-          const patch = smooth(px, py, seed + 7, 11);
+          const patch = smooth(bx, by, seed + 7, 11);
           let col = patch > 0.66 ? look.grass[2] : patch < 0.3 ? look.grass[1] : look.grass[0];
-          if (look.soil && smooth(px, py, seed + 3, 9) > 0.72) col = look.soil;
+          if (look.soil && smooth(bx, by, seed + 3, 9) > 0.72) col = look.soil;
           else if (n < 0.05) col = look.grass[2];
           else if (n > 0.97) col = look.grass[3];
-          put(px, py, col);
+          // ngọn cỏ mảnh (chỉ thấy rõ ở độ chi tiết cao)
+          const blade = K > 1 && noise(px, py - 1, seed + 5) < 0.05 ? -0.12 : 0;
+          put(px, py, col, 255, lit + blade + (patch - 0.5) * 0.06);
         }
       } else {
         const dw = -sd;
+        // bóng của đảo đổ xuống nước phía dưới-phải
+        const shadow = at(px - 2 * K, py - 3 * K) > 0 ? -0.18 : 0;
+        const ripple = K > 1 && Math.sin(bx * 0.9 + by * 0.35 + smooth(bx, by, seed + 9, 6) * 6) > 0.93 ? 0.25 : 0;
         if (dw < 1.3) put(px, py, '#e9f8fb', 235);
-        else if (dw < 6) put(px, py, n < 0.08 ? '#a8e6f0' : look.shallow, 200);
-        else if (dw < 9) put(px, py, '#3a90c2', 90);
+        else if (dw < 2.2) put(px, py, '#c4eef6', 225, shadow);
+        else if (dw < 6) put(px, py, n < 0.08 ? '#a8e6f0' : look.shallow, 205, shadow + ripple + (dw - 2) * -0.025);
+        else if (dw < 9) put(px, py, '#3a90c2', Math.round(90 * (9 - dw) / 3), shadow);
       }
     }
   // trang trí theo từng ô: cụm hoa, vỏ sò, đá, san hô
   const dec = mulberry32(hashStr(`decor:${seed}`));
-  const at = (x: number, y: number) => (x >= 0 && y >= 0 && x < Wd && y < Wd ? dist[y * Wd + x] : -99);
+  const dot = (x: number, y: number, col: string, a = 255) => {
+    for (let j = 0; j < K; j++) for (let i = 0; i < K; i++) put(x * K + i, y * K + j, col, a);
+  };
+  const atB = (x: number, y: number) => at(x * K, y * K);
+  const Wb = GRID * 16;
   for (let i = 0; i < 1400; i++) {
-    const x = Math.floor(dec() * Wd),
-      y = Math.floor(dec() * Wd);
-    const sd = at(x, y);
+    const x = Math.floor(dec() * Wb),
+      y = Math.floor(dec() * Wb);
+    const sd = atB(x, y);
     const roll = dec();
     if (sd > beach + 2.5) {
       if (roll < look.flowerRate) {
         const col = look.flowers[Math.floor(dec() * look.flowers.length)];
-        for (const [dx, dy] of [[0, 0], [2, 1], [-1, 2], [1, -2]]) if (dec() < 0.75 && at(x + dx, y + dy) > beach + 1) put(x + dx, y + dy, col);
+        for (const [dx, dy] of [[0, 0], [2, 1], [-1, 2], [1, -2]])
+          if (dec() < 0.75 && atB(x + dx, y + dy) > beach + 1) {
+            dot(x + dx, y + dy, col);
+            if (K > 1) put((x + dx) * K, (y + dy) * K, '#ffffff', 200);
+          }
       } else if (roll < look.flowerRate + look.rockRate * 0.4) {
-        put(x, y, '#9aa0a8');
-        put(x + 1, y, '#7b7e88');
-        put(x, y + 1, '#7b7e88');
+        dot(x, y, '#9aa0a8');
+        dot(x + 1, y, '#7b7e88');
+        dot(x, y + 1, '#7b7e88');
       }
     } else if (sd > 1.5 && sd < beach) {
-      if (roll < look.shellRate) put(x, y, dec() < 0.5 ? '#fbf3dc' : '#ef9fae');
+      if (roll < look.shellRate) dot(x, y, dec() < 0.5 ? '#fbf3dc' : '#ef9fae');
       else if (roll < look.shellRate + look.rockRate) {
-        put(x, y, '#b2b5bd');
-        put(x + 1, y, '#7b7e88');
+        dot(x, y, '#b2b5bd');
+        dot(x + 1, y, '#7b7e88');
       }
     } else if (sd < -2 && sd > -6) {
       if (roll < look.coralRate) {
         const col = dec() < 0.5 ? '#ef7c98' : '#ec9640';
-        put(x, y, col, 220);
-        put(x + 1, y + 1, col, 200);
+        dot(x, y, col, 220);
+        dot(x + 1, y + 1, col, 200);
       } else if (roll < look.coralRate + look.rockRate * 0.5) {
-        put(x, y, '#7b7e88');
-        put(x + 1, y, '#4c4e58');
-        put(x, y - 1, '#e9f8fb', 200);
+        dot(x, y, '#7b7e88');
+        dot(x + 1, y, '#4c4e58');
+        dot(x, y - 1, '#e9f8fb', 200);
       }
     }
   }
