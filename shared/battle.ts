@@ -2,7 +2,7 @@
 import { counterMult, isMech, squadUnit, survivors, TROOP_KEYS, type TroopRows, type Troops } from './troops';
 import { COMPANIONS, EFFECTS, enemyBase, LINH_VAT, type CompKey, type EnemyKey, type SkillKey, type UnitBase } from './data';
 import { shipUnit, type ShipKind, type ShipWeapon } from './navy';
-import { GENERALS, generalUnit, type GenId, type LegWeaponId } from './gacha';
+import { GENERALS, GEN_ARM, commandBonus, generalUnit, type GenId, type LegWeaponId } from './gacha';
 import type { Rng } from './rng';
 
 export interface BUnit {
@@ -177,6 +177,13 @@ function teamFromSpec0(spec: TeamSpec, side: 0 | 1): BUnit[] {
     const g = applyGear(makeUnit(generalUnit(spec.gen.id, spec.gen.star, spec.gen.w), spec.gen.id, 1, side, out.length), spec.gear);
     g.lead = true;
     out.push(g);
+    // chỉ huy đúng sở trường: đội quân loại đó mạnh hơn
+    const squad = out.find((u) => u.key === `tq-${GEN_ARM[spec.gen!.id]}`);
+    if (squad) {
+      const b = 1 + commandBonus(spec.gen.id, spec.gen.star);
+      squad.maxHp = squad.hp = Math.round(squad.maxHp * b);
+      squad.atk = Math.round(squad.atk * b);
+    }
   }
   if (spec.fort) {
     for (const lv of spec.fort.don.slice(0, 2)) out.push(makeUnit(DON, 'don', 1 + (lv - 1) * 6, side, out.length));

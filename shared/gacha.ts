@@ -28,6 +28,12 @@ export const GENERALS: Record<GenId, GenDef> = {
   thaylang: { id: 'thaylang', name: 'Thầy Lang Đảo', title: 'Nam Dược Thần Hiệu', rarity: 'Hiếm', lore: 'Một gùi thuốc nam, chữa đủ bệnh trên biển.', hp: 300, atk: 16, def: 11, spd: 10, skill: 'lalanh', row: 'back' },
 };
 export const GEN_IDS = Object.keys(GENERALS) as GenId[];
+/** Binh chủng sở trường của từng tướng (spec 017): mang đúng quân này thì đội quân được thưởng chỉ huy. */
+export const GEN_ARM: Record<GenId, 'giao' | 'cung' | 'khien' | 'xenu' | 'xeda' | 'voi'> = {
+  giong: 'voi', sontinh: 'khien', lac: 'giao', auco: 'cung', caolo: 'xenu', nuthuy: 'xeda', nghiaquan: 'giao', ngudan: 'cung', thaylang: 'khien',
+};
+/** Thưởng công và máu cho đội quân đúng sở trường: 12% + 2% mỗi sao. */
+export const commandBonus = (_id: GenId, star: number) => 0.12 + 0.02 * Math.max(1, Math.min(5, star));
 export const MAX_STAR = 5;
 /** Mỗi sao thêm 20% chỉ số. */
 export const starMult = (star: number) => 1 + 0.2 * (Math.max(1, Math.min(MAX_STAR, star)) - 1);

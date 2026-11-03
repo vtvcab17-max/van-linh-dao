@@ -200,6 +200,12 @@ await wait(300);
 check('Chọn hàng sau cho Lính Giáo', (await p.evaluate(() => window.__vld.store.s.hang.giao)) === 'back');
 await p.click('#sheet [data-row="giao:front"]');
 await wait(200);
+// tướng chỉ huy: Lạc Long Quân sở trường lính giáo
+await p.evaluate(() => { const s = window.__vld.store.s; s.tuong.lac = 3; s.chuTuong = 'lac'; });
+await p.click('#sheet [data-row="giao:front"]');
+await wait(250);
+check('Bảng Quân đội ghi tướng chỉ huy đúng sở trường (+18%)', /chỉ huy.*Lính Giáo/.test(await p.evaluate(() => document.querySelector('#sheet')?.textContent ?? '')) && /18%/.test(await p.evaluate(() => document.querySelector('#sheet')?.textContent ?? '')));
+await shot('04b-tuong-chi-huy');
 
 // 5. xếp quân lên thuyền
 await p.click('#sheet [data-mang="giao:5"]');

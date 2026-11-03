@@ -3,6 +3,7 @@ import type { UI } from './ui';
 import { RES, type ResKey } from '../../shared/data';
 import { bLevel, slotSum } from '../../shared/economy';
 import { fitCargo, carryCap, bedCap, parkCap, isMech, TROOP_KEYS, TROOPS, boardOk, mechCount, troopCount, type TroopKey, type Troops } from '../../shared/troops';
+import { GENERALS, GEN_ARM, commandBonus } from '../../shared/gacha';
 import { worldFor } from '../../shared/map';
 import { isleById } from '../../shared/world';
 import { lenhView, type LenhId, type PlayerState } from '../../shared/logic';
@@ -116,7 +117,15 @@ export function openArmy(ui: UI) {
     const tqLine = tq.some((x) => x > 0)
       ? `Nghiên cứu: lính +${8 * tq[0]}% máu, +${6 * tq[1]}% công · cơ giới +${8 * tq[2]}% công và máu.`
       : 'Học Viện có Giáp quân, Vũ khí quân, Cơ khí để quân mạnh hơn.';
-    return `<div class="card"><small>Lệnh hôm nay</small>${lenh}</div>
+    const gid = s.chuTuong && s.tuong[s.chuTuong] ? s.chuTuong : null;
+    const arm = gid ? GEN_ARM[gid] : null;
+    const cmdLine = !gid
+      ? 'Chưa chọn tướng dẫn đầu. Mỗi tướng chỉ huy một loại quân sở trường và làm đội đó mạnh hơn.'
+      : (s.mang[arm!] ?? 0) > 0
+        ? `<b>${GENERALS[gid].name}</b> chỉ huy <b>${TROOPS[arm!].name}</b>: đội này +${Math.round(commandBonus(gid, s.tuong[gid]!) * 100)}% công và máu.`
+        : `<b>${GENERALS[gid].name}</b> sở trường <b>${TROOPS[arm!].name}</b>: mang loại quân này theo thì được +${Math.round(commandBonus(gid, s.tuong[gid]!) * 100)}% công và máu.`;
+    return `<div class="card"><small>Tướng chỉ huy</small><p>${cmdLine}</p></div>
+      <div class="card"><small>Lệnh hôm nay</small>${lenh}</div>
       <div class="card"><small>Tổng quan</small>
       <p class="muted small">${tqLine}</p>
       <p>Quân ở đảo nhà <b>${home}</b> · lính <b>${homeInf}</b>/${beds} giường · cơ giới <b>${homeMech}</b>/${park} chỗ đậu</p>
