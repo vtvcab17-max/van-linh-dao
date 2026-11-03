@@ -1,3 +1,4 @@
+import { AI_ISLAND } from './art2/aiart';
 import { charCanvas } from './art/sprites';
 import { drawMonster } from './art2/monsters';
 import { drawDinh2 } from './art2/dinh2';
@@ -15,6 +16,15 @@ import { playTrailer } from './trailer';
 import { ls } from './net/base';
 
 const t0 = performance.now();
+{
+  // ảnh đảo do AI sinh làm nền màn mở đầu, phủ một lớp tối cho chữ dễ đọc
+  const sp = document.getElementById('splash');
+  if (sp) {
+    sp.style.backgroundImage = `linear-gradient(rgba(18,9,10,.62), rgba(18,9,10,.82)), url(${AI_ISLAND})`;
+    sp.style.backgroundSize = 'cover';
+    sp.style.backgroundPosition = 'center';
+  }
+}
 
 function setSplash(text: string) {
   const el = document.getElementById('splashStatus');

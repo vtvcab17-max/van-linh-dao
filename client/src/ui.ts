@@ -1,4 +1,5 @@
 // Giao diện DOM: thanh tài nguyên, bảng linh vật, đội, chat, góp ý, hải đồ, credit Beta Holding.
+import { AI_GROUP_OF_TAB, aiArt, aiGroupArt } from './art2/aiart';
 import type Phaser from 'phaser';
 import {
   CHESTS,
@@ -80,6 +81,13 @@ type Tab = 'island' | 'sea' | 'team' | 'chat' | 'feedback' | 'bxh' | 'cho';
 
 /** Dáng vẻ của một đảo người khác (dữ liệu gửi qua mạng nên luôn kiểm lại). */
 export const pubAvatar = (p: { id: string; avatar?: unknown }): Avatar => cleanAvatar(p.avatar) ?? avatarFrom(p.id);
+
+/** Dải tranh minh họa 3 cấp của nhóm công trình (ảnh do AI sinh). */
+function aiStrip(tab: string): string {
+  const g = AI_GROUP_OF_TAB[tab];
+  if (!g) return '';
+  return `<div class="aistrip">${aiGroupArt(g).map((u, i) => `<figure><img src="${u}" alt=""><figcaption>Cấp ${i + 1}</figcaption></figure>`).join('')}</div>`;
+}
 
 export class UI {
   game!: Phaser.Game;
@@ -1173,6 +1181,7 @@ export class UI {
         .join('');
       return `<p class="muted small">Thành trì <b>${fortName(s)}</b> · thợ ${busySlots(s)}/${buildSlots(s)} · kho ${storageCap(s)}. Bấm "Chọn chỗ" rồi chạm ô đất viền xanh.</p>
         <div class="btabs">${tabs}</div>
+        ${aiStrip(cur)}
         <div class="card"><small>${ICON[cur]} ${cur} · ${groups[cur].length} loại</small>${groups[cur].map(row).join('')}</div>`;
     };
     const show = () => this.openSheet('build', 'Xây dựng', draw(), bind);
@@ -1218,7 +1227,8 @@ export class UI {
       const left = busy ? d.doneAt! - (s.gt + (Date.now() - s.lastReal) * s.speed) : 0;
       const next = d.lv < 3 && !busy ? `<div class="card"><small>Nâng lên ${b.names[d.lv]}</small><div class="costs">${costHtml(b.cost[d.lv], s.res)}</div><p class="muted small">Xây mất ${hms(b.ms[d.lv])}</p>
         <button class="primary wide" id="btnUp" ${canPay(s, b.cost[d.lv]) && busySlots(s) < buildSlots(s) ? '' : 'disabled'}>${busySlots(s) >= buildSlots(s) ? 'Thợ đang bận hết' : 'Nâng cấp'}</button></div>` : '';
-      return `<div class="room" style="background-image:url(${roomUrl(d.k)})"><div class="room-t"><img src="${canvasUrl(`dinh2-ui-${d.k}-${lv}`, () => drawDinh(d.k, lv), 2)}" alt=""><div><h3>${b.names[lv - 1]}</h3><p class="tier">Cấp ${d.lv || 0}/3${busy ? ` · đang xây lên cấp ${d.to}` : ''}</p></div></div></div>
+      const ai = aiArt(d.k, lv);
+      return `${ai ? `<img class="ai-ban" src="${ai}" alt="">` : ''}<div class="room" style="background-image:url(${roomUrl(d.k)})"><div class="room-t"><img src="${canvasUrl(`dinh2-ui-${d.k}-${lv}`, () => drawDinh(d.k, lv), 2)}" alt=""><div><h3>${b.names[lv - 1]}</h3><p class="tier">Cấp ${d.lv || 0}/3${busy ? ` · đang xây lên cấp ${d.to}` : ''}</p></div></div></div>
         <p class="muted room-d">${b.desc}</p>
         ${busy ? `<div class="card"><small>Đang xây</small><p>Còn <b>${hms(left / s.speed)}</b></p></div>` : ''}
         ${d.lv > 0 && (d.k === 'thapcanh' || d.k === 'tuong' || d.k === 'donbinh') ? '<button class="wide" id="btnTower">Lên tháp nhìn biển</button>' : ''}

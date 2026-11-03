@@ -380,6 +380,11 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 #trailer .tr-ctl { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; }
 #trailer .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.15); }
 #trailer .bar span { display: block; height: 100%; width: 0; background: var(--gold); }
+.aistrip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+.aistrip figure { margin: 0; position: relative; border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; background: var(--lacquer); }
+.aistrip img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
+.aistrip figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 4px; font: 600 11px var(--font-body); color: var(--paper); background: linear-gradient(transparent, rgba(0,0,0,.75)); text-align: center; }
+.ai-ban { display: block; width: 100%; max-height: 150px; object-fit: cover; border: 2px solid var(--ink); border-radius: 6px; margin-bottom: 8px; }
 .btabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
 .btab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 2px; min-height: 0; font: 15px/1.1 var(--font-pixel); white-space: nowrap; }
 .btab span { font-size: 15px; }
