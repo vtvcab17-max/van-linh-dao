@@ -18,3 +18,15 @@ describe('trận thành bang', () => {
     expect(a.events.length).toBe(b.events.length);
   });
 });
+
+import { sideHp } from '../shared/battle';
+describe('bảng trực tiếp', () => {
+  it('tổng máu bên không tính tường', () => {
+    const t = teamFromSpec(spec({ thap: [1], don: [], tuongHp: 0 }, 2), 1);
+    const w = t.find((u) => u.wall)!;
+    const { hp, max } = sideHp(t);
+    expect(hp).toBe(max);
+    expect(max).toBe(t.filter((u) => !u.wall).reduce((a, u) => a + u.maxHp, 0));
+    expect(w.maxHp).toBeGreaterThan(0);
+  });
+});

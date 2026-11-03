@@ -63,6 +63,7 @@ export class BattleScene extends Phaser.Scene {
     this.idx = 0;
     this.speed = 1;
     this.done = false;
+    this.round = 0;
     this.views.clear();
   }
 
@@ -95,7 +96,26 @@ export class BattleScene extends Phaser.Scene {
     const b = this.data0.battle;
     this.layout(b.a, 0);
     this.layout(b.b, 1);
+    const q = (id: string) => document.getElementById(id)!;
+    q('battleHud').hidden = false;
+    q('bhLive').textContent = this.data0.pvp ? 'TRỰC TIẾP' : '';
+    this.time.addEvent({ delay: 100, loop: true, callback: () => this.updateHud() });
+    this.updateHud();
     this.time.delayedCall(500, () => this.next());
+  }
+
+  private round = 0;
+  private updateHud() {
+    const sum = (side: 0 | 1) => {
+      let hp = 0, max = 0;
+      for (const v of this.views.values()) if (v.u.side === side && !v.u.wall) { hp += v.hp; max += v.u.maxHp; }
+      return max ? Math.round((100 * hp) / max) : 0;
+    };
+    const q = (id: string) => document.getElementById(id);
+    const a = q('bhA'), b = q('bhB'), r = q('bhRound');
+    if (a) a.style.width = sum(0) + '%';
+    if (b) b.style.width = sum(1) + '%';
+    if (r) r.textContent = `Lượt ${this.round}`;
   }
 
   /** Đổi tốc độ x1 ↔ x2 (không áp cho trận người chơi). Trả về tốc độ mới. */
@@ -209,6 +229,7 @@ export class BattleScene extends Phaser.Scene {
   private next() {
     const ev = this.data0.battle.events[this.idx++];
     if (!ev) return this.finish();
+    this.round = Math.max(this.round, ev.r);
     const wait = this.play(ev);
     this.time.delayedCall(Math.max(10, wait / this.speed), () => this.next());
   }

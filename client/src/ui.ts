@@ -972,6 +972,7 @@ export class UI {
         this.game.scene.stop('battle');
         this.game.scene.wake(from);
         $('#battlebar').hidden = true;
+        $('#battleHud').hidden = true;
         $('#tools').hidden = false;
         $('#nav').classList.remove('dim');
         sound.setMood(from);
@@ -996,8 +997,12 @@ export class UI {
       ${gained ? `<div class="card"><small>${fromVoyage ? (v ? 'Đang chở về bến' : 'Đã chở về bến') : 'Nhận được'}</small><div class="costs">${gained}</div></div>` : ''}
       ${ups.length ? `<p class="good">Lên cấp: ${[...new Set(ups)].join(', ')}</p>` : ''}
       ${win ? '' : '<p class="hint">Mẹo: cho Cuốc ăn sắt để chủ đảo đánh mạnh hơn, nâng Nhà chính để có Thu Hà hồi máu.</p>'}
+      ${o.battle ? '<button class="wide" id="btnReplay">Xem lại trận</button>' : ''}
       <button class="primary wide" id="btnOk">Tiếp tục</button>`;
-    this.openSheet('result', title, html, (b) => b.querySelector('#btnOk')!.addEventListener('click', () => this.closeSheet()));
+    this.openSheet('result', title, html, (b) => {
+      b.querySelector('#btnOk')!.addEventListener('click', () => this.closeSheet());
+      b.querySelector('#btnReplay')?.addEventListener('click', () => this.runBattle(o, title, fromVoyage));
+    });
   }
 
   // ---------------- cài đặt, credit ----------------

@@ -321,3 +321,14 @@ export function simulate(a: BUnit[], b: BUnit[], rng: Rng, maxRounds = 20): Batt
   const winner: 0 | 1 = alive(1).length === 0 && alive(0).length > 0 ? 0 : 1;
   return { winner, rounds: round, events, a: snapA, b: snapB, hpB: all.filter((u) => u.side === 1).map((u) => u.hp), hpA: all.filter((u) => u.side === 0 && !u.wall).map((u) => u.hp) };
 }
+
+/** Tổng máu hiện có và tối đa của một bên (không tính tường), dùng cho bảng trực tiếp. */
+export function sideHp(units: BUnit[]): { hp: number; max: number } {
+  let hp = 0, max = 0;
+  for (const u of units) {
+    if (u.wall) continue;
+    hp += Math.max(0, u.hp);
+    max += u.maxHp;
+  }
+  return { hp, max };
+}
