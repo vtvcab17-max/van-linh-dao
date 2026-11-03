@@ -8,7 +8,8 @@ export type Ch = 'music' | 'amb' | 'sfx';
 export type Mood = 'island' | 'sea' | 'battle';
 export type Sfx =
   | 'tap' | 'open' | 'coin' | 'gather' | 'build' | 'levelup' | 'error' | 'tick' | 'win' | 'legend'
-  | 'hit' | 'crit' | 'arrow' | 'heal' | 'chest' | 'expand' | 'sail' | 'victory' | 'defeat';
+  | 'hit' | 'crit' | 'arrow' | 'heal' | 'chest' | 'expand' | 'sail' | 'victory' | 'defeat'
+  | 'horn' | 'fall';
 
 interface Prefs {
   music: boolean;
@@ -494,6 +495,17 @@ class Sound {
         [880, 1175, 1397].forEach((f) => tone('triangle', f, t + 0.7, 0.9, 0.12));
         break;
       }
+      case 'horn':
+        // tù và xung trận: hai nốt trầm kéo dài
+        tone('sawtooth', 130, t, 0.5, 0.22, 126);
+        tone('sawtooth', 196, t + 0.35, 0.6, 0.22, 190);
+        burst(t, 0.3, 0.12, 'lowpass', 500);
+        break;
+      case 'fall':
+        // lính ngã: tiếng đổ nặng trầm
+        burst(t, 0.14, 0.45, 'lowpass', 700);
+        tone('sine', 110, t, 0.2, 0.5, 45);
+        break;
       case 'hit':
         burst(t, 0.08, 0.5, 'lowpass', 1600);
         tone('sine', 150, t, 0.12, 0.45, 60);

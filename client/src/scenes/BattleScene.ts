@@ -77,6 +77,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   create() {
+    sound.play('horn', 0.15);
     const rs = (this.registry.get('rs') as number) || 1;
     this.ui = this.registry.get('ui');
     this.rs = rs;
@@ -404,6 +405,7 @@ export class BattleScene extends Phaser.Scene {
         return 260;
       }
       case 'die': {
+        sound.play(a.u.key.startsWith('tq-') ? 'fall' : 'hit');
         a.hp = 0;
         this.drawBar(a);
         this.tweens.add({ targets: a.img, alpha: 0.15, angle: 90 * dir * -1, y: a.y + 2, duration: 350 });
