@@ -377,6 +377,18 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 #trailer .tr-ctl { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; }
 #trailer .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.15); }
 #trailer .bar span { display: block; height: 100%; width: 0; background: var(--gold); }
+.btabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.btab { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px 2px; min-height: 0; font: 15px/1.1 var(--font-pixel); white-space: nowrap; }
+.btab span { font-size: 15px; }
+.btab i { font: 600 11px/1 'Be Vietnam Pro', sans-serif; font-style: normal; color: var(--paper-dim); letter-spacing: 0; text-transform: none; }
+.btab[aria-selected="true"] { background: var(--gold); color: var(--ink); border-color: var(--paper); }
+.btab[aria-selected="true"] i { color: var(--ink); }
+#sheet[data-kind="build"] .gear small { font: 12px/1.3 'Be Vietnam Pro', sans-serif; text-transform: none; letter-spacing: 0; color: var(--paper-dim); }
+#sheet[data-kind="build"] .gear b { font-size: 14px; }
+#sheet[data-kind="build"] .gear .lvl { font-size: 13px; margin-left: 4px; }
+#sheet[data-kind="build"] .gear { grid-template-columns: 44px 1fr; }
+#sheet[data-kind="build"] .gear button { grid-column: 1 / -1; width: 100%; }
+#sheet[data-kind="build"] .costs { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 3px; font-size: 13px; }
 .gear { display: grid; grid-template-columns: 36px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px dashed rgba(232,184,79,.25); }
 .gear img { width: 36px; image-rendering: pixelated; }
 .gear b { display: block; font-size: 13px; }

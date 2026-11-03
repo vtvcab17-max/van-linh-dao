@@ -1150,20 +1150,40 @@ export class UI {
         return `<div class="gear"><img src="${canvasUrl('dinh2-ui-' + k, () => drawDinh(k, 1), 2)}" alt=""><div><b>${b.names[0]} <span class="lvl">${have}/${b.max}</span></b><small>${b.desc} · xây ${hms(b.ms[0])}</small><div class="costs">${costHtml(b.cost[0], s.res)}</div></div>
           <button type="button" data-b="${k}" ${lock || !canPay(s, b.cost[0]) ? 'disabled' : ''}>${lock || 'Chọn chỗ'}</button></div>`;
       };
-      return `<div class="card"><small>Đảo của bạn</small><p>Thành trì: <b>${fortName(s)}</b> · Đội thợ: ${busySlots(s)}/${buildSlots(s)} đang bận · Kho chứa ${storageCap(s)}</p>
-        <p class="muted small">Bấm "Chọn chỗ" rồi chạm một ô đất trống (viền xanh). Chạm công trình đã xây để nâng cấp. Càng lên cấp xây càng lâu.</p></div>
-        ${Object.entries(groups).map(([g, ks]) => `<div class="card"><small>${g}</small>${ks.map(row).join('')}</div>`).join('')}`;
+      const ICON: Record<string, string> = { 'Nhà cửa': '🏠', 'Nông trại': '🌾', 'Chế biến': '🔥', 'Kinh tế': '🪙', 'Học thuật': '📜', 'Thành trì': '🏯' };
+      const ready = (k: BKey) => {
+        const b = BUILDINGS[k];
+        return s.lv.leu.tier >= b.needLeu && s.dinh.filter((d) => d.k === k).length < b.max && canPay(s, b.cost[0]);
+      };
+      const cur = groups[this.buildTab] ? this.buildTab : 'Nhà cửa';
+      const tabs = Object.entries(groups)
+        .map(([g, ks]) => {
+          const n = ks.filter(ready).length;
+          return `<button type="button" class="btab" data-bt="${g}" aria-selected="${g === cur}"><span>${ICON[g]} ${g}</span><i>${n ? '● ' + n + ' xây được' : ks.length + ' loại'}</i></button>`;
+        })
+        .join('');
+      return `<p class="muted small">Thành trì <b>${fortName(s)}</b> · thợ ${busySlots(s)}/${buildSlots(s)} · kho ${storageCap(s)}. Bấm "Chọn chỗ" rồi chạm ô đất viền xanh.</p>
+        <div class="btabs">${tabs}</div>
+        <div class="card"><small>${ICON[cur]} ${cur} · ${groups[cur].length} loại</small>${groups[cur].map(row).join('')}</div>`;
     };
-    this.openSheet('build', 'Xây dựng', draw(), (body) =>
+    const show = () => this.openSheet('build', 'Xây dựng', draw(), bind);
+    const bind = (body: HTMLElement) =>
       body.addEventListener('click', (e) => {
+        const bt = (e.target as HTMLElement).closest<HTMLElement>('[data-bt]');
+        if (bt) {
+          this.buildTab = bt.dataset.bt!;
+          show();
+          return;
+        }
         const t = (e.target as HTMLElement).closest('button');
         if (!t?.dataset.b) return;
         this.closeSheet();
         if (this.tab !== 'island') this.goIsland();
         this.island.setPlacing(t.dataset.b as BKey);
-      }),
-    );
+      });
+    show();
   }
+  private buildTab = 'Nhà cửa';
 
   onPlacing(k: BKey | null) {
     const b = $('#btnBuild');
