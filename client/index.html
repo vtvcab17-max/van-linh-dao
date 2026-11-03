@@ -380,6 +380,18 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 #trailer .tr-ctl { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; }
 #trailer .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.15); }
 #trailer .bar span { display: block; height: 100%; width: 0; background: var(--gold); }
+.yard { position: relative; height: 210px; margin: 6px 0; overflow: hidden; border-radius: 8px; border: 3px solid #4a2c1c;
+  background: radial-gradient(ellipse at 50% 55%, #c9a566 0 38%, transparent 70%), repeating-linear-gradient(0deg, #6fa656 0 14px, #66a050 14px 28px); box-shadow: inset 0 0 0 2px rgba(0,0,0,.25); }
+.yard::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 16px; background: repeating-linear-gradient(90deg, #7a4f2e 0 6px, #5b3a22 6px 9px, transparent 9px 18px); border-bottom: 3px solid #3d2616; z-index: 0; }
+.yard-m { background: radial-gradient(ellipse at 50% 55%, #a08f78 0 40%, transparent 72%), repeating-linear-gradient(0deg, #7d9a6a 0 14px, #739060 14px 28px); }
+.yard-empty { position: absolute; inset: 40% 12px auto; margin: 0; text-align: center; color: #fff4d8; text-shadow: 0 1px 0 #3d2616; font-size: 13px; }
+.tp { position: absolute; width: var(--sz); height: var(--sz); margin: calc(var(--sz) / -2) 0 0 calc(var(--sz) / -2); animation: tpwalk var(--dur) ease-in-out var(--del) infinite alternate; pointer-events: none; }
+.tp img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; filter: drop-shadow(0 3px 0 rgba(0,0,0,.28)); animation: tpface calc(var(--dur) * 2) steps(1, end) var(--del) infinite, tpbob .42s steps(2, end) infinite; }
+.tp.mech img { animation: tpface calc(var(--dur) * 2) steps(1, end) var(--del) infinite, tpbob .9s steps(2, end) infinite; }
+@keyframes tpwalk { from { transform: translate(calc(var(--dx) * -1), calc(var(--dy) * -1)); } to { transform: translate(var(--dx), var(--dy)); } }
+@keyframes tpface { 0% { scale: var(--f) 1; } 50% { scale: calc(var(--f) * -1) 1; } }
+@keyframes tpbob { 0% { translate: 0 0; } 50% { translate: 0 -2px; } }
+@media (prefers-reduced-motion: reduce) { .tp, .tp img { animation: none; } }
 .garr { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed rgba(240,200,100,.2); }
 .garr > div { min-width: 0; flex: 1; }
 .garr small { display: block; margin-top: 2px; text-transform: none; letter-spacing: 0; }

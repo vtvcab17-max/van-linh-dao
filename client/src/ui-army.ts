@@ -130,3 +130,60 @@ export function openArmy(ui: UI) {
     });
   });
 }
+
+/** Sân trại: từng người lính (hoặc xe, voi) đi lại bên trong, thấy trực tiếp quân đang có ở đảo nhà. */
+const hash = (n: number) => {
+  let x = (n + 0x9e3779b9) | 0;
+  x = Math.imul(x ^ (x >>> 16), 0x85ebca6b);
+  x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35);
+  return (x ^ (x >>> 16)) >>> 0;
+};
+const MAX_SHOWN = 36;
+export function campYard(s: PlayerState, site: 'donbinh' | 'xuongcg'): string {
+  const mech = site === 'xuongcg';
+  const keys = TROOP_KEYS.filter((k) => isMech(k) === mech);
+  const list: TroopKey[] = [];
+  for (const k of keys) for (let i = 0; i < (s.troops[k] ?? 0); i++) list.push(k);
+  const shown = list.slice(0, MAX_SHOWN);
+  const away = keys.reduce((t, k) => t + (s.voyage?.troops?.[k] ?? 0) + Object.values(s.isleTroops).reduce((a, g) => a + (g[k] ?? 0), 0), 0);
+  const sprites = shown
+    .map((k, i) => {
+      const h = hash(i * 7919 + k.charCodeAt(0) * 131);
+      const h2 = hash(h);
+      const left = 4 + (h % 84);
+      const top = 22 + (h2 % 58);
+      const amp = mech ? 22 : 44;
+      const dx = (((h >> 3) % (amp * 2 + 1)) - amp) || amp;
+      const dy = ((h2 >> 3) % 29) - 14;
+      const dur = (mech ? 7 : 3.5) + (h % 30) / 10;
+      const del = -((h2 % 60) / 10);
+      const size = mech ? 46 : 32;
+      return `<span class="tp${mech ? ' mech' : ''}" style="left:${left}%;top:${top}%;--dx:${dx}px;--dy:${dy}px;--f:${dx >= 0 ? 1 : -1};--dur:${dur}s;--del:${del}s;--sz:${size}px;z-index:${top}"><img src="${troopIcon(k)}" alt="${TROOPS[k].name}"></span>`;
+    })
+    .join('');
+  const chips = keys.map((k) => `<span class="cost"><img src="${troopIcon(k)}" alt="">${TROOPS[k].name} ×${s.troops[k] ?? 0}</span>`).join(' ');
+  const total = list.length;
+  return `<div class="card"><small>${mech ? 'Bãi xe và voi chiến' : 'Sân trại lính'} · ${total} ${mech ? 'cơ giới' : 'lính'} đang ở trại</small>
+    <div class="yard${mech ? ' yard-m' : ''}">${sprites || `<p class="yard-empty">${mech ? 'Bãi trống. Đóng xe nỏ, xe đá, voi chiến bên dưới.' : 'Sân trống. Luyện lính bên dưới để thấy họ tập trận.'}</p>`}</div>
+    <div class="costs">${chips}</div>
+    <p class="muted small">${total > MAX_SHOWN ? `Hiển thị ${MAX_SHOWN}/${total}. ` : ''}${away ? `Đang đi vắng: ${away} (trên thuyền hoặc đóng ở đảo khác). ` : ''}Mỗi hình là một ${mech ? 'cơ giới' : 'người lính'} thật.</p></div>`;
+}
+/** Nút luyện nhanh ngay trong nhà lính / xưởng cơ giới. */
+export function campControls(s: PlayerState, site: 'donbinh' | 'xuongcg'): string {
+  const mech = site === 'xuongcg';
+  const don = bLevel(s.dinh, 'donbinh');
+  const cg = bLevel(s.dinh, 'xuongcg');
+  const cap = houseCap(don, cg);
+  const home = troopCount(s.troops);
+  const rows = TROOP_KEYS.filter((k) => isMech(k) === mech)
+    .map((k) => {
+      const d = TROOPS[k];
+      const lv = mech ? cg : don;
+      const lock = lv < d.need ? `Cần cấp ${d.need}` : home >= cap ? 'Trại đầy' : '';
+      const can = !lock && Object.entries(d.cost).every(([r, v]) => s.res[r as ResKey] >= (v ?? 0));
+      return `<div class="gear"><img src="${troopIcon(k)}" alt=""><div><b>${d.name}</b><small>${d.desc}</small><div class="costs">${costHtml(d.cost, s.res)}</div>${lock ? `<small class="bad">${lock}</small>` : ''}</div>
+        <div class="tstep"><button type="button" data-luyen="${k}:1" ${can ? '' : 'disabled'}>${mech ? 'Đóng' : 'Luyện'} 1</button></div></div>`;
+    })
+    .join('');
+  return `<div class="card"><small>${mech ? 'Đóng cơ giới' : 'Luyện lính'} · trại chứa ${home}/${cap}</small>${rows}<button type="button" class="wide" id="btnArmy2">Mở bảng quân đội</button></div>`;
+}

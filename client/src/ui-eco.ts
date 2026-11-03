@@ -1,12 +1,13 @@
 // Giao diện hệ sinh thái: ruộng vườn, chuồng ao, xưởng chế biến, học viện, sửa đồ, thời tiết, kho.
 import type { UI } from './ui';
-import { armyLine } from './ui-army';
+import { armyLine, campControls, campYard, openArmy } from './ui-army';
 import { cropsFor, homeCell, pending, plotsOf, plotState, rationNeed, techLv, unitsOf, type PlayerState } from '../../shared/logic';
 import { CROPS, dayPhase, GAME_DAY_MS, HIRE_COST, PENS, PER_WORKER, PLOT_YIELD, plotSeed, PROCS, regionOf, seasonOf, TECH_KEYS, TECH_MAX, TECHS, techCost, techMs, WEATHER, weatherAt, WIND_DIRS, WX_MS, type CropKey, type TechKey } from '../../shared/eco';
 import { RES, RES_KEYS, type ResKey } from '../../shared/data';
 import { GEAR, GEAR_KEYS } from '../../shared/boss';
 import { bLevel, routePeriod, routesNear, SLOT_INFO, slotsOf, type Dinh } from '../../shared/economy';
 import { SELL_CHO_BONUS, SELL_PRICE } from '../../shared/balance';
+import type { TroopKey } from '../../shared/troops';
 import { berthsUsed, fleetCap, SHIP_KINDS, SHIP_SIZE, SHIPS, WEAPON_KEYS, WEAPONS, type ShipKind, type ShipWeapon } from '../../shared/navy';
 import { repairCost } from '../../shared/logic';
 import { canvasUrl, iconUrl } from './art/textures';
@@ -152,6 +153,7 @@ export function dinhExtra(ui: UI, d: Dinh): string {
   const s = ui.store.s;
   if (d.lv < 1) return '';
   const inner = interior(ui, d);
+  if (d.k === 'donbinh' || d.k === 'xuongcg') return campYard(s, d.k) + campControls(s, d.k) + inner;
   return inner + dinhMore(ui, d, s);
 }
 function dinhMore(ui: UI, d: Dinh, s: PlayerState): string {
@@ -211,6 +213,11 @@ export function dinhClick(ui: UI, d: Dinh, t: HTMLElement): boolean {
   }
   if (t.id === 'btnGieo') return run(ui.store.do({ t: 'trong', id: d.id, k: pickK })), true;
   if (t.id === 'btnGat') return run(ui.store.do({ t: 'gat', id: d.id })), true;
+  if (t.dataset.luyen) {
+    const [k, n] = t.dataset.luyen.split(':');
+    return run(ui.store.do({ t: 'luyen', k: k as TroopKey, n: Number(n) })), true;
+  }
+  if (t.id === 'btnArmy2') return openArmy(ui), true;
   if (t.dataset.buy) return run(ui.store.do({ t: 'nuoi', id: d.id })), true;
   if (t.dataset.hire) return run(ui.store.do({ t: 'thue', id: d.id })), true;
   if (t.id === 'btnThuNT') return run(ui.store.do({ t: 'thuNT', id: d.id })), true;
