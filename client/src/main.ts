@@ -1,3 +1,4 @@
+import { drawMonster } from './art2/monsters';
 import Phaser from 'phaser';
 import { GAME } from '../../shared/data';
 import { createNet } from './net';
@@ -94,7 +95,7 @@ async function boot() {
     clearTimeout(rt);
     rt = window.setTimeout(() => game.scale.resize(Math.ceil(innerWidth / rs), Math.ceil(innerHeight / rs)), 60);
   });
-  (window as unknown as { __vld: unknown }).__vld = { store, ui, game, perf, net, GAME };
+  (window as unknown as { __vld: unknown }).__vld = { store, ui, game, perf, net, GAME, drawMonster };
   game.events.once('ready', async () => {
     try {
       ui.init(game);
