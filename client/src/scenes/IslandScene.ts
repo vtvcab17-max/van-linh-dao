@@ -674,8 +674,7 @@ export class IslandScene extends Phaser.Scene {
       img.setFlipX(isLand(s, c.x + 1, c.y) || isLand(s, c.x + 2, c.y));
       img.setInteractive({ useHandCursor: true }).on('pointerup', () => {
         if (this.dragged) return;
-        const by = s.dinh.find((d) => d.k === 'benthuyen');
-        if (by) this.ui.openDinh(by.id);
+        this.ui.openSeaView('boat');
       });
       this.tweens.add({ targets: img, y: img.y + 1, angle: { from: -1.5, to: 1.5 }, duration: 1100 + i * 170, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
       this.boats.push(img);

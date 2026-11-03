@@ -48,6 +48,7 @@ import { SPIN_COST } from '../../shared/gacha';
 import { drawDinh2 as drawDinh } from './art2/dinh2';
 import { roomUrl } from './art2/room';
 import { openSociety } from './ui-society';
+import { openSeaView } from './ui-seaview';
 import { playTrailer } from './trailer';
 import type { IslandScene } from './scenes/IslandScene';
 import type { SeaScene } from './scenes/SeaScene';
@@ -1167,6 +1168,10 @@ export class UI {
     if (k) this.toast(`Chạm một ô đất có viền xanh để xây ${BUILDINGS[k].names[0]}.`, 'gold', 4000);
   }
 
+  openSeaView(kind: 'boat' | 'tower') {
+    openSeaView(this, kind);
+  }
+
   openDinh(id: string) {
     let armed = false;
     const draw = () => {
@@ -1182,6 +1187,8 @@ export class UI {
       return `<div class="room" style="background-image:url(${roomUrl(d.k)})"><div class="room-t"><img src="${canvasUrl(`dinh2-ui-${d.k}-${lv}`, () => drawDinh(d.k, lv), 2)}" alt=""><div><h3>${b.names[lv - 1]}</h3><p class="tier">Cấp ${d.lv || 0}/3${busy ? ` · đang xây lên cấp ${d.to}` : ''}</p></div></div></div>
         <p class="muted room-d">${b.desc}</p>
         ${busy ? `<div class="card"><small>Đang xây</small><p>Còn <b>${hms(left / s.speed)}</b></p></div>` : ''}
+        ${d.lv > 0 && (d.k === 'thapcanh' || d.k === 'tuong' || d.k === 'donbinh') ? '<button class="wide" id="btnTower">Lên tháp nhìn biển</button>' : ''}
+        ${d.k === 'benthuyen' && d.lv > 0 ? '<button class="wide" id="btnBoatView">Ra xem thuyền trên biển</button>' : ''}
         ${dinhExtra(this, d)}
         ${next}
         <button class="wide" id="btnPha">${armed ? 'Chắc chắn dỡ? Bấm lần nữa' : 'Dỡ bỏ (thu lại 30% vật liệu)'}</button>`;
@@ -1195,6 +1202,8 @@ export class UI {
           body.innerHTML = draw();
           return;
         }
+        if (t.id === 'btnTower') return this.openSeaView('tower');
+        if (t.id === 'btnBoatView') return this.openSeaView('boat');
         if (t.id === 'btnUp') {
           const o = this.store.do({ t: 'nang', id });
           this.toast(o.msg, o.ok ? 'gold' : 'bad');
