@@ -313,6 +313,9 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 #battlebar > div { display: flex; flex-direction: column; }
 #battlebar b { font: 22px/1 var(--font-pixel); color: var(--gold); }
 #battlebar span { font: 16px var(--font-pixel); color: var(--paper-dim); white-space: nowrap; }
+#battlebar > div { min-width: 0; flex: 1; }
+#battlebar button { padding: 4px 8px; min-height: 0; flex: none; }
+@media (max-width: 460px) { #battlebar span { display: none; } }
 .banner { position: fixed; left: 50%; top: 34%; transform: translate(-50%, -50%); z-index: 40; font: 72px/1 var(--font-pixel); letter-spacing: .06em; text-shadow: 0 4px 0 var(--ink), 4px 0 var(--ink), -4px 0 var(--ink), 0 -4px var(--ink); pointer-events: none; animation: bannerIn .35s cubic-bezier(.2,1.6,.4,1); }
 .banner.win { color: var(--gold); }
 .banner.lose { color: var(--danger); }
@@ -537,6 +540,7 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 #battleHud i { flex: 1; height: 8px; border-radius: 4px; background: rgba(0,0,0,.5); overflow: hidden; }
 #battleHud i b { display: block; height: 100%; width: 100%; background: #4fd06a; transition: width .25s; }
 #battleHud i b.e { background: #f0554a; }
+#battleHud i b.p { background: #e8b84f; }
 </style>
 </head>
 <body>
@@ -589,8 +593,8 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 <div id="perf" hidden></div>
 <div id="maplabels" hidden></div>
 <div id="buildlabels"></div>
-<div id="battleHud" class="panel" hidden><div class="bh-top"><b id="bhLive"></b><span id="bhRound"></span></div><div class="bh-row"><small>Bạn</small><i><b id="bhA"></b></i></div><div class="bh-row"><small>Địch</small><i><b id="bhB" class="e"></b></i></div></div>
-<div id="battlebar" class="panel" hidden><div><b id="battleTitle"></b><span>Bấm x1/x2 để đổi tốc độ</span></div><button id="btnBSpeed" type="button">x1</button><button id="btnSkip" type="button">Bỏ qua</button></div>
+<div id="battleHud" class="panel" hidden><div class="bh-top"><b id="bhLive"></b><span id="bhRound"></span></div><div class="bh-row"><small>Bạn</small><i><b id="bhA"></b></i></div><div class="bh-row"><small>Địch</small><i><b id="bhB" class="e"></b></i></div><div class="bh-row"><small>Trận</small><i><b id="bhP" class="p" style="width:0"></b></i></div></div>
+<div id="battlebar" class="panel" hidden><div><b id="battleTitle"></b><span>Bấm x1/x2 để đổi tốc độ</span></div><button id="btnBPause" type="button">Dừng</button><button id="btnBSpeed" type="button">x1</button><button id="btnSkip" type="button">Bỏ qua</button></div>
 <div id="intro" hidden><div class="panel"><small>Đêm Trăng Máu</small><p></p><button class="primary" type="button">Tiếp</button></div></div>
 <div id="splash">
   <div class="studio">Beta Holding giới thiệu</div>

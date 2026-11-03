@@ -45,6 +45,7 @@ export class BattleScene extends Phaser.Scene {
   private data0!: BattleData;
   private idx = 0;
   private speed = 1;
+  private paused = false;
   private done = false;
   private W = 240;
   private H = 135;
@@ -63,6 +64,7 @@ export class BattleScene extends Phaser.Scene {
     this.data0 = d;
     this.idx = 0;
     this.speed = 1;
+    this.paused = false;
     this.done = false;
     this.round = 0;
     this.views.clear();
@@ -113,7 +115,9 @@ export class BattleScene extends Phaser.Scene {
       return max ? Math.round((100 * hp) / max) : 0;
     };
     const q = (id: string) => document.getElementById(id);
-    const a = q('bhA'), b = q('bhB'), r = q('bhRound');
+    const a = q('bhA'), b = q('bhB'), r = q('bhRound'), pg = q('bhP');
+    const total = this.data0?.battle.events.length || 1;
+    if (pg) pg.style.width = Math.min(100, Math.round((100 * this.idx) / total)) + '%';
     if (a) a.style.width = sum(0) + '%';
     if (b) b.style.width = sum(1) + '%';
     if (r) r.textContent = `Lượt ${this.round}`;
@@ -229,7 +233,18 @@ export class BattleScene extends Phaser.Scene {
     this.ui.floatAt((x - cam.worldView.x) * k, (y - cam.worldView.y) * k, text, '', undefined, color, Math.round(size * 2.1));
   }
 
+  /** Tạm dừng/tiếp tục (chỉ trận không phải người chơi). */
+  togglePause() {
+    if (this.data0?.pvp) return false;
+    this.paused = !this.paused;
+    return this.paused;
+  }
+
   private next() {
+    if (this.paused) {
+      this.time.delayedCall(100, () => this.next());
+      return;
+    }
     const ev = this.data0.battle.events[this.idx++];
     if (!ev) return this.finish();
     this.round = Math.max(this.round, ev.r);

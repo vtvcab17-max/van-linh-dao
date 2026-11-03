@@ -281,6 +281,10 @@ export class UI {
       const v = (this.game.scene.getScene('battle') as BattleScene).toggleSpeed();
       $('#btnBSpeed').textContent = `x${v}`;
     });
+    $('#btnBPause').addEventListener('click', () => {
+      const on = (this.game.scene.getScene('battle') as BattleScene).togglePause();
+      $('#btnBPause').textContent = on ? 'Tiếp' : 'Dừng';
+    });
     $('#btnSkip').addEventListener('click', () => (this.game.scene.getScene('battle') as BattleScene).skip());
     const navIcons: Record<string, string> = {
       island: canvasUrl('nav-leu', () => drawLeu(1, false, 'thuong'), 1),
@@ -960,9 +964,12 @@ export class UI {
     $('#battleTitle').textContent = title;
     $('#nav').classList.add('dim');
     $('#tools').hidden = true;
+    $('#top').style.visibility = 'hidden';
     sound.setMood('battle');
     $('#btnSkip').hidden = !!o.pvp;
     $('#btnBSpeed').hidden = !!o.pvp;
+    $('#btnBPause').hidden = !!o.pvp;
+    $('#btnBPause').textContent = 'Dừng';
     $('#btnBSpeed').textContent = 'x1';
     $('#battleTitle').textContent = o.pvp ? `${title} · trận người chơi, không tua` : title;
     const data: BattleData = {
@@ -974,6 +981,7 @@ export class UI {
         this.game.scene.wake(from);
         $('#battlebar').hidden = true;
         $('#battleHud').hidden = true;
+        $('#top').style.visibility = '';
         $('#tools').hidden = false;
         $('#nav').classList.remove('dim');
         sound.setMood(from);
