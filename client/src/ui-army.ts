@@ -53,6 +53,11 @@ const COUNTER_HINT: Record<TroopKey, string> = {
   xeda: 'khắc khiên, tháp, đồn',
   voi: 'húc mạnh, sợ lính giáo',
 };
+/** Mục gập được; nhớ mở/đóng qua các lần vẽ lại bảng. */
+const opened = new Set<string>(['luyen', 'danhsach']);
+const det = (id: string, title: string, html: string) =>
+  `<details class="wq-more" data-det="${id}" ${opened.has(id) ? 'open' : ''}><summary>${title}</summary>${html}</details>`;
+
 export function openArmy(ui: UI) {
   const draw = () => {
     const s = ui.store.s;
@@ -130,16 +135,24 @@ export function openArmy(ui: UI) {
       <p class="muted small">${tqLine}</p>
       <p>Quân ở đảo nhà <b>${home}</b> · lính <b>${homeInf}</b>/${beds} giường · cơ giới <b>${homeMech}</b>/${park} chỗ đậu</p>
       <p>Thuyền chở tối đa <b>${carry}</b> quân. Mỗi chuyến đang mang <b>${troopCount(cargo)}</b>.</p>
-      <p class="muted small">Mỗi lính và mỗi cơ giới đều tính là 1 đơn vị, chiếm 1 giường (lính ngủ trong nhà: Nhà chính mỗi bậc 4 giường, mỗi gian nhà dân thêm 1) hoặc 1 chỗ đậu (cơ giới ở Xưởng Cơ Giới) và 1 chỗ trên thuyền. Trại Lính chỉ để huấn luyện. Quân ở nhà giữ đảo; quân mang đi ăn lương và có thể tử trận.</p></div>
-      <div class="card"><small>Quân từng hòn đảo</small>
+      </div>
+      ${det('ghichu', 'Luật chỗ ở và chở quân', `<p class="muted small">Mỗi lính và mỗi cơ giới đều tính là 1 đơn vị, chiếm 1 giường (lính ngủ trong nhà: Nhà chính mỗi bậc 4 giường, mỗi gian nhà dân thêm 1) hoặc 1 chỗ đậu (cơ giới ở Xưởng Cơ Giới) và 1 chỗ trên thuyền. Trại Lính chỉ để huấn luyện. Quân ở nhà giữ đảo; quân mang đi ăn lương và có thể tử trận.</p>`)}
+      ${det('dao', `Quân từng hòn đảo (${home} ở nhà)`, `<div class="card flat">
         <div class="garr"><div><b>Đảo nhà</b> <span class="lvl">${home} quân</span><small>${esc(listTroops(s.troops))}</small></div></div>
-        ${onBoat}${isleRows || '<p class="muted small">Chưa có đảo nào cắm cờ. Thắng một đảo tự nhiên thì quân còn lại ở lại giữ đảo.</p>'}</div>
+        ${onBoat}${isleRows || '<p class="muted small">Chưa có đảo nào cắm cờ. Thắng một đảo tự nhiên thì quân còn lại ở lại giữ đảo.</p>'}</div>`)}
       <div class="card"><small>Mang theo mỗi chuyến (${troopCount(cargo)}/${carry})</small>${plan || '<p class="muted small">Luyện quân xong sẽ chỉnh số mang theo ở đây.</p>'}
         ${noBoat.length ? `<p class="bad small">${noBoat.map((k) => TROOPS[k].name).join(', ')} cần thuyền buồm chiến trở lên mới lên được.</p>` : ''}</div>
-      <div class="card"><small>Danh sách quân</small>${roster}</div>
-      <div class="card"><small>Luyện lính và đóng cơ giới</small>${train}</div>`;
+      ${det('danhsach', 'Danh sách quân và hàng đứng', `<div class="card flat">${roster}</div>`)}
+      ${det('luyen', 'Luyện lính và đóng cơ giới', `<div class="card flat">${train}</div>`)}`;
   };
   ui.openSheet('army', 'Quân đội', draw(), (body) => {
+    body.addEventListener('toggle', (e) => {
+      const d = e.target as HTMLElement;
+      const id = d.dataset?.det;
+      if (!id) return;
+      if ((d as HTMLDetailsElement).open) opened.add(id);
+      else opened.delete(id);
+    }, true);
     body.addEventListener('click', (e) => {
       const t = (e.target as HTMLElement).closest('button');
       if (!t) return;
