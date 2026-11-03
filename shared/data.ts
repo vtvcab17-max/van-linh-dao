@@ -59,9 +59,10 @@ export interface LinhVatDef {
 
 export const TIER_NAMES = ['Thức Tỉnh', 'Có Hồn', 'Thành Linh', 'Thành Tinh', 'Thành Thần'];
 /** Linh khí cần để lên bậc tiếp theo (bậc 1→2, 2→3, 3→4, 4→5). */
-export const XP_TO_NEXT = [50, 300, 1200, 6000];
+/** Linh khí cần để lên bậc 2, 3, 4, 5 (đã cân bằng bằng mô phỏng: bậc 4 ~ngày 8, bậc 5 ~ngày 30). */
+export const XP_TO_NEXT = [50, 600, 40_000, 120_000];
 /** Thời gian xây khi tiến hóa lên bậc 2, 3, 4, 5 — bậc càng cao xây càng lâu. */
-export const BUILD_MS = [60_000, 10 * 60_000, 60 * 60_000, 4 * 3600_000];
+export const BUILD_MS = [60_000, 30 * 60_000, 3 * 3600_000, 12 * 3600_000];
 /** Mỗi công trình nặng nhẹ khác nhau: nhà chính lâu nhất. */
 export const BUILD_FACTOR: Record<LvKey, number> = { leu: 1, cuoc: 0.7, rao: 0.8, thuyen: 0.9 };
 
@@ -278,10 +279,10 @@ export interface ChestDef {
 export const CHESTS: ChestDef[] = [
   { key: 'moc', name: 'Hòm Gỗ Mục', rarity: 'Thường', color: '#e9e4d6', weight: 600, rolls: 2, amount: [5, 10], so: [3, 8], ngoc: 0 },
   { key: 'lim', name: 'Hòm Gỗ Lim', rarity: 'Tốt', color: '#62b356', weight: 250, rolls: 2, amount: [10, 18], so: [8, 16], ngoc: 0 },
-  { key: 'dong', name: 'Hòm Đồng', rarity: 'Hiếm', color: '#4f90da', weight: 100, rolls: 3, amount: [16, 28], so: [15, 30], ngoc: 0 },
-  { key: 'bac', name: 'Hòm Bạc Chạm', rarity: 'Quý', color: '#a273d8', weight: 40, rolls: 3, amount: [28, 45], so: [30, 60], ngoc: 1 },
-  { key: 'sonmai', name: 'Hòm Sơn Mài', rarity: 'Huyền Thoại', color: '#ec8d3c', weight: 9, rolls: 4, amount: [45, 80], so: [60, 120], ngoc: 2 },
-  { key: 'rong', name: 'Hòm Rồng Vàng', rarity: 'Thần Thoại', color: '#de4a3f', weight: 1, rolls: 5, amount: [80, 140], so: [150, 260], ngoc: 5 },
+  { key: 'dong', name: 'Hòm Đồng', rarity: 'Hiếm', color: '#4f90da', weight: 160, rolls: 3, amount: [16, 28], so: [15, 30], ngoc: 0 },
+  { key: 'bac', name: 'Hòm Bạc Chạm', rarity: 'Quý', color: '#a273d8', weight: 80, rolls: 3, amount: [28, 45], so: [30, 60], ngoc: 1 },
+  { key: 'sonmai', name: 'Hòm Sơn Mài', rarity: 'Huyền Thoại', color: '#ec8d3c', weight: 20, rolls: 4, amount: [45, 80], so: [60, 120], ngoc: 2 },
+  { key: 'rong', name: 'Hòm Rồng Vàng', rarity: 'Thần Thoại', color: '#de4a3f', weight: 3, rolls: 5, amount: [80, 140], so: [150, 260], ngoc: 5 },
 ];
 export const CHEST_INTERVAL_MS = 300_000;
 

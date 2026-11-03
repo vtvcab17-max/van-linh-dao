@@ -140,6 +140,19 @@ export const BUILDINGS: Record<BKey, BDef> = {
   den: { names: ['Miếu Thổ Thần', 'Đền Sơn Tinh', 'Đền Hùng Thu Nhỏ'], desc: 'Linh vật đói chậm hơn 15% mỗi cấp; đánh Thủy Tinh +5% công mỗi cấp.', group: 'nhà cửa', max: 1, needLeu: 3, cost: [{ go: 100, da: 100, so: 60 }, { go: 200, da: 200, so: 200 }, { go: 400, da: 400, so: 500, ngoc: 4 }], ms: [20 * M, 2 * 60 * M, 6 * 60 * M] },
 };
 
+/**
+ * Cân bằng tiến triển (spec 006): chi phí cấp 2 ×3, cấp 3 ×6, thời gian xây ×3 so với bản gốc;
+ * tre và sắt nặng thêm ×1,5 để không dư thừa. Đã kiểm bằng người chơi máy (shared/sim.ts).
+ */
+const COST_SCALE = [1, 3, 6];
+const TIME_SCALE = 3;
+const HEAVY: Partial<Record<ResKey, number>> = { tre: 1.5, sat: 1.5 };
+for (const k of B_KEYS) {
+  const b = BUILDINGS[k];
+  b.cost = b.cost.map((c, i) => Object.fromEntries(Object.entries(c).map(([r, v]) => [r, Math.round((v as number) * COST_SCALE[i] * (i > 0 ? HEAVY[r as ResKey] ?? 1 : 1))]))) as typeof b.cost;
+  b.ms = b.ms.map((m) => m * TIME_SCALE) as typeof b.ms;
+}
+
 export interface Dinh {
   id: string;
   k: BKey;

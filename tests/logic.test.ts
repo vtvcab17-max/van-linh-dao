@@ -291,7 +291,7 @@ describe('Kinh tế: nhà cửa, thuế, cửa hàng, thôn tính', () => {
     const t = freeTile(s)!;
     expect(apply(s, { t: 'xay', k: 'nhadan', x: t.x, y: t.y }).ok).toBe(true);
     expect(apply(s, { t: 'xay', k: 'nhadan', x: t.x, y: t.y }).ok).toBe(false);
-    tick(s, s.lastReal + 3 * 60_000);
+    tick(s, s.lastReal + 7 * 60_000);
     expect(s.dinh[0].lv).toBe(1);
     expect(incomePerHour(s).dan).toBe(6); // 6 gian, mỗi gian một hộ
     const before = s.res.tien;

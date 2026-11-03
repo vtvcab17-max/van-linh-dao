@@ -550,6 +550,9 @@ export function occupied(s: PlayerState, x: number, y: number): boolean {
 }
 
 /** Thu nhập mỗi giờ: nhà dân, thuế thương thuyền, cống nạp của chư hầu; trừ phần phải nộp cho chủ. */
+/** Bậc Nhà chính tối thiểu để một công trình lên cấp 3 (không dưới bậc 4: cấp 3 là mục tiêu dài hạn). */
+export const LV3_TIER = (needLeu: number) => Math.min(5, Math.max(4, needLeu + 2));
+
 export function incomePerHour(s: PlayerState, now = s.lastReal) {
   const period = routePeriod(now);
   const bonus = (s.bag.trongdong ? 0.25 : 0) + (s.guild ? 0.05 * s.guild.lv : 0);
@@ -1137,7 +1140,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
       const b = BUILDINGS[d.k];
       if (d.doneAt !== undefined) return fail('Đang xây dở.');
       if (d.lv >= 3) return fail('Đã cấp cao nhất.');
-      if (d.lv + 1 >= 3 && s.lv.leu.tier < Math.min(5, b.needLeu + 2)) return fail(`Cần Nhà chính bậc ${Math.min(5, b.needLeu + 2)} để lên cấp 3.`);
+      if (d.lv + 1 >= 3 && s.lv.leu.tier < LV3_TIER(b.needLeu)) return fail(`Cần Nhà chính bậc ${LV3_TIER(b.needLeu)} để lên cấp 3.`);
       if (busySlots(s) >= buildSlots(s)) return fail('Thợ đang bận hết.');
       if (!canPay(s, b.cost[d.lv])) return fail('Chưa đủ vật liệu.');
       pay(s, b.cost[d.lv]);

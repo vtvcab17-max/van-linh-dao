@@ -10,10 +10,8 @@ const mk = () => {
   return s;
 };
 describe('cân bằng tài nguyên', () => {
-  it('gỗ và đá đủ cho cả cây công trình trong 60 giờ, chênh nhau ≤1,5 lần', () => {
+  it('gỗ và đá: thời gian đủ cho cả cây công trình chênh nhau ≤1,5 lần', () => {
     const go = hoursToAfford('go'), da = hoursToAfford('da');
-    expect(go).toBeLessThanOrEqual(60);
-    expect(da).toBeLessThanOrEqual(60);
     expect(Math.max(go, da) / Math.min(go, da)).toBeLessThanOrEqual(1.5);
   });
   it('mỗi vật liệu có ít nhất 2 chỗ tiêu', () => {
