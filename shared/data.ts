@@ -37,10 +37,10 @@ export const RES: Record<ResKey, { name: string; capped: boolean }> = {
 
 export type NodeKind = 'grass' | 'palm' | 'bamboo' | 'rock' | 'scrap' | 'drift';
 export const NODES: Record<NodeKind, { name: string; yields: Partial<Record<ResKey, number>>; regrowMs: number; weight: number }> = {
-  grass: { name: 'Bụi cỏ tranh', yields: { co: 4 }, regrowMs: 40_000, weight: 30 },
-  palm: { name: 'Cây dừa', yields: { la: 3, go: 2 }, regrowMs: 80_000, weight: 22 },
+  grass: { name: 'Bụi cỏ tranh', yields: { co: 3 }, regrowMs: 40_000, weight: 30 },
+  palm: { name: 'Cây dừa', yields: { la: 2, go: 5 }, regrowMs: 80_000, weight: 22 },
   bamboo: { name: 'Bụi tre', yields: { tre: 4 }, regrowMs: 70_000, weight: 22 },
-  rock: { name: 'Mỏm đá', yields: { da: 3 }, regrowMs: 100_000, weight: 14 },
+  rock: { name: 'Mỏm đá', yields: { da: 6 }, regrowMs: 100_000, weight: 14 },
   scrap: { name: 'Đống sắt vụn', yields: { sat: 2 }, regrowMs: 120_000, weight: 9 },
   drift: { name: 'Gỗ trôi dạt', yields: { cui: 4 }, regrowMs: 55_000, weight: 0 },
 };

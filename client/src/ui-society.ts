@@ -1,5 +1,6 @@
 // Bảng Xã hội: phồn vinh, dân số, đàn vật nuôi theo giai đoạn, trứng/sữa, đồ chế biến, câu cá.
 import type { UI } from './ui';
+import { animalUrl } from './art2/animals';
 import { FISH, herdCap, HATCH_EGGS, isAdult, nextStageIn, PRESERVED, prosperity, SPECIES, SP_KEYS, stageIdx, type FishHow, type PKey, type Sp } from '../../shared/society';
 
 const H = 3600_000;
@@ -23,12 +24,12 @@ export function openSociety(ui: UI) {
         const i = stageIdx(a, s.gt);
         const left = nextStageIn(a, s.gt);
         const mature = isAdult(a, s.gt);
-        return `<div class="card sub"><small>${D.stages[i][0]}${mature ? ' · ' + D.use : ''}</small>
+        return `<div class="card sub" style="display:flex;flex-direction:row;gap:10px;align-items:center"><img src="${animalUrl(a.sp, i)}" alt="" style="width:56px;flex:none;image-rendering:pixelated"><div><small>${D.stages[i][0]}${mature ? ' · ' + D.use : ''}</small>
           <p class="muted small">${mature ? 'Đã trưởng thành' : `Lớn lên sau ${dur(left)}`}</p>
-          ${a.sp === 'lon' && mature ? `<button type="button" data-use="${a.id}">Mổ lấy thịt</button>` : ''}</div>`;
+          ${a.sp === 'lon' && mature ? `<button type="button" data-use="${a.id}">Mổ lấy thịt</button>` : ''}</div></div>`;
       })
       .join('');
-    const buy = SP_KEYS.map((k) => `<button type="button" data-buy="${k}" ${so.herd.length >= cap ? 'disabled' : ''}>${SPECIES[k].name} ${SPECIES[k].buy}đ</button>`).join(' ');
+    const buy = SP_KEYS.map((k) => `<button type="button" data-buy="${k}" ${so.herd.length >= cap ? 'disabled' : ''}><img src="${animalUrl(k, 0)}" alt="" style="width:20px;vertical-align:middle;image-rendering:pixelated"> ${SPECIES[k].name} ${SPECIES[k].buy}đ</button>`).join(' ');
     const pk = (Object.keys(PRESERVED) as PKey[]).map((k) => `<button type="button" data-bao="${k}">${PRESERVED[k]}</button>`).join(' ');
     const kho = Object.entries(so.kho).filter(([, v]) => (v ?? 0) > 0).map(([k, v]) => `${PRESERVED[k as PKey]} ${v}`).join(', ');
     const fish = (Object.keys(FISH) as FishHow[])

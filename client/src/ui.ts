@@ -409,7 +409,7 @@ export class UI {
     const s = this.store.s;
     const cap = storageCap(s);
     const el = $('#res');
-    const show: ResKey[] = ['lt', 'tien', 'co', 'la', 'tre', 'go', 'da', 'sat', 'luong', 'so', 'ngoc'];
+    const show: ResKey[] = ['tien', 'so', 'go', 'da', 'tre', 'thoc'];
     if (el.childElementCount !== show.length) {
       el.innerHTML = show.map((k) => `<span class="r" data-k="${k}" title="${RES[k].name}"><img src="${iconUrl(k)}" alt="${RES[k].name}"><b></b></span>`).join('');
     }

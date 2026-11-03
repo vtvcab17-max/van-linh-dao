@@ -47,6 +47,7 @@ describe('xã hội thu nhỏ', () => {
     tick(s, 1_000_000 + 10 * 3600_000);
     expect(s.res.thit).toBeLessThan(100);
     s.res.rau = 20;
+    s.res.la = 10;
     expect(apply(s, { t: 'bao', k: 'rau' }).ok).toBe(true);
     expect(s.soc.kho.rau).toBe(12);
     expect(apply(s, { t: 'banBQ' }).ok).toBe(true);

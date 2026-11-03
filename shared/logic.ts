@@ -45,6 +45,7 @@ import {
 } from './eco';
 import { inWorld, isleById, lairById, WORLD_H, WORLD_VERSION, WORLD_W, type Isle } from './world';
 import { cleanDef } from './economy';
+import { SELL_CHO_BONUS, SELL_PRICE, WRAP_PER_LA } from './balance';
 import { FISH, herdCap, HATCH_EGGS, isAdult, newSociety, PRES_PRICE, PRES_YIELD, PRESERVED, prosperity, SELL_MEAT, settleSociety, SPECIES, trauBonus, type FishHow, type PKey, type Society, type Sp } from './society';
 import {
   DUP_FRAGS, FRAG_PER_GENERAL, GEN_IDS, GENERALS, LEG_IDS, LEG_WEAPONS, LT_BUY_DAILY, LT_BUY_PRICE, LT_SELL_PRICE, MAX_STAR, PITY, rollWheel, SPIN10_COST, SPIN_COST, starMult, ltDrop,
@@ -875,6 +876,7 @@ export type Action =
   | { t: 'egg'; use: 'food' | 'hatch' }
   | { t: 'bao'; k: PKey }
   | { t: 'banBQ' }
+  | { t: 'banNL'; res: ResKey; n: number }
   | { t: 'fish'; how: FishHow }
   | { t: 'speed'; speed: number }
   | { t: 'quay'; n: 1 | 10 }
@@ -1497,11 +1499,25 @@ export function apply(s: PlayerState, a: Action): Outcome {
       if (!(k in PRESERVED)) return fail('Không chế biến được.');
       const have = k === 'sua' ? Math.floor(s.soc.sua) : Math.floor(s.res[k]);
       if (have < 2) return fail('Cần ít nhất 2 phần để chế biến.');
+      const la = Math.ceil(have / WRAP_PER_LA);
+      if (s.res.la < la) return fail(`Cần ${la} lá để gói ${have} phần.`);
+      s.res.la -= la;
       if (k === 'sua') s.soc.sua -= have;
       else s.res[k] -= have;
       const out = Math.max(1, Math.floor(have * PRES_YIELD));
       s.soc.kho[k] = (s.soc.kho[k] ?? 0) + out;
       return { ok: true, msg: `${PRESERVED[k]}: ${out} phần, không bị hỏng.` };
+    }
+    case 'banNL': {
+      const price = SELL_PRICE[a.res];
+      const n = Math.floor(a.n);
+      if (!price) return fail('Sạp chợ không thu mua thứ này.');
+      if (!(n >= 1) || s.res[a.res] < n) return fail('Không đủ để bán.');
+      const get = Math.floor(n * price * (1 + SELL_CHO_BONUS * bLevel(s.dinh, 'cho')));
+      if (get < 1) return fail('Bán nhiều hơn một chút mới được 1 đồng.');
+      s.res[a.res] -= n;
+      s.res.tien += get;
+      return { ok: true, msg: `Bán ${n} ${RES[a.res].name} được ${get} đồng.` };
     }
     case 'banBQ': {
       let n = 0;

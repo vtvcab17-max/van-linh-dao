@@ -5,6 +5,7 @@ import { CROPS, dayPhase, GAME_DAY_MS, HIRE_COST, PENS, PER_WORKER, PLOT_YIELD, 
 import { RES, RES_KEYS, type ResKey } from '../../shared/data';
 import { GEAR, GEAR_KEYS } from '../../shared/boss';
 import { bLevel, routePeriod, routesNear, SLOT_INFO, slotsOf, type Dinh } from '../../shared/economy';
+import { SELL_CHO_BONUS, SELL_PRICE } from '../../shared/balance';
 import { berthsUsed, fleetCap, SHIP_KINDS, SHIP_SIZE, SHIPS, WEAPON_KEYS, WEAPONS, type ShipKind, type ShipWeapon } from '../../shared/navy';
 import { repairCost } from '../../shared/logic';
 import { canvasUrl, iconUrl } from './art/textures';
@@ -258,20 +259,66 @@ export function openWeather(ui: UI) {
 }
 
 // ---------------- kho ----------------
+/** Nguồn và chỗ dùng của từng tài nguyên (hiện khi chạm vào). */
+const RES_INFO: Record<ResKey, [string, string]> = {
+  co: ['Nhặt ở bụi cỏ tranh', 'Nuôi linh vật, thức ăn vật nuôi, bán ở sạp chợ'],
+  la: ['Nhặt ở cây dừa', 'Gói thực phẩm khi muối/phơi, nhà thuốc, bán ở sạp chợ'],
+  tre: ['Nhặt ở bụi tre', 'Xây nhà, vườn, bến, hàng rào'],
+  go: ['Nhặt ở cây dừa', 'Xây hầu hết công trình'],
+  cui: ['Nhặt củi trôi dạt', 'Nhiên liệu cho Bếp, nuôi linh vật, bán ở sạp chợ'],
+  da: ['Nhặt ở mỏm đá', 'Xây tường, tháp, nhà cấp cao'],
+  sat: ['Nhặt sắt vụn, thắng quái', 'Nâng cấp công trình, cuốc, thuyền chiến'],
+  so: ['Hòm báu, thắng quái', 'Tiến hóa linh vật, xây chợ, miếu'],
+  ngoc: ['Quái mạnh, hòm hiếm', 'Công trình cấp cao, tiến hóa bậc cuối'],
+  tien: ['Thuế nhà dân, thương nhân, bán nguyên liệu', 'Mua giống, thuê thợ, học viện'],
+  lt: ['Phần thưởng, mua gói', 'Quay Vòng Quay'],
+  thoc: ['Gặt ở ruộng', 'Xay gạo, nuôi vật nuôi'],
+  gao: ['Xay ở cối xay', 'Nấu lương khô, ăn trên biển'],
+  rau: ['Gặt ở vườn', 'Nuôi vật nuôi, nấu ăn. Chóng hỏng'],
+  thit: ['Mổ lợn, chuồng trại', 'Nấu lương, muối. Chóng hỏng'],
+  trung: ['Gà mái đẻ', 'Ăn hoặc ấp. Chóng hỏng'],
+  ca: ['Câu cá, ao cá', 'Nấu lương, làm cá khô. Chóng hỏng'],
+  thaoduoc: ['Gặt ở vườn thuốc', 'Nhà thuốc làm thuốc men'],
+  to: ['Gặt ở nương dâu', 'Khung cửi dệt vải'],
+  luong: ['Nấu ở bếp', 'Lương cho chuyến ra khơi'],
+  duoc: ['Nhà thuốc', 'Chữa bệnh trên biển'],
+  vai: ['Khung cửi', 'Buồm, thuyền lớn'],
+};
 export function openKho(ui: UI) {
-  const s = ui.store.s;
-  const groups: [string, ResKey[]][] = [
-    ['Tiền', ['lt', 'tien', 'so', 'ngoc']],
-    ['Vật liệu', ['co', 'la', 'tre', 'go', 'cui', 'da', 'sat']],
-    ['Nông sản', ['thoc', 'gao', 'rau', 'thit', 'trung', 'ca', 'thaoduoc', 'to']],
-    ['Quân nhu', ['luong', 'duoc', 'vai']],
-  ];
-  const html = groups
-    .map(([g, ks]) => `<div class="card"><small>${g}</small><div class="kho">${ks.filter((k) => RES_KEYS.includes(k)).map((k) => `<span class="cost"><img src="${iconUrl(k)}" alt="">${RES[k].name}: <b>${fmt(s.res[k])}</b></span>`).join('')}</div></div>`)
-    .join('') +
-    `<div class="card"><small>Thuyền và trang bị</small><p>Thân thuyền: <b>${Math.round(s.vo)}%</b> ${bLevel(s.dinh, 'benthuyen') ? '' : '<span class="muted">(xây Bến Thuyền để sửa)</span>'}</p>
-      ${GEAR_KEYS.filter((g) => s.kho[g] > 0).map((g) => `<p>${GEAR[g].name} ×${s.kho[g]} · bền ${Math.round(s.ben[g])}%</p>`).join('')}</div>`;
-  ui.openSheet('kho', 'Kho đảo', html);
+  const draw = () => {
+    const s = ui.store.s;
+    const groups: [string, ResKey[]][] = [
+      ['Tiền', ['tien', 'so', 'ngoc', 'lt']],
+      ['Vật liệu', ['go', 'da', 'tre', 'sat', 'co', 'la', 'cui']],
+      ['Nông sản', ['thoc', 'gao', 'rau', 'thit', 'trung', 'ca', 'thaoduoc', 'to']],
+      ['Quân nhu', ['luong', 'duoc', 'vai']],
+    ];
+    const sellable = (k: ResKey) => (k === 'co' || k === 'la' || k === 'cui') && s.res[k] >= 10;
+    return groups
+      .map(([g, ks]) => `<div class="card"><small>${g}</small><div class="kho">${ks.filter((k) => RES_KEYS.includes(k)).map((k) => `<button type="button" class="cost" data-info="${k}"><img src="${iconUrl(k)}" alt="">${RES[k].name}: <b>${fmt(s.res[k])}</b></button>`).join('')}</div></div>`)
+      .join('') +
+      `<div class="card" id="khoInfo"><small>Chạm một loại để xem nguồn và chỗ dùng</small></div>
+      <div class="card"><small>Bán nguyên liệu dư ở sạp chợ</small>
+        <div class="row" style="flex-wrap:wrap">${(['co', 'la', 'cui'] as ResKey[]).map((k) => `<button type="button" data-sell="${k}" ${sellable(k) ? '' : 'disabled'}><img src="${iconUrl(k)}" alt="" style="width:18px;vertical-align:middle"> Bán ${RES[k].name} (${SELL_PRICE[k]} đ)</button>`).join('')}</div>
+        <p class="muted small">Mỗi lượt bán 10 (cần có ít nhất 10). Có Chợ thì giá cao hơn ${SELL_CHO_BONUS * 100}% mỗi cấp.</p></div>
+      <div class="card"><small>Thuyền và trang bị</small><p>Thân thuyền: <b>${Math.round(s.vo)}%</b> ${bLevel(s.dinh, 'benthuyen') ? '' : '<span class="muted">(xây Bến Thuyền để sửa)</span>'}</p>
+        ${GEAR_KEYS.filter((g) => s.kho[g] > 0).map((g) => `<p>${GEAR[g].name} ×${s.kho[g]} · bền ${Math.round(s.ben[g])}%</p>`).join('')}</div>`;
+  };
+  ui.openSheet('kho', 'Kho đảo', draw(), (body) => {
+    body.addEventListener('click', (e) => {
+      const t = (e.target as HTMLElement).closest<HTMLElement>('button');
+      if (!t) return;
+      if (t.dataset.info) {
+        const k = t.dataset.info as ResKey;
+        body.querySelector('#khoInfo')!.innerHTML = `<small>${RES[k].name}</small><p>Lấy từ: ${RES_INFO[k][0]}</p><p>Dùng cho: ${RES_INFO[k][1]}</p>`;
+      } else if (t.dataset.sell) {
+        const k = t.dataset.sell as ResKey;
+        const o = ui.store.do({ t: 'banNL', res: k, n: Math.min(10, Math.floor(ui.store.s.res[k])) });
+        ui.toast(o.msg, o.ok ? 'gold' : 'bad');
+        body.innerHTML = draw();
+      }
+    });
+  });
 }
 
 /** Dòng hậu cần trong bảng ra khơi: lương, thuốc, thân thuyền. */

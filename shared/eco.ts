@@ -180,7 +180,7 @@ export interface ProcDef {
 }
 export const PROCS: Record<'coixay' | 'bep' | 'nhathuoc' | 'khungcui', ProcDef> = {
   coixay: { name: 'Cối xay', take: { thoc: 4 }, give: { gao: 3 }, rate: 6 },
-  bep: { name: 'Bếp nấu lương', take: { gao: 2 }, takeOne: { keys: ['thit', 'ca', 'trung'], n: 1 }, give: { luong: 3 }, rate: 5 },
+  bep: { name: 'Bếp nấu lương', take: { gao: 2, cui: 1 }, takeOne: { keys: ['thit', 'ca', 'trung'], n: 1 }, give: { luong: 3 }, rate: 5 },
   nhathuoc: { name: 'Nhà thuốc', take: { thaoduoc: 3 }, give: { duoc: 1 }, rate: 4 },
   khungcui: { name: 'Khung cửi', take: { to: 2 }, give: { vai: 1 }, rate: 3 },
 };

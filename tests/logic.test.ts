@@ -19,7 +19,7 @@ describe('đảo khởi đầu', () => {
     const grass = s.nodes.find((n) => n.kind === 'grass')!;
     const a = apply(s, { t: 'gather', node: grass.id });
     expect(a.ok).toBe(true);
-    expect(a.gained?.co).toBe(4);
+    expect(a.gained?.co).toBe(3);
     expect(apply(s, { t: 'gather', node: grass.id }).ok).toBe(false);
     tick(s, T0 + 41_000);
     expect(apply(s, { t: 'gather', node: grass.id }).ok).toBe(true);
@@ -515,6 +515,7 @@ describe('Hệ sinh thái thành bang', () => {
     expect(apply(s, { t: 'thuNT', id: cx.id }).ok).toBe(true);
     expect(s.res.gao).toBeGreaterThan(100);
     const l0 = s.res.luong;
+    s.res.cui = 50; // bếp cần củi làm nhiên liệu
     expect(apply(s, { t: 'thuNT', id: bep.id }).ok).toBe(true);
     expect(s.res.luong).toBeGreaterThan(l0);
     expect(apply(s, { t: 'thuNT', id: nt.id }).ok).toBe(true);

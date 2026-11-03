@@ -2,6 +2,7 @@
 // Thuần & tất định: dùng chung cho client và máy chủ. Thời gian tính theo s.gt (mili giây trong game).
 import type { PlayerState } from './logic';
 import { bLevel, slotSum } from './economy';
+import { FEED_CO_PER_HOUR } from './balance';
 
 const H = 3600_000;
 const D = 24 * H;
@@ -136,6 +137,14 @@ export function settleSociety(s: PlayerState, dt: number) {
   const m = Math.floor(so.suaAcc);
   so.suaAcc -= m;
   so.sua = Math.min(60, so.sua + m);
+  // vật nuôi ăn cỏ; thiếu cỏ thì lớn chậm lại (tuổi lùi theo tỉ lệ thiếu)
+  if (so.herd.length) {
+    const need = so.herd.length * FEED_CO_PER_HOUR * hours;
+    const eat = Math.min(need, s.res.co);
+    s.res.co = Math.max(0, Math.round((s.res.co - eat) * 1000) / 1000);
+    const short = need > 0 ? (need - eat) / need : 0;
+    if (short > 0) for (const a of so.herd) a.born += dt * short;
+  }
   // thực phẩm tươi hỏng dần; kho tốt thì hỏng chậm
   const keep = 1 - preserveRate(s);
   const lose = (k: string, have: number) => {
