@@ -1,6 +1,6 @@
 // Lính và tướng chibi: đầu to bằng nửa người, mặt hai chấm mắt, nhìn mũ là biết binh chủng.
 import { HAIR_COLORS, OUTFIT_COLORS, SKINS, type Avatar } from '../../../shared/avatar';
-import { C, cnv, outline, P, shadow } from './pal';
+import { C, cnv, lit, outline, P, shadow } from './pal';
 
 export const UW = 20;
 export const UH = 26;
@@ -279,7 +279,7 @@ export function drawUnit(look: Look): HTMLCanvasElement {
   // má phấn nhẹ hơn với nón che
   hat(p, look.hat, OX, OY, hairC);
   if (look.weapon !== 'cung') weapon(p, look.weapon, OX, OY);
-  const o = outline(c0);
+  const o = lit(outline(c0));
   // bóng đổ vẽ sau viền để không bị viền bao
   const [c, x] = cnv(UW, UH);
   const ps = new P(x);

@@ -130,3 +130,33 @@ export function scaleUp(src: HTMLCanvasElement, k: number): HTMLCanvasElement {
   x.drawImage(src, 0, 0, c.width, c.height);
   return c;
 }
+
+const OUT_RGB = [0x3d, 0x2b, 0x2b];
+const isEdge = (d: Uint8ClampedArray, w: number, h: number, i: number, j: number) => {
+  if (i < 0 || j < 0 || i >= w || j >= h) return true;
+  const k = (j * w + i) * 4;
+  return d[k + 3] < 128 || (d[k] === OUT_RGB[0] && d[k + 1] === OUT_RGB[1] && d[k + 2] === OUT_RGB[2]);
+};
+
+/** Ánh sáng thống nhất từ góc trên-trái: mép sáng phía sáng, mép tối phía khuất (sửa tại chỗ). */
+export function shadeEdges(d: Uint8ClampedArray, w: number, h: number): void {
+  const src = new Uint8ClampedArray(d);
+  for (let j = 0; j < h; j++)
+    for (let i = 0; i < w; i++) {
+      const k = (j * w + i) * 4;
+      if (src[k + 3] < 128 || isEdge(src, w, h, i, j)) continue;
+      const lit = isEdge(src, w, h, i - 1, j) || isEdge(src, w, h, i, j - 1);
+      const dark = isEdge(src, w, h, i + 1, j) || isEdge(src, w, h, i, j + 1);
+      if (lit === dark) continue;
+      for (let c = 0; c < 3; c++) d[k + c] = lit ? Math.min(255, src[k + c] + (255 - src[k + c]) * 0.28) : src[k + c] * 0.82;
+    }
+}
+
+/** Áp shadeEdges cho một canvas đã có viền. */
+export function lit(src: HTMLCanvasElement): HTMLCanvasElement {
+  const x = src.getContext('2d')!;
+  const im = x.getImageData(0, 0, src.width, src.height);
+  shadeEdges(im.data, src.width, src.height);
+  x.putImageData(im, 0, 0);
+  return src;
+}

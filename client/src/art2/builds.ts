@@ -1,10 +1,10 @@
 // Công trình nhìn chéo từ trên xuống (3/4), kiến trúc Việt: đình mái cong, nhà tranh, tường đá ong,
 // cổng thành, tháp canh, bến thuyền, xưởng đóng tàu; thuyền và chiến hạm có mắt thuyền.
-import { C, cnv, outline, P, shadow } from './pal';
+import { C, cnv, lit, outline, P, shadow } from './pal';
 
 /** Viền xong rồi mới vẽ bọt sóng (bọt không có viền). */
 const done = (c: HTMLCanvasElement, after?: (p: P) => void) => {
-  const o = outline(c);
+  const o = lit(outline(c));
   if (after) after(new P(o.getContext('2d')!));
   return o;
 };

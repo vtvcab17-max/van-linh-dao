@@ -165,6 +165,7 @@ export class BattleScene extends Phaser.Scene {
         const row = Math.max(0, Math.min(ROWS - 1, Math.round((ROWS - 1) / 2 + (i - (list.length - 1) / 2) * (list.length > 3 ? 1 : 1.5))));
         const col = colOf(lane);
         const { x, y } = this.cellXY(col, row);
+        if (!u.wall) this.add.ellipse(x, y - 1, this.cell * 0.9, this.cell * 0.3, side === 0 ? 0x4fd06a : 0xf0554a, 0.35).setStrokeStyle(1, side === 0 ? 0x2f9a4a : 0xb23a30, 0.9).setDepth(y + 1);
         const img = this.add.image(x, y, this.texFor(u, side)).setOrigin(0.5, 1).setDepth(y + 2).setScale(this.fit(this.texFor(u, side), 1.25));
         if (side === 1 && !u.wall) img.setFlipX(true);
         const men: Phaser.GameObjects.Image[] = [];
