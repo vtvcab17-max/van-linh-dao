@@ -49,7 +49,7 @@ export function preloadAll(scene: Phaser.Scene) {
   for (const k of ['grass', 'palm', 'bamboo', 'rock', 'scrap', 'drift']) ensureTex(scene, `node-${k}`, () => drawNode(k));
   for (let i = 0; i < 6; i++) ensureTex(scene, `chest-${i}`, () => drawChest(i));
   for (const e of ['vui', 'doi', 'doi_bung', 'nghe'] as const) ensureTex(scene, `emo-${e}`, () => drawEmote(e));
-    for (const k of ['an', 'ngoc', 'ha', 'chau', 'rua', 'cuagai', 'sualua', 'khida', 'canoc', 'haitac', 'baytheo', 'cuada', 'thuytinh', 'thuybinh']) ensureTex(scene, `ch-${k}`, () => charCanvas(k));
+    for (const k of ['an', 'ngoc', 'ha', 'chau', 'trau', 'ngu', 'rua', 'cuagai', 'sualua', 'khida', 'canoc', 'haitac', 'baytheo', 'cuada', 'thuytinh', 'thuybinh']) ensureTex(scene, `ch-${k}`, () => charCanvas(k));
   for (let t = 1; t <= 5; t++) ensureTex(scene, `ch-rao${t}`, () => charCanvas(`rao${t}`));
   for (let t = 1; t <= 5; t++) ensureTex(scene, `boat-${t}`, () => drawThuyen(t, false, 'thuong'));
 }

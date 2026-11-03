@@ -120,8 +120,8 @@ export interface CropDef {
 export const CROPS: Record<CropKey, CropDef> = {
   lua: { name: 'Lúa', plot: 'ruong', ms: 4 * 3600_000, out: 'thoc', per: 70, seed: { tien: 20 }, slow: 'Đông' },
   rau: { name: 'Rau muống', plot: 'vuon', ms: 45 * 60_000, out: 'rau', per: 30, seed: { tien: 6 } },
-  thaoduoc: { name: 'Thảo dược', plot: 'vuon', ms: 2 * 3600_000, out: 'thaoduoc', per: 14, seed: { tien: 15 }, slow: 'Đông' },
-  dau: { name: 'Dâu tằm', plot: 'nuongdau', ms: 3 * 3600_000, out: 'to', per: 9, seed: { tien: 12 }, slow: 'Đông' },
+  thaoduoc: { name: 'Thảo dược', plot: 'vuon', ms: 2 * 3600_000, out: 'duoc', per: 5, seed: { tien: 15 }, slow: 'Đông' },
+  dau: { name: 'Dâu tằm', plot: 'nuongdau', ms: 3 * 3600_000, out: 'vai', per: 5, seed: { tien: 12 }, slow: 'Đông' },
 };
 /** Chín rồi để quá 8 giờ thì hỏng một nửa. */
 export const OVERRIPE_MS = 8 * 3600_000;
@@ -180,7 +180,7 @@ export interface ProcDef {
 }
 export const PROCS: Record<'coixay' | 'bep' | 'nhathuoc' | 'khungcui', ProcDef> = {
   coixay: { name: 'Cối xay', take: { thoc: 4 }, give: { gao: 3 }, rate: 6 },
-  bep: { name: 'Bếp nấu lương', take: { gao: 2, cui: 1 }, takeOne: { keys: ['thit', 'ca', 'trung'], n: 1 }, give: { luong: 3 }, rate: 5 },
+  bep: { name: 'Nhà Bếp', take: { thoc: 3, cui: 1 }, takeOne: { keys: ['thit', 'ca', 'trung'], n: 1 }, give: { luong: 4 }, rate: 5 },
   nhathuoc: { name: 'Nhà thuốc', take: { thaoduoc: 3 }, give: { duoc: 1 }, rate: 4 },
   khungcui: { name: 'Khung cửi', take: { to: 2 }, give: { vai: 1 }, rate: 3 },
 };
@@ -205,10 +205,20 @@ export const TECHS: Record<TechKey, TechDef> = {
 };
 export const TECH_KEYS = Object.keys(TECHS) as TechKey[];
 export const TECH_MAX = 3;
-export const techCost = (lv: number): Partial<Record<ResKey, number>> => ({ tien: 300 * lv * lv, go: 120 * lv, da: 100 * lv, gao: 40 * lv });
+export const techCost = (lv: number): Partial<Record<ResKey, number>> => ({ tien: 300 * lv * lv, go: 120 * lv, da: 100 * lv, thoc: 60 * lv });
 export const techMs = (lv: number) => 30 * 60_000 * lv * lv;
 
 // ======================= HÀNH QUÂN: LƯƠNG, BỆNH =======================
+/**
+ * Bữa ăn thành sức mạnh (spec 012): cơ cấu khẩu phần mang theo quyết định buff của cả chuyến.
+ * Thịt +12% công, cá +12% máu, lương nấu +8% cả hai (nhân theo tỉ lệ khẩu phần), gạo không buff.
+ */
+export function mealBuff(mix: Partial<Record<ResKey, number>>): { atk: number; hp: number } {
+  const total = Object.values(mix).reduce((a, b) => a + (b ?? 0), 0);
+  if (total <= 0) return { atk: 1, hp: 1 };
+  const f = (k: ResKey) => (mix[k] ?? 0) / total;
+  return { atk: 1 + 0.12 * f('thit') + 0.08 * f('luong'), hp: 1 + 0.12 * f('ca') + 0.08 * f('luong') };
+}
 /** Mỗi người trong đội ăn 1 lương mỗi giờ trên biển. */
 export const RATION_PER_HOUR = 1;
 /** Bệnh trên biển. */

@@ -394,8 +394,46 @@ export function drawBattleBg(w: number, h: number): Canvas {
   return c;
 }
 
+const TRAU = [
+  '................',
+  '.wk..........kw.',
+  '.wwk........kww.',
+  '..wkkTTTTTTkkw..',
+  '...kTTTTTTTTk...',
+  '..kTTttttttTTk..',
+  '.kTTtkTttTktTTk.',
+  '.kTTtttttttTTTk.',
+  '.kTTtuuuuuuTTTk.',
+  '..kTtukkkkutTk..',
+  '..kkTuuuuuuTkk..',
+  '...kTTTTTTTTk...',
+  '...kTTkkkkTTk...',
+  '...kTTk..kTTk...',
+  '...kkkk..kkkk...',
+  '................',
+];
+const NGU = [
+  '.......kk.......',
+  '.....kkyykk.....',
+  '....kyyyyyyk....',
+  '...kYyyyyyyYk...',
+  '....kkuuuukk....',
+  '....kukuukuk....',
+  '....kuuuuuuk....',
+  '.....kuuuuk.....',
+  '...kkBBbbBBkk.t.',
+  '..kBbbbbbbbBkt..',
+  '..kBbbbbbbbBkt..',
+  '..kuBbbbbbBukt..',
+  '...kkBBBBBBkkt..',
+  '....kBBkkBBk.t..',
+  '....kkk..kkk.t..',
+  '................',
+];
 export function charCanvas(key: string): Canvas {
   if (isRandKey(key)) return drawMonster(randSeed(key), randBase(key).family);
+  if (key === 'trau') return fromMap(TRAU);
+  if (key === 'ngu') return fromMap(NGU);
   if (key === 'thuytinh') return drawThuyTinh();
   if (key === 'thuybinh') return drawThuyBinh();
   if (key === 'cuada') return fromMap(recolor(CUA_GAI, { e: 'n', E: 'N', O: 'M' }), PAL, 2);

@@ -272,17 +272,17 @@ const RES_INFO: Record<ResKey, [string, string]> = {
   ngoc: ['Quái mạnh, hòm hiếm', 'Công trình cấp cao, tiến hóa bậc cuối'],
   tien: ['Thuế nhà dân, thương nhân, bán nguyên liệu', 'Mua giống, thuê thợ, học viện'],
   lt: ['Phần thưởng, mua gói', 'Quay Vòng Quay'],
-  thoc: ['Gặt ở ruộng', 'Xay gạo, nuôi vật nuôi'],
-  gao: ['Xay ở cối xay', 'Nấu lương khô, ăn trên biển'],
+  thoc: ['Gặt ở ruộng', 'Nấu lương ở Nhà Bếp, nuôi vật nuôi, học viện'],
+  gao: ['Cối xay cũ (không xây mới)', 'Ăn trên biển, không có buff'],
   rau: ['Gặt ở vườn', 'Nuôi vật nuôi, nấu ăn. Chóng hỏng'],
-  thit: ['Mổ lợn, chuồng trại', 'Nấu lương, muối. Chóng hỏng'],
+  thit: ['Mổ lợn, chuồng trại', 'Ăn trên biển: công +12%. Nấu lương. Chóng hỏng'],
   trung: ['Gà mái đẻ', 'Ăn hoặc ấp. Chóng hỏng'],
-  ca: ['Câu cá, ao cá', 'Nấu lương, làm cá khô. Chóng hỏng'],
-  thaoduoc: ['Gặt ở vườn thuốc', 'Nhà thuốc làm thuốc men'],
-  to: ['Gặt ở nương dâu', 'Khung cửi dệt vải'],
-  luong: ['Nấu ở bếp', 'Lương cho chuyến ra khơi'],
-  duoc: ['Nhà thuốc', 'Chữa bệnh trên biển'],
-  vai: ['Khung cửi', 'Buồm, thuyền lớn'],
+  ca: ['Câu cá, ao cá', 'Ăn trên biển: máu +12%. Nấu lương. Chóng hỏng'],
+  luong: ['Nấu ở Nhà Bếp', 'Lương ra khơi: công và máu +8%'],
+  thaoduoc: ['Hàng cũ: tự đổi thành thuốc', 'Không còn dùng'],
+  to: ['Hàng cũ: tự đổi thành vải', 'Không còn dùng'],
+  duoc: ['Gặt ở vườn thuốc', 'Chữa bệnh trên biển'],
+  vai: ['Gặt ở nương dâu', 'Buồm, thuyền lớn'],
 };
 export function openKho(ui: UI) {
   const draw = () => {
@@ -290,7 +290,7 @@ export function openKho(ui: UI) {
     const groups: [string, ResKey[]][] = [
       ['Tiền', ['tien', 'so', 'ngoc', 'lt']],
       ['Vật liệu', ['go', 'da', 'tre', 'sat', 'co', 'la', 'cui']],
-      ['Nông sản', ['thoc', 'gao', 'rau', 'thit', 'trung', 'ca', 'thaoduoc', 'to']],
+      ['Nông sản', ['thoc', 'rau', 'thit', 'trung', 'ca', 'gao']],
       ['Quân nhu', ['luong', 'duoc', 'vai']],
     ];
     const sellable = (k: ResKey) => (k === 'co' || k === 'la' || k === 'cui') && s.res[k] >= 10;
@@ -329,7 +329,7 @@ export function supplyLine(s: PlayerState, oneWayMs: number) {
   return `<div class="card ${ok ? '' : 'danger-card'}"><small>Hậu cần</small>
     <p>Lương cho cả chuyến: <b>${need}</b> khẩu phần · đang có ${have} ${ok ? '' : '<b class="bad">(thiếu: quân sẽ đói, đánh yếu đi)</b>'}</p>
     <p>Thuốc men mang theo: ${Math.min(s.res.duoc, 10)} liều · thân thuyền ${Math.round(s.vo)}%${s.vo < 30 ? ' <b class="bad">(đi chậm)</b>' : ''}</p>
-    <p class="muted small">Lương khô dùng trước, thiếu thì lấy gạo (2 gạo = 1 khẩu phần), cá, thịt. Đi càng lâu càng tốn lương, càng dễ đổ bệnh.</p></div>`;
+    <p class="muted small">Bữa ăn là buff: lương nấu (công, máu +8%) dùng trước, rồi thịt (công +12%), cá (máu +12%), cuối cùng gạo (2 gạo = 1 khẩu phần, không buff). Đi càng lâu càng tốn lương, càng dễ đổ bệnh.</p></div>`;
 }
 
 /** Lớp phủ ngày đêm, mưa, sương mù trên màn hình. */

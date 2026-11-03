@@ -1151,7 +1151,7 @@ export class UI {
       const s = this.store.s;
       const groups: Record<string, BKey[]> = { 'Nhà cửa': [], 'Nông trại': [], 'Chế biến': [], 'Kinh tế': [], 'Học thuật': [], 'Thành trì': [] };
       const G: Record<string, string> = { 'nhà cửa': 'Nhà cửa', 'nông trại': 'Nông trại', 'chế biến': 'Chế biến', 'kinh tế': 'Kinh tế', 'học thuật': 'Học thuật', 'thành trì': 'Thành trì' };
-      for (const k of B_KEYS) groups[G[BUILDINGS[k].group]].push(k);
+      for (const k of B_KEYS) if (!BUILDINGS[k].hidden) groups[G[BUILDINGS[k].group]].push(k);
       const row = (k: BKey) => {
         const b = BUILDINGS[k];
         const have = s.dinh.filter((d) => d.k === k).length;

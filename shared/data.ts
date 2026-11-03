@@ -188,8 +188,8 @@ export const EFFECTS = {
   sailSecPerCell: [15, 12, 9, 7, 5],
 };
 
-export type CompKey = 'an' | 'ngoc' | 'ha' | 'chau';
-export const COMP_KEYS: CompKey[] = ['an', 'ngoc', 'ha', 'chau'];
+export type CompKey = 'an' | 'ngoc' | 'ha' | 'chau' | 'trau' | 'ngu';
+export const COMP_KEYS: CompKey[] = ['an', 'ngoc', 'ha', 'chau', 'trau', 'ngu'];
 export interface UnitBase {
   name: string;
   hp: number;
@@ -217,6 +217,8 @@ export const COMPANIONS: Record<CompKey, UnitBase & { title: string; unlock: str
   ngoc: { name: 'Lâm Bảo Ngọc', title: 'Võ sư Bình Định', hp: 150, atk: 9, def: 12, spd: 7, skill: 'thietcot', row: 'front', unlock: 'Có sẵn', bio: 'Thiết Cốt: da cứng như sắt, đứng ra chịu đòn thay đồng đội.' },
   ha: { name: 'Đặng Thu Hà', title: 'Dược sĩ trạm xá', hp: 80, atk: 7, def: 5, spd: 9, skill: 'lalanh', row: 'back', unlock: 'Nhà chính lên bậc 2', bio: 'Lá Lành: hồi máu bằng thuốc nam.' },
   chau: { name: 'Hồ Minh Châu', title: 'Sinh viên Bách Khoa', hp: 75, atk: 15, def: 4, spd: 11, skill: 'samset', row: 'back', unlock: 'Cuốc lên bậc 2', bio: 'Sấm Sét: phóng tia sét đánh dây chuyền.' },
+  trau: { name: 'Trâu Chiến', title: 'Lớn lên từ chuồng trại', hp: 170, atk: 11, def: 9, spd: 6, skill: 'phandon', row: 'front', unlock: 'Chuồng lên cấp 2', bio: 'Mai Gai: húc ai đụng vào cũng đau, phản lại một phần sát thương.' },
+  ngu: { name: 'Ngư Phủ', title: 'Lão chài ao cá', hp: 78, atk: 13, def: 4, spd: 10, skill: 'danhkep', row: 'back', unlock: 'Ao Cá xây xong', bio: 'Vồ Kép: phóng lao hai phát liên tiếp.' },
 };
 
 export const SKILLS: Record<SkillKey, { name: string; desc: string }> = {

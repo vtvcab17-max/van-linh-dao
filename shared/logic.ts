@@ -5,6 +5,7 @@ import {
   CHESTS,
   CHEST_INTERVAL_MS,
   COMP_KEYS,
+  COMPANIONS,
   EFFECTS,
   EVOLVE_COST,
   FEEDABLE,
@@ -40,7 +41,7 @@ import { islandCell, worldFor } from './map';
 import { hexDist, hexLine, hexRange } from './hex';
 import { berthsUsed, cleanShips, fleetCap, SHIP_SIZE, SHIP_WEAR, SHIPS, WEAPONS, type Ship, type ShipKind, type ShipWeapon } from './navy';
 import {
-  CROPS, cropProgress, GEAR_WEAR, HIRE_COST, HULL_WEAR, OVERRIPE_MS, PENS, PER_WORKER, PLOT_YIELD, plotSeed, PROCS, RATION_PER_HOUR, SICK_PER_HOUR, STORE_H, TECH_MAX, TECHS, WEATHER, regionOf, techCost, techMs, wearMult, weatherAt, windFactor,
+  CROPS, cropProgress, mealBuff, GEAR_WEAR, HIRE_COST, HULL_WEAR, OVERRIPE_MS, PENS, PER_WORKER, PLOT_YIELD, plotSeed, PROCS, RATION_PER_HOUR, SICK_PER_HOUR, STORE_H, TECH_MAX, TECHS, WEATHER, regionOf, techCost, techMs, wearMult, weatherAt, windFactor,
   type CropKey, type TechKey,
 } from './eco';
 import { inWorld, isleById, lairById, WORLD_H, WORLD_VERSION, WORLD_W, type Isle } from './world';
@@ -205,6 +206,8 @@ export interface Voyage {
   food?: number;
   need?: number;
   duoc?: number;
+  /** cơ cấu khẩu phần mang theo (quyết định buff bữa ăn) */
+  mix?: Partial<Record<ResKey, number>>;
   /** đảo tự nhiên đang có chủ: sức giữ đảo lúc ra khơi */
   isleDef?: IsleDef;
   /** xuất phát từ đâu (đảo nhà hoặc cứ điểm chư hầu) */
@@ -316,6 +319,8 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
       ngoc: { lv: 1, xp: 0, unlocked: true },
       ha: { lv: 1, xp: 0, unlocked: false },
       chau: { lv: 1, xp: 0, unlocked: false },
+      trau: { lv: 1, xp: 0, unlocked: false },
+      ngu: { lv: 1, xp: 0, unlocked: false },
     },
     chests: [],
     nextChestAt: 20_000,
@@ -616,6 +621,15 @@ export function tick(s: PlayerState, now: number): string[] {
       d.to = undefined;
       d.doneAt = undefined;
       notes.push(`Xây xong ${BUILDINGS[d.k].names[d.lv - 1]}.`);
+      // nông trại nuôi ra quân: Ao Cá xong → Ngư Phủ, Chuồng cấp 2 → Trâu Chiến
+      if (d.k === 'aoca' && !s.comps.ngu.unlocked) {
+        s.comps.ngu.unlocked = true;
+        notes.push(`${COMPANIONS.ngu.name} xin theo đội ra trận!`);
+      }
+      if (d.k === 'chuong' && d.lv >= 2 && !s.comps.trau.unlocked) {
+        s.comps.trau.unlocked = true;
+        notes.push(`${COMPANIONS.trau.name} xin theo đội ra trận!`);
+      }
     }
   const dt = dtReal * s.speed;
   s.gt += dt;
@@ -1140,6 +1154,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
     case 'xay': {
       const b = BUILDINGS[a.k];
       if (!b) return fail('Không có công trình này.');
+      if (b.hidden) return fail('Công trình này đã được gộp vào Nhà Bếp và Vườn, không xây mới nữa.');
       if (s.lv.leu.tier < b.needLeu) return fail(`Cần Nhà chính bậc ${b.needLeu}.`);
       if (s.dinh.filter((d) => d.k === a.k).length >= b.max) return fail(`Đảo chỉ có chỗ cho ${b.max} ${b.names[0]}.`);
       if (!isLand(s, a.x, a.y) || occupied(s, a.x, a.y)) return fail('Ô này không xây được. Chọn ô đất trống.');
@@ -1856,6 +1871,16 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   merged.tech = { ...s.tech };
   if (typeof merged.vo !== 'number') merged.vo = 100;
   merged.ltDay = { ...fresh.ltDay, ...s.ltDay };
+  // gộp tài nguyên (spec 012): tơ → vải (2:1), thảo dược → thuốc (3:1)
+  if (merged.res.to > 0) {
+    merged.res.vai += Math.floor(merged.res.to / 2);
+    merged.res.to = 0;
+  }
+  if (merged.res.thaoduoc > 0) {
+    merged.res.duoc += Math.floor(merged.res.thaoduoc / 3);
+    merged.res.thaoduoc = 0;
+  }
+  merged.comps = { ...fresh.comps, ...s.comps };
   merged.soc = { ...newSociety(), ...(s.soc ?? {}) } as Society;
   // hải đồ mở rộng (hơn 1 triệu ô): toạ độ cũ không còn đúng → dời đảo tới vành ngoài mới, khám phá lại
   if (merged.wv !== WORLD_VERSION) {
@@ -2265,19 +2290,22 @@ export function rationNeed(s: PlayerState, oneWayMs: number) {
   return Math.ceil(h * teamSize(s) * RATION_PER_HOUR * (1 - 0.15 * (s.tech.quanLuong ?? 0)));
 }
 /** Xuất kho lương thực: lương khô trước, thiếu thì gạo (2 gạo = 1 khẩu phần), rồi cá, thịt. */
-function takeRations(s: PlayerState, need: number): number {
+function takeRations(s: PlayerState, need: number): { got: number; mix: Partial<Record<ResKey, number>> } {
   let got = 0;
+  const mix: Partial<Record<ResKey, number>> = {};
   const take = (k: ResKey, per: number) => {
     if (got >= need) return;
     const n = Math.min(s.res[k], Math.ceil((need - got) * per));
     s.res[k] -= n;
-    got += Math.floor(n / per);
+    const g = Math.floor(n / per);
+    got += g;
+    if (g) mix[k] = (mix[k] ?? 0) + g;
   };
   take('luong', 1);
-  take('gao', 2);
-  take('ca', 1);
   take('thit', 1);
-  return got;
+  take('ca', 1);
+  take('gao', 2);
+  return { got, mix };
 }
 /** Thuốc mang theo: tối đa 2 liều mỗi người. */
 function takeMedicine(s: PlayerState): number {
@@ -2302,6 +2330,13 @@ function voyageCondition(s: PlayerState, v: Voyage): { mod: NonNullable<TeamSpec
       mod.hp *= 0.8 + 0.2 * fed;
       notes.push(fed <= 0 ? 'Hết sạch lương: quân đói lả, đánh yếu hẳn.' : 'Thiếu lương: quân đói, đánh yếu đi.');
     }
+  }
+  // bữa ăn thành buff: thịt tăng công, cá tăng máu, lương nấu tăng cả hai
+  if (v.mix) {
+    const mb = mealBuff(v.mix);
+    mod.atk *= mb.atk;
+    mod.hp *= mb.hp;
+    if (mb.atk > 1 || mb.hp > 1) notes.push(`Bữa ăn no nê${mb.atk > 1 ? `: công +${Math.round((mb.atk - 1) * 100)}%` : ''}${mb.hp > 1 ? `${mb.atk > 1 ? ',' : ':'} máu +${Math.round((mb.hp - 1) * 100)}%` : ''}.`);
   }
   // bệnh trên biển
   const hours = Math.max(0, (v.arriveAt - v.departAt) / 3600_000);
@@ -2431,11 +2466,15 @@ export { TECHS, TECH_MAX, techCost, techMs, CROPS, PENS, PROCS };
 function provision(s: PlayerState, v: Voyage, oneWayMs: number) {
   if (v.kind === 'scout') {
     v.need = Math.ceil(rationNeed(s, oneWayMs) / Math.max(1, teamSize(s)));
-    v.food = takeRations(s, v.need);
+    const sc = takeRations(s, v.need);
+    v.food = sc.got;
+    v.mix = sc.mix;
     return;
   }
   v.need = rationNeed(s, oneWayMs);
-  v.food = takeRations(s, v.need);
+  const ra = takeRations(s, v.need);
+  v.food = ra.got;
+  v.mix = ra.mix;
   v.duoc = takeMedicine(s);
 }
 

@@ -114,6 +114,8 @@ export interface BDef {
   cost: Partial<Record<ResKey, number>>[];
   /** thời gian xây (ms) theo cấp 1..3 */
   ms: [number, number, number];
+  /** ngừng cho xây mới (công trình cũ vẫn chạy) */
+  hidden?: boolean;
 }
 
 const M = 60_000;
@@ -131,10 +133,10 @@ export const BUILDINGS: Record<BKey, BDef> = {
   nuongdau: { names: ['Nương Dâu', 'Bãi Dâu Tằm', 'Làng Tơ Lụa'], desc: 'Trồng dâu nuôi tằm: 3 giờ ra tơ để dệt vải buồm.', group: 'nông trại', max: 2, needLeu: 2, cost: [{ go: 40, tre: 40 }, { go: 90, tre: 90, da: 30 }, { go: 200, tre: 200, da: 80 }], ms: [5 * M, 25 * M, 90 * M] },
   chuong: { names: ['Chuồng Gà', 'Chuồng Lợn Gà', 'Trang Trại Chăn Nuôi'], desc: 'Ra trứng và thịt mỗi giờ; ăn thóc và rau lúc bạn ghé thu.', group: 'nông trại', max: 3, needLeu: 1, cost: [{ go: 40, tre: 30 }, { go: 100, tre: 80, da: 30 }, { go: 220, da: 120, sat: 30 }], ms: [3 * M, 20 * M, 75 * M] },
   aoca: { names: ['Ao Cá', 'Đầm Cá', 'Hồ Cá Chép'], desc: 'Nuôi cá: ra cá mỗi giờ, không cần cho ăn.', group: 'nông trại', max: 2, needLeu: 1, cost: [{ da: 30, co: 20 }, { da: 80, go: 40 }, { da: 200, go: 100 }], ms: [3 * M, 20 * M, 75 * M] },
-  coixay: { names: ['Cối Xay Tay', 'Cối Giã Gạo', 'Cối Xay Nước'], desc: 'Xay thóc thành gạo (4 thóc → 3 gạo).', group: 'chế biến', max: 1, needLeu: 1, cost: [{ go: 40, da: 40 }, { go: 100, da: 100 }, { go: 220, da: 220, sat: 40 }], ms: [5 * M, 25 * M, 90 * M] },
-  bep: { names: ['Bếp Lương', 'Lò Nấu Quân Lương', 'Đại Trù Phòng'], desc: 'Nấu lương khô cho quân đi biển (2 gạo + 1 thịt/cá/trứng → 3 lương).', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, da: 40 }, { go: 140, da: 100 }, { go: 300, da: 220, sat: 60 }], ms: [8 * M, 30 * M, 2 * 60 * M] },
-  nhathuoc: { names: ['Trạm Thuốc', 'Nhà Thuốc Nam', 'Y Viện'], desc: 'Bào chế thuốc men (3 thảo dược → 1 thuốc) chữa bệnh trên biển.', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, la: 60 }, { go: 140, la: 120, da: 60 }, { go: 300, da: 200, ngoc: 2 }], ms: [8 * M, 30 * M, 2 * 60 * M] },
-  khungcui: { names: ['Khung Cửi', 'Xưởng Dệt', 'Phường Tơ Lụa'], desc: 'Dệt tơ thành vải buồm (2 tơ → 1 vải) để vá buồm, sửa thuyền.', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, tre: 60 }, { go: 140, tre: 140 }, { go: 300, tre: 300, sat: 40 }], ms: [8 * M, 30 * M, 2 * 60 * M] },
+  coixay: { names: ['Cối Xay Tay', 'Cối Giã Gạo', 'Cối Xay Nước'], desc: 'Xay thóc thành gạo (4 thóc → 3 gạo).', group: 'chế biến', max: 1, needLeu: 1, cost: [{ go: 40, da: 40 }, { go: 100, da: 100 }, { go: 220, da: 220, sat: 40 }], ms: [5 * M, 25 * M, 90 * M], hidden: true },
+  bep: { names: ['Nhà Bếp', 'Bếp Quân Lương', 'Đại Trù Phòng'], desc: 'Nấu lương cho quân đi biển (3 thóc + 1 củi + 1 thịt/cá/trứng → 4 lương). Ăn thịt tăng công, ăn cá tăng máu, lương nấu tăng cả hai.', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, da: 40 }, { go: 140, da: 100 }, { go: 300, da: 220, sat: 60 }], ms: [8 * M, 30 * M, 2 * 60 * M] },
+  nhathuoc: { names: ['Trạm Thuốc', 'Nhà Thuốc Nam', 'Y Viện'], desc: 'Bào chế thuốc men (3 thảo dược → 1 thuốc) chữa bệnh trên biển.', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, la: 60 }, { go: 140, la: 120, da: 60 }, { go: 300, da: 200, ngoc: 2 }], ms: [8 * M, 30 * M, 2 * 60 * M], hidden: true },
+  khungcui: { names: ['Khung Cửi', 'Xưởng Dệt', 'Phường Tơ Lụa'], desc: 'Dệt tơ thành vải buồm (2 tơ → 1 vải) để vá buồm, sửa thuyền.', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, tre: 60 }, { go: 140, tre: 140 }, { go: 300, tre: 300, sat: 40 }], ms: [8 * M, 30 * M, 2 * 60 * M], hidden: true },
   hocvien: { names: ['Trường Làng', 'Học Viện', 'Quốc Tử Giám'], desc: 'Nghiên cứu nông nghiệp, hàng hải, quân sự, y học. Cấp học viện là cấp nghiên cứu cao nhất.', group: 'học thuật', max: 1, needLeu: 2, cost: [{ go: 100, da: 80, tien: 200 }, { go: 240, da: 200, tien: 800 }, { go: 500, da: 400, ngoc: 3, tien: 2500 }], ms: [15 * M, 90 * M, 5 * 60 * M] },
   benthuyen: { names: ['Bến Thuyền', 'Xưởng Đóng Tàu', 'Thủy Xưởng'], desc: 'Đóng, sửa thuyền chiến. Có 6 chỗ neo, lên cấp 9 rồi 12 chỗ.', group: 'học thuật', max: 1, needLeu: 2, cost: [{ go: 120, tre: 80 }, { go: 260, tre: 160, sat: 40 }, { go: 520, da: 200, sat: 120, vai: 20 }], ms: [10 * M, 60 * M, 3 * 60 * M] },
   den: { names: ['Miếu Thổ Thần', 'Đền Sơn Tinh', 'Đền Hùng Thu Nhỏ'], desc: 'Linh vật đói chậm hơn 15% mỗi cấp; đánh Thủy Tinh +5% công mỗi cấp.', group: 'nhà cửa', max: 1, needLeu: 3, cost: [{ go: 100, da: 100, so: 60 }, { go: 200, da: 200, so: 200 }, { go: 400, da: 400, so: 500, ngoc: 4 }], ms: [20 * M, 2 * 60 * M, 6 * 60 * M] },

@@ -1,3 +1,4 @@
+import { charCanvas } from './art/sprites';
 import { drawMonster } from './art2/monsters';
 import { drawDinh2 } from './art2/dinh2';
 import { drawUnit, GENERALS } from './art2/units';
@@ -97,7 +98,7 @@ async function boot() {
     clearTimeout(rt);
     rt = window.setTimeout(() => game.scale.resize(Math.ceil(innerWidth / rs), Math.ceil(innerHeight / rs)), 60);
   });
-  (window as unknown as { __vld: unknown }).__vld = { store, ui, game, perf, net, GAME, drawMonster, drawDinh2, drawUnit, GENERALS };
+  (window as unknown as { __vld: unknown }).__vld = { store, ui, game, perf, net, GAME, drawMonster, drawDinh2, drawUnit, GENERALS, char: charCanvas };
   game.events.once('ready', async () => {
     try {
       ui.init(game);
