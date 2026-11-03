@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json && tsc -p server/tsconfig.json",
     "danh-gia": "node tools/evaluate.mjs",
     "playtest:quan": "node tools/playtest-quan.mjs",
+    "playtest:hoatdong": "node tools/playtest-hoatdong.mjs",
     "server:dev": "wrangler dev --port 8787",
     "build:test": "vite build",
     "deploy": "npm run build && wrangler deploy"
