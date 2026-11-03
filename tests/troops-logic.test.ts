@@ -41,13 +41,32 @@ describe('luyện quân', () => {
     s.res.luong = 1;
     expect(apply(s, { t: 'luyen', k: 'giao', n: 1 }).ok).toBe(false);
   });
-  it('không vượt sức chứa trại', () => {
+  it('Trại Lính chỉ để huấn luyện: mỗi lượt tối đa 5 lính mỗi cấp', () => {
     const s = rich('a');
-    put(s, 'donbinh', 1, 5); // chứa 10 + 15 = 25
-    expect(apply(s, { t: 'luyen', k: 'giao', n: 10 }).ok).toBe(true);
-    expect(apply(s, { t: 'luyen', k: 'giao', n: 10 }).ok).toBe(true);
-    expect(apply(s, { t: 'luyen', k: 'giao', n: 10 }).ok).toBe(false);
+    put(s, 'donbinh', 1, 5);
+    expect(apply(s, { t: 'luyen', k: 'giao', n: 6 }).ok).toBe(false);
+    expect(apply(s, { t: 'luyen', k: 'giao', n: 5 }).ok).toBe(true);
+  });
+  it('lính ngủ trong nhà: hết giường thì không luyện thêm, thêm nhà dân thì có giường', () => {
+    const s = rich('a'); // Nhà chính bậc 5 = 20 giường
+    put(s, 'donbinh', 3, 5);
+    for (let i = 0; i < 4; i++) expect(apply(s, { t: 'luyen', k: 'giao', n: 5 }).ok).toBe(true);
     expect(troopCount(s.troops)).toBe(20);
+    const r = apply(s, { t: 'luyen', k: 'giao', n: 1 });
+    expect(r.ok).toBe(false);
+    expect(r.msg).toContain('giường');
+    s.dinh.push({ id: 'nh', k: 'nhadan', x: 9, y: 9, lv: 1 }); // 6 gian
+    expect(apply(s, { t: 'luyen', k: 'giao', n: 5 }).ok).toBe(true);
+  });
+  it('cơ giới đậu ở bãi xe của Xưởng Cơ Giới, không chiếm giường', () => {
+    const s = rich('a');
+    put(s, 'donbinh', 3, 5);
+    put(s, 'xuongcg', 1, 6); // bãi 4 chỗ
+    for (let i = 0; i < 4; i++) expect(apply(s, { t: 'luyen', k: 'xenu', n: 1 }).ok).toBe(true);
+    const r = apply(s, { t: 'luyen', k: 'xenu', n: 1 });
+    expect(r.ok).toBe(false);
+    expect(r.msg).toContain('Bãi xe');
+    expect(apply(s, { t: 'luyen', k: 'giao', n: 5 }).ok).toBe(true);
   });
   it('quân cộng vào sức mạnh', () => {
     const s = rich('a');

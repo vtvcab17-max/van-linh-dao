@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TROOPS, TROOP_KEYS, boardOk, carryCap, cleanTroops, fitCargo, houseCap, squadUnit, survivors, troopCount, troopPower, isMech } from '../shared/troops';
+import { TROOPS, TROOP_KEYS, boardOk, carryCap, cleanTroops, fitCargo, bedCap, parkCap, batchMax, squadUnit, survivors, troopCount, troopPower, isMech } from '../shared/troops';
 
 describe('quân', () => {
   it('có 3 lính và 3 cơ giới, cơ giới nhận diện đúng', () => {
@@ -7,9 +7,12 @@ describe('quân', () => {
     expect(TROOP_KEYS.filter(isMech)).toEqual(['xenu', 'xeda', 'voi']);
     expect(TROOPS.giao.cost.luong).toBeGreaterThan(0);
   });
-  it('sức chứa trại và sức chở thuyền', () => {
-    expect(houseCap(0, 0)).toBe(10);
-    expect(houseCap(2, 1)).toBe(10 + 30 + 10);
+  it('giường lính, bãi xe, lượt luyện và sức chở thuyền', () => {
+    expect(bedCap(1, 0)).toBe(4);
+    expect(bedCap(3, 12)).toBe(12 + 12);
+    expect(parkCap(0)).toBe(0);
+    expect(parkCap(3)).toBe(8);
+    expect(batchMax(2)).toBe(10);
     expect(carryCap(1, [])).toBe(12);
     expect(carryCap(3, [{ k: 'buom', vo: 80 }, { k: 'ghe', vo: 0 }, { k: 'chien', vo: 50 }])).toBe(8 + 12 + 10 + 16);
   });

@@ -1,8 +1,8 @@
 // Bảng quân đội (spec 013): lính, quân cơ giới, quân từng đảo, quân mang theo mỗi chuyến, luyện quân.
 import type { UI } from './ui';
 import { RES, type ResKey } from '../../shared/data';
-import { bLevel } from '../../shared/economy';
-import { fitCargo, carryCap, houseCap, isMech, TROOP_KEYS, TROOPS, boardOk, mechCount, troopCount, type TroopKey, type Troops } from '../../shared/troops';
+import { bLevel, slotSum } from '../../shared/economy';
+import { fitCargo, carryCap, bedCap, parkCap, isMech, TROOP_KEYS, TROOPS, boardOk, mechCount, troopCount, type TroopKey, type Troops } from '../../shared/troops';
 import { worldFor } from '../../shared/map';
 import { isleById } from '../../shared/world';
 import type { PlayerState } from '../../shared/logic';
@@ -49,8 +49,11 @@ export function openArmy(ui: UI) {
     const s = ui.store.s;
     const don = bLevel(s.dinh, 'donbinh');
     const cg = bLevel(s.dinh, 'xuongcg');
-    const cap = houseCap(don, cg);
+    const beds = bedCap(s.lv.leu.tier, slotSum(s.dinh, 'nhadan'));
+    const park = parkCap(cg);
     const home = troopCount(s.troops);
+    const homeMech = mechCount(s.troops);
+    const homeInf = home - homeMech;
     const carry = carryCap(s.lv.thuyen.tier, s.fleet);
     const cargo = fitCargo(s.mang, s.troops, carry, s.fleet);
     const noBoat = TROOP_KEYS.filter((k) => (s.mang[k] ?? 0) > 0 && !boardOk(k, s.fleet));
@@ -90,18 +93,18 @@ export function openArmy(ui: UI) {
     const train = TROOP_KEYS.map((k) => {
       const d = TROOPS[k];
       const site = isMech(k) ? cg : don;
-      const lock = !site ? (isMech(k) ? 'Cần Xưởng Cơ Giới' : 'Cần Trại Lính') : site < d.need ? `Cần ${isMech(k) ? 'Xưởng Cơ Giới' : 'Trại Lính'} cấp ${d.need}` : home >= cap ? 'Trại đầy' : '';
-      const can = (n: number) => !lock && home + n <= cap && Object.entries(d.cost).every(([r, v]) => s.res[r as ResKey] >= (v ?? 0) * n);
+      const lock = !site ? (isMech(k) ? 'Cần Xưởng Cơ Giới' : 'Cần Trại Lính') : site < d.need ? `Cần ${isMech(k) ? 'Xưởng Cơ Giới' : 'Trại Lính'} cấp ${d.need}` : isMech(k) ? (homeMech >= park ? 'Bãi xe đầy' : '') : homeInf >= beds ? 'Hết giường, lính ngủ trong nhà' : '';
+      const can = (n: number) => !lock && (isMech(k) ? homeMech + n <= park : homeInf + n <= beds && (n <= 5 * don)) && Object.entries(d.cost).every(([r, v]) => s.res[r as ResKey] >= (v ?? 0) * n);
       return `<div class="gear"><img src="${troopIcon(k)}" alt=""><div><b>${d.name}</b><small>${d.desc}</small><div class="costs">${costHtml(d.cost, s.res)}</div>${lock ? `<small class="bad">${lock}</small>` : ''}</div>
         <div class="tstep"><button type="button" data-luyen="${k}:1" ${can(1) ? '' : 'disabled'}>${isMech(k) ? 'Đóng' : 'Luyện'} 1</button><button type="button" data-luyen="${k}:5" ${can(5) ? '' : 'disabled'}>×5</button></div></div>`;
     }).join('');
 
     return `<div class="card"><small>Tổng quan</small>
-      <p>Quân ở đảo nhà <b>${home}</b>/${cap} chỗ · lính ${home - mechCount(s.troops)} · cơ giới ${mechCount(s.troops)}</p>
+      <p>Quân ở đảo nhà <b>${home}</b> · lính <b>${homeInf}</b>/${beds} giường · cơ giới <b>${homeMech}</b>/${park} chỗ đậu</p>
       <p>Thuyền chở tối đa <b>${carry}</b> quân. Mỗi chuyến đang mang <b>${troopCount(cargo)}</b>.</p>
-      <p class="muted small">Mỗi lính và mỗi cơ giới đều tính là 1 đơn vị, chiếm 1 chỗ ở trại và 1 chỗ trên thuyền. Quân ở nhà giữ đảo; quân mang đi ăn lương và có thể tử trận.</p></div>
+      <p class="muted small">Mỗi lính và mỗi cơ giới đều tính là 1 đơn vị, chiếm 1 giường (lính ngủ trong nhà: Nhà chính mỗi bậc 4 giường, mỗi gian nhà dân thêm 1) hoặc 1 chỗ đậu (cơ giới ở Xưởng Cơ Giới) và 1 chỗ trên thuyền. Trại Lính chỉ để huấn luyện. Quân ở nhà giữ đảo; quân mang đi ăn lương và có thể tử trận.</p></div>
       <div class="card"><small>Quân từng hòn đảo</small>
-        <div class="garr"><div><b>Đảo nhà</b> <span class="lvl">${home}/${cap} quân</span><small>${esc(listTroops(s.troops))}</small></div></div>
+        <div class="garr"><div><b>Đảo nhà</b> <span class="lvl">${home} quân</span><small>${esc(listTroops(s.troops))}</small></div></div>
         ${onBoat}${isleRows || '<p class="muted small">Chưa có đảo nào cắm cờ. Thắng một đảo tự nhiên thì quân còn lại ở lại giữ đảo.</p>'}</div>
       <div class="card"><small>Mang theo mỗi chuyến (${troopCount(cargo)}/${carry})</small>${plan || '<p class="muted small">Luyện quân xong sẽ chỉnh số mang theo ở đây.</p>'}
         ${noBoat.length ? `<p class="bad small">${noBoat.map((k) => TROOPS[k].name).join(', ')} cần thuyền buồm chiến trở lên mới lên được.</p>` : ''}</div>
@@ -166,24 +169,26 @@ export function campYard(s: PlayerState, site: 'donbinh' | 'xuongcg'): string {
   return `<div class="card"><small>${mech ? 'Bãi xe và voi chiến' : 'Sân trại lính'} · ${total} ${mech ? 'cơ giới' : 'lính'} đang ở trại</small>
     <div class="yard${mech ? ' yard-m' : ''}">${sprites || `<p class="yard-empty">${mech ? 'Bãi trống. Đóng xe nỏ, xe đá, voi chiến bên dưới.' : 'Sân trống. Luyện lính bên dưới để thấy họ tập trận.'}</p>`}</div>
     <div class="costs">${chips}</div>
-    <p class="muted small">${total > MAX_SHOWN ? `Hiển thị ${MAX_SHOWN}/${total}. ` : ''}${away ? `Đang đi vắng: ${away} (trên thuyền hoặc đóng ở đảo khác). ` : ''}Mỗi hình là một ${mech ? 'cơ giới' : 'người lính'} thật.</p></div>`;
+    <p class="muted small">${total > MAX_SHOWN ? `Hiển thị ${MAX_SHOWN}/${total}. ` : ''}${away ? `Đang đi vắng: ${away} (trên thuyền hoặc đóng ở đảo khác). ` : ''}Mỗi hình là một ${mech ? 'cơ giới' : 'người lính'} thật.${mech ? '' : ' Lính tập luyện ở sân này, ngủ trong nhà.'}</p></div>`;
 }
 /** Nút luyện nhanh ngay trong nhà lính / xưởng cơ giới. */
 export function campControls(s: PlayerState, site: 'donbinh' | 'xuongcg'): string {
   const mech = site === 'xuongcg';
   const don = bLevel(s.dinh, 'donbinh');
   const cg = bLevel(s.dinh, 'xuongcg');
-  const cap = houseCap(don, cg);
-  const home = troopCount(s.troops);
+  const beds = bedCap(s.lv.leu.tier, slotSum(s.dinh, 'nhadan'));
+  const park = parkCap(cg);
+  const homeMech = mechCount(s.troops);
+  const homeInf = troopCount(s.troops) - homeMech;
   const rows = TROOP_KEYS.filter((k) => isMech(k) === mech)
     .map((k) => {
       const d = TROOPS[k];
       const lv = mech ? cg : don;
-      const lock = lv < d.need ? `Cần cấp ${d.need}` : home >= cap ? 'Trại đầy' : '';
+      const lock = lv < d.need ? `Cần cấp ${d.need}` : mech ? (homeMech >= park ? 'Bãi xe đầy' : '') : homeInf >= beds ? 'Hết giường: lính ngủ trong nhà, xây thêm nhà dân' : '';
       const can = !lock && Object.entries(d.cost).every(([r, v]) => s.res[r as ResKey] >= (v ?? 0));
       return `<div class="gear"><img src="${troopIcon(k)}" alt=""><div><b>${d.name}</b><small>${d.desc}</small><div class="costs">${costHtml(d.cost, s.res)}</div>${lock ? `<small class="bad">${lock}</small>` : ''}</div>
         <div class="tstep"><button type="button" data-luyen="${k}:1" ${can ? '' : 'disabled'}>${mech ? 'Đóng' : 'Luyện'} 1</button></div></div>`;
     })
     .join('');
-  return `<div class="card"><small>${mech ? 'Đóng cơ giới' : 'Luyện lính'} · trại chứa ${home}/${cap}</small>${rows}<button type="button" class="wide" id="btnArmy2">Mở bảng quân đội</button></div>`;
+  return `<div class="card"><small>${mech ? `Đóng cơ giới · bãi xe ${homeMech}/${park}` : `Luyện lính (tối đa ${5 * don} mỗi lượt) · giường trong nhà ${homeInf}/${beds}`}</small>${rows}<button type="button" class="wide" id="btnArmy2">Mở bảng quân đội</button></div>`;
 }

@@ -39,7 +39,7 @@ import { LV_LABEL, ASCEND_REWARD, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, 
 import { teamFromBoss } from './battle';
 import { islandCell, worldFor } from './map';
 import { hexDist, hexLine, hexRange } from './hex';
-import { TROOPS, TROOP_KEYS, carryCap, cleanTroops, fitCargo, houseCap, isMech, squadUnit as _sq, survivors, troopCount, troopPower, type TroopKey, type Troops } from './troops';
+import { TROOPS, TROOP_KEYS, carryCap, cleanTroops, fitCargo, bedCap, parkCap, batchMax, isMech, squadUnit as _sq, survivors, troopCount, mechCount, troopPower, type TroopKey, type Troops } from './troops';
 import { berthsUsed, cleanShips, fleetCap, SHIP_SIZE, SHIP_WEAR, SHIPS, WEAPONS, type Ship, type ShipKind, type ShipWeapon } from './navy';
 import {
   CROPS, cropProgress, mealBuff, GEAR_WEAR, HIRE_COST, HULL_WEAR, OVERRIPE_MS, PENS, PER_WORKER, PLOT_YIELD, plotSeed, PROCS, RATION_PER_HOUR, SICK_PER_HOUR, STORE_H, TECH_MAX, TECHS, WEATHER, regionOf, techCost, techMs, wearMult, weatherAt, windFactor,
@@ -1315,9 +1315,16 @@ export function apply(s: PlayerState, a: Action): Outcome {
       const lvB = bLevel(s.dinh, site);
       if (!lvB) return fail(isMech(a.k) ? 'Cần xây Xưởng Cơ Giới để đóng quân cơ giới.' : 'Cần xây Trại Lính để luyện lính.');
       if (lvB < d.need) return fail(`${d.name} cần ${site === 'xuongcg' ? 'Xưởng Cơ Giới' : 'Trại Lính'} cấp ${d.need}.`);
-      const cap = houseCap(bLevel(s.dinh, 'donbinh'), bLevel(s.dinh, 'xuongcg'));
-      const have = troopCount(s.troops);
-      if (have + n > cap) return fail(`Trại chỉ chứa ${cap} quân (đang có ${have}). Nâng Trại Lính hoặc Xưởng Cơ Giới.`);
+      if (!isMech(a.k) && n > batchMax(lvB)) return fail(`Trại Lính cấp ${lvB} luyện tối đa ${batchMax(lvB)} lính mỗi lượt.`);
+      if (isMech(a.k)) {
+        const have = mechCount(s.troops);
+        const cap = parkCap(lvB);
+        if (have + n > cap) return fail(`Bãi xe chỉ đậu được ${cap} cơ giới (đang có ${have}). Nâng Xưởng Cơ Giới.`);
+      } else {
+        const have = troopCount(s.troops) - mechCount(s.troops);
+        const cap = bedCap(s.lv.leu.tier, slotSum(s.dinh, 'nhadan'));
+        if (have + n > cap) return fail(`Chỉ có ${cap} giường cho lính (đang có ${have}). Lính ngủ trong nhà: nâng Nhà chính hoặc xây thêm nhà dân.`);
+      }
       const cost = Object.fromEntries(Object.entries(d.cost).map(([r, v]) => [r, (v ?? 0) * n])) as Partial<Record<ResKey, number>>;
       if (!canPay(s, cost)) return fail('Chưa đủ vật liệu hoặc lương.');
       pay(s, cost);

@@ -1,5 +1,5 @@
 // Quân đội (spec 013): lính luyện ở Trại Lính, quân cơ giới đóng ở Xưởng Cơ Giới, chở bằng thuyền.
-// Mỗi lính và mỗi cơ giới đều là 1 đơn vị (1 chỗ ở trại, 1 chỗ trên thuyền). Trong trận mỗi loại quân gộp thành một đội.
+// Mỗi lính và mỗi cơ giới đều là 1 đơn vị (1 giường hoặc 1 chỗ đậu, 1 chỗ trên thuyền). Trong trận mỗi loại quân gộp thành một đội.
 import type { ResKey, UnitBase } from './data';
 
 export type TroopKey = 'giao' | 'cung' | 'khien' | 'xenu' | 'xeda' | 'voi';
@@ -26,8 +26,15 @@ export const isMech = (k: TroopKey) => TROOPS[k].mech;
 export const troopCount = (t: Troops | undefined) => Object.values(t ?? {}).reduce((a, b) => a + (b ?? 0), 0);
 export const mechCount = (t: Troops | undefined) => TROOP_KEYS.filter(isMech).reduce((a, k) => a + (t?.[k] ?? 0), 0);
 
-/** Sức chứa trại: 10 + 15 mỗi cấp Trại Lính + 10 mỗi cấp Xưởng Cơ Giới. */
-export const houseCap = (donbinhLv: number, cgLv: number) => 10 + 15 * donbinhLv + 10 * cgLv;
+/**
+ * Lính ngủ trong nhà, không ngủ ở Trại Lính (Trại Lính chỉ để huấn luyện):
+ * Nhà chính mỗi bậc 4 giường, mỗi gian nhà dân thêm 1 giường tầng.
+ */
+export const bedCap = (leuTier: number, nhaGian: number) => 4 * Math.max(1, leuTier) + nhaGian;
+/** Quân cơ giới đậu ở bãi của Xưởng Cơ Giới: 2 + 2 mỗi cấp. */
+export const parkCap = (cgLv: number) => (cgLv > 0 ? 2 + 2 * cgLv : 0);
+/** Trại Lính luyện tối đa 5 lính mỗi cấp trong một lượt. */
+export const batchMax = (lv: number) => 5 * lv;
 
 const SHIP_CARRY: Record<string, number> = { ghe: 6, buom: 10, chien: 16 };
 /** Sức chở quân của thuyền chính và hạm đội (thuyền hỏng không chở được). */

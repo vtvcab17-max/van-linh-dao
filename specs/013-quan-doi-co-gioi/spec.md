@@ -15,7 +15,7 @@ Thuyền chở quân (sức chở theo bậc thuyền và hạm đội) → ra t
 - Luyện lính tốn lương (nông trại gắn với quân đội).
 
 ## Luật
-- R1 Sức chứa trại: 10 + 15 × tổng cấp Trại Lính + 10 × tổng cấp Xưởng CG.
+- R1 Chỗ ở: Trại Lính chỉ để huấn luyện (tối đa 5 lính mỗi cấp mỗi lượt), lính ngủ trong nhà: Nhà chính 4 giường mỗi bậc + 1 giường tầng mỗi gian nhà dân. Cơ giới đậu ở bãi Xưởng CG: 2 + 2 mỗi cấp.
 - R2 Sức chở: 8 + 4 × bậc thuyền + hạm đội (ghe 6, thuyền buồm 10, chiến hạm 16; thuyền hỏng không tính).
 - R3 Quân tại đảo nhà (`troops`), tại từng đảo đã cắm cờ (`isleTroops`), kế hoạch mang theo (`mang`).
 - R4 Ra khơi (hoang đảo, đảo tự nhiên, đảo người chơi) mang theo quân theo kế hoạch, bị giới hạn bởi quân sẵn có, sức chở, luật lên thuyền; quân mang theo ăn lương.
