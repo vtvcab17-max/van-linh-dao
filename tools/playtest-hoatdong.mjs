@@ -200,7 +200,15 @@ if (bep) {
   await shot('06-nha-bep');
   const sheetTxt = await p.evaluate(() => document.querySelector('#sheet')?.textContent ?? '');
   check('Bảng Nhà Bếp ghi thóc + củi → khẩu phần', /thóc|Thóc/.test(sheetTxt) && /khẩu phần|Lương|lương/.test(sheetTxt));
-  await p.evaluate(() => { const r = window.__vld.store.s.res; r.luong = 0; r.thoc = 60; r.cui = 60; r.thit = 30; r.ca = 0; r.trung = 0; });
+  await p.evaluate(() => { const r = window.__vld.store.s.res; r.luong = 0; r.thoc = 60; r.cui = 60; r.thit = 0; r.ca = 0; r.trung = 0; });
+  await p.evaluate(() => window.__vld.ui.closeSheet());
+  await reset();
+  const ptN = await tileXY(bep.x, bep.y);
+  await p.mouse.click(ptN.x, ptN.y);
+  await wait(500);
+  check('Thiếu thịt/cá/trứng → bảng Nhà Bếp báo rõ thiếu gì', await open('#needNote'));
+  await shot('06b-thieu-thit');
+  await p.evaluate(() => { window.__vld.store.s.res.thit = 30; });
   const l0 = await p.evaluate(() => window.__vld.store.s.res.luong);
   const t0 = await p.evaluate(() => window.__vld.store.s.res.thoc);
   // nấu: thuê thợ (ô trống) rồi chờ thời gian game chạy

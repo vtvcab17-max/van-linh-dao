@@ -22,6 +22,19 @@ const hm = (ms: number) => {
   const m = Math.max(0, Math.ceil(ms / 60_000));
   return m >= 60 ? `${Math.floor(m / 60)} giờ ${m % 60} phút` : `${m} phút`;
 };
+/** Xưởng chế biến đứng im vì thiếu nguyên liệu: nói rõ thiếu gì (vd. Nhà Bếp cần thêm thịt/cá/trứng). */
+function needLine(s: PlayerState, k: keyof typeof PROCS): string {
+  const P = PROCS[k];
+  const lack: string[] = [];
+  const need: Partial<Record<ResKey, number>> = {};
+  for (const [r, v] of Object.entries(P.take)) if ((s.res[r as ResKey] ?? 0) < (v ?? 1)) need[r as ResKey] = v ?? 1;
+  const one = P.takeOne && P.takeOne.keys.every((r) => (s.res[r] ?? 0) < P.takeOne!.n) ? P.takeOne : null;
+  if (!Object.keys(need).length && !one) return '';
+  if (Object.keys(need).length) lack.push(`thiếu ${costs(need)}`);
+  if (one) lack.push(`cần thêm 1 trong: ${one.keys.map((r) => `<span class="cost"><img src="${iconUrl(r)}" alt="">${fmt(one.n)}</span>`).join(' hoặc ')}`);
+  return `<p class="warn small" id="needNote">Chưa nấu được: ${lack.join('; ')}.</p>`;
+}
+
 const costs = (c: Partial<Record<ResKey, number>>, have?: Record<string, number>) =>
   Object.entries(c)
     .filter(([, v]) => (v ?? 0) > 0)
@@ -112,6 +125,7 @@ function interior(ui: UI, d: Dinh): string {
         <div class="card sub"><small>Đang có (${p.h.toFixed(1).replace('.', ',')}/12 giờ)</small>
         <p>Thu được: ${has ? costs(p.give) : '<span class="muted">chưa có gì</span>'}</p>
         ${Object.values(p.take).some((v) => (v ?? 0) > 0) ? `<p class="muted small">Sẽ dùng: ${costs(p.take)}</p>` : ''}
+        ${!animal && !has ? needLine(s, d.k as keyof typeof PROCS) : ''}
         <button type="button" class="primary wide" id="btnThuNT" ${has ? '' : 'disabled'}>Thu</button></div>`;
       break;
     }
