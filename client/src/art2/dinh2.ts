@@ -257,6 +257,24 @@ export function drawDinh2(k: BKey, lv: number): HTMLCanvasElement {
       p.px(16, G - 4, C.metal2);
       return fin(c, (q) => { smoke(q, 16, 4); q.px(7, 21, '#fff2b0'); });
     }
+    case 'xuongcg': {
+      const { c, p, G } = make();
+      shadow(p, 11, G, 10);
+      walls(p, 2, 14, 14, G, L === 3 ? PLASTER : ['#b9b0a2', '#9d9384', '#80776a']);
+      // cửa xưởng rộng cho xe ra vào
+      p.rect(4, 19, 8, G - 20, '#3b2a1e');
+      p.rect(5, 20, 6, G - 21, '#5a4030');
+      roof(p, L, 1, 13, 9, 15);
+      // bánh xe gỗ và nỏ lớn ngoài sân
+      p.ell(18, G - 5, 4, 4, C.wood2);
+      p.ell(18, G - 5, 2, 2, C.wood3);
+      p.px(18, G - 5, C.metal);
+      p.h(14, 22, G - 10, C.wood3);
+      p.v(18, G - 14, G - 10, C.wood2);
+      p.line(15, G - 14, 21, G - 14, C.metal);
+      p.px(21, G - 14, C.red);
+      return fin(c, (q) => { smoke(q, 12, 4); });
+    }
     case 'den': {
       const { c, p, G } = make();
       shadow(p, 11, G, 10);

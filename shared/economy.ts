@@ -101,8 +101,8 @@ export const DAY0 = Date.UTC(2026, 10, 1, 17, 0, 0); // 00:00 02/11/2026 giờ V
 export const dayOf = (now: number) => Math.floor((now - DAY0) / 86_400_000);
 
 // ======================= CÔNG TRÌNH =======================
-export type BKey = 'nhadan' | 'khothoc' | 'cho' | 'tramthue' | 'thapcanh' | 'tuong' | 'donbinh' | 'xuongren' | 'den' | 'ruong' | 'vuon' | 'nuongdau' | 'chuong' | 'aoca' | 'coixay' | 'bep' | 'nhathuoc' | 'khungcui' | 'hocvien' | 'benthuyen';
-export const B_KEYS: BKey[] = ['nhadan', 'khothoc', 'cho', 'tramthue', 'thapcanh', 'tuong', 'donbinh', 'xuongren', 'den', 'ruong', 'vuon', 'nuongdau', 'chuong', 'aoca', 'coixay', 'bep', 'nhathuoc', 'khungcui', 'hocvien', 'benthuyen'];
+export type BKey = 'nhadan' | 'khothoc' | 'cho' | 'tramthue' | 'thapcanh' | 'tuong' | 'donbinh' | 'xuongren' | 'den' | 'ruong' | 'vuon' | 'nuongdau' | 'chuong' | 'aoca' | 'coixay' | 'bep' | 'nhathuoc' | 'khungcui' | 'hocvien' | 'benthuyen' | 'xuongcg';
+export const B_KEYS: BKey[] = ['nhadan', 'khothoc', 'cho', 'tramthue', 'thapcanh', 'tuong', 'donbinh', 'xuongren', 'den', 'ruong', 'vuon', 'nuongdau', 'chuong', 'aoca', 'coixay', 'bep', 'nhathuoc', 'khungcui', 'hocvien', 'benthuyen', 'xuongcg'];
 
 export interface BDef {
   names: [string, string, string];
@@ -139,6 +139,7 @@ export const BUILDINGS: Record<BKey, BDef> = {
   khungcui: { names: ['Khung Cửi', 'Xưởng Dệt', 'Phường Tơ Lụa'], desc: 'Dệt tơ thành vải buồm (2 tơ → 1 vải) để vá buồm, sửa thuyền.', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, tre: 60 }, { go: 140, tre: 140 }, { go: 300, tre: 300, sat: 40 }], ms: [8 * M, 30 * M, 2 * 60 * M], hidden: true },
   hocvien: { names: ['Trường Làng', 'Học Viện', 'Quốc Tử Giám'], desc: 'Nghiên cứu nông nghiệp, hàng hải, quân sự, y học. Cấp học viện là cấp nghiên cứu cao nhất.', group: 'học thuật', max: 1, needLeu: 2, cost: [{ go: 100, da: 80, tien: 200 }, { go: 240, da: 200, tien: 800 }, { go: 500, da: 400, ngoc: 3, tien: 2500 }], ms: [15 * M, 90 * M, 5 * 60 * M] },
   benthuyen: { names: ['Bến Thuyền', 'Xưởng Đóng Tàu', 'Thủy Xưởng'], desc: 'Đóng, sửa thuyền chiến. Có 6 chỗ neo, lên cấp 9 rồi 12 chỗ.', group: 'học thuật', max: 1, needLeu: 2, cost: [{ go: 120, tre: 80 }, { go: 260, tre: 160, sat: 40 }, { go: 520, da: 200, sat: 120, vai: 20 }], ms: [10 * M, 60 * M, 3 * 60 * M] },
+  xuongcg: { names: ['Xưởng Cơ Giới', 'Xưởng Chiến Xa', 'Binh Công Xưởng'], desc: 'Đóng quân cơ giới: xe nỏ, xe bắn đá, voi chiến. Mỗi cấp thêm 10 chỗ ở trại. Cần Trại Lính để luyện lính.', group: 'thành trì', max: 1, needLeu: 3, cost: [{ go: 150, da: 100, sat: 60 }, { go: 300, da: 220, sat: 120 }, { go: 600, da: 420, sat: 260, ngoc: 4 }], ms: [20 * M, 100 * M, 6 * 60 * M] },
   den: { names: ['Miếu Thổ Thần', 'Đền Sơn Tinh', 'Đền Hùng Thu Nhỏ'], desc: 'Linh vật đói chậm hơn 15% mỗi cấp; đánh Thủy Tinh +5% công mỗi cấp.', group: 'nhà cửa', max: 1, needLeu: 3, cost: [{ go: 100, da: 100, so: 60 }, { go: 200, da: 200, so: 200 }, { go: 400, da: 400, so: 500, ngoc: 4 }], ms: [20 * M, 2 * 60 * M, 6 * 60 * M] },
 };
 
@@ -198,7 +199,8 @@ export const SLOT_INFO: Record<BKey, { kind: SlotKind; unit: string; desc: strin
   tramthue: { kind: 'show', unit: 'chỗ neo thương thuyền', desc: 'Thương thuyền đi ngang thì ghé neo nộp thuế.' },
   thapcanh: { kind: 'show', unit: 'chỗ xạ thủ', desc: 'Xạ thủ đứng canh trên tháp.' },
   tuong: { kind: 'show', unit: 'lỗ châu mai', desc: 'Lỗ châu mai cho lính bắn ra khi bị đánh.' },
-  donbinh: { kind: 'show', unit: 'giường lính', desc: 'Lính đồn ăn ngủ tại trại, sẵn sàng giữ đảo.' },
+  donbinh: { kind: 'show', unit: 'giường lính', desc: 'Lính ăn ngủ tại trại, mỗi cấp thêm 15 chỗ ở.' },
+  xuongcg: { kind: 'show', unit: 'bệ xe', desc: 'Quân cơ giới đóng và đậu ở đây.' },
   xuongren: { kind: 'show', unit: 'lò rèn', desc: 'Mỗi lò một thợ rèn sửa trang bị.' },
   hocvien: { kind: 'show', unit: 'chỗ ngồi', desc: 'Học trò ngồi học, nghiên cứu các môn.' },
   den: { kind: 'show', unit: 'bát hương', desc: 'Bát hương thờ thần, giữ linh vật no lâu.' },

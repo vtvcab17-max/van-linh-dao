@@ -39,6 +39,7 @@ import { LV_LABEL, ASCEND_REWARD, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, 
 import { teamFromBoss } from './battle';
 import { islandCell, worldFor } from './map';
 import { hexDist, hexLine, hexRange } from './hex';
+import { TROOPS, TROOP_KEYS, carryCap, cleanTroops, fitCargo, houseCap, isMech, squadUnit as _sq, survivors, troopCount, troopPower, type TroopKey, type Troops } from './troops';
 import { berthsUsed, cleanShips, fleetCap, SHIP_SIZE, SHIP_WEAR, SHIPS, WEAPONS, type Ship, type ShipKind, type ShipWeapon } from './navy';
 import {
   CROPS, cropProgress, mealBuff, GEAR_WEAR, HIRE_COST, HULL_WEAR, OVERRIPE_MS, PENS, PER_WORKER, PLOT_YIELD, plotSeed, PROCS, RATION_PER_HOUR, SICK_PER_HOUR, STORE_H, TECH_MAX, TECHS, WEATHER, regionOf, techCost, techMs, wearMult, weatherAt, windFactor,
@@ -163,6 +164,10 @@ export interface PlayerState {
   gacha: { pity: number; spins: number };
   /** Hạm đội: thuyền chiến đóng thêm ở Xưởng Đóng Tàu. */
   fleet: Ship[];
+  /** quân đóng ở đảo nhà, ở từng đảo đã cắm cờ, và kế hoạch mang theo khi ra khơi (spec 013) */
+  troops: Troops;
+  isleTroops: Record<string, Troops>;
+  mang: Troops;
   /** Khiên bảo hộ tới lúc này (giờ thật): không ai đột kích, đánh chiếm, thám thính được. */
   shield: number;
   /** Nghiên cứu đã xong ở học viện. */
@@ -208,6 +213,8 @@ export interface Voyage {
   duoc?: number;
   /** cơ cấu khẩu phần mang theo (quyết định buff bữa ăn) */
   mix?: Partial<Record<ResKey, number>>;
+  /** quân mang theo trên thuyền */
+  troops?: Troops;
   /** đảo tự nhiên đang có chủ: sức giữ đảo lúc ra khơi */
   isleDef?: IsleDef;
   /** xuất phát từ đâu (đảo nhà hoặc cứ điểm chư hầu) */
@@ -350,6 +357,9 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     khu: '01',
     shield: now + 24 * 3600_000, // người mới được che chở 24 giờ
     fleet: [],
+    troops: {},
+    isleTroops: {},
+    mang: {},
     tech: {},
     research: null,
     ben: { giao: 100, khien: 100, thuoc: 100, bua: 100 },
@@ -500,7 +510,7 @@ export function powerFrom(tiers: Partial<Record<LvKey, number>>, team: { lv: num
 }
 export function power(s: PlayerState): number {
   const team = COMP_KEYS.filter((k) => s.comps[k].unlocked).map((k) => s.comps[k]);
-  return powerFrom({ leu: s.lv.leu.tier, cuoc: s.lv.cuoc.tier, rao: s.lv.rao.tier, thuyen: s.lv.thuyen.tier }, team, landCount(s), s.kho, s.asc) + genPower(s);
+  return powerFrom({ leu: s.lv.leu.tier, cuoc: s.lv.cuoc.tier, rao: s.lv.rao.tier, thuyen: s.lv.thuyen.tier }, team, landCount(s), s.kho, s.asc) + genPower(s) + troopPower(s.troops) + Object.values(s.isleTroops).reduce((p, g) => p + troopPower(g), 0) + troopPower(s.voyage?.troops);
 }
 /** Danh hiệu: đã phi thăng thì là Tiên Nhân. */
 export function titleFor(s: PlayerState): string {
@@ -530,6 +540,7 @@ export function teamSpec(s: PlayerState, defending: boolean): TeamSpec {
     mod: defending ? undefined : battleMod,
     fort: defending ? defSpecOf(s.dinh) : undefined,
     ships: s.fleet.filter((x) => x.vo > 0).map((x) => ({ k: x.k, w: { ...x.w }, vo: x.vo })),
+    troops: defending ? cleanTroops(s.troops) : cleanTroops(s.voyage?.troops),
     gen: s.chuTuong && s.tuong[s.chuTuong] ? { id: s.chuTuong, star: s.tuong[s.chuTuong]!, w: s.deo && (s.vuKhi[s.deo] ?? 0) > 0 ? s.deo : null } : undefined,
   };
 }
@@ -612,6 +623,12 @@ export function tick(s: PlayerState, now: number): string[] {
     s.thue.acc -= whole;
     s.res.tien = Math.max(0, s.res.tien + whole);
     if (whole > 0) s.thue.today += whole;
+  }
+  // đảo đã mất hoặc bỏ thì quân đóng ở đó về đảo nhà
+  for (const [id, g] of Object.entries(s.isleTroops)) {
+    if (s.isles.some((o) => o.id === id)) continue;
+    for (const k of TROOP_KEYS) if (g[k]) s.troops[k] = (s.troops[k] ?? 0) + (g[k] ?? 0);
+    delete s.isleTroops[id];
   }
   // nhà cửa, thành trì xây xong
   for (const d of s.dinh)
@@ -813,14 +830,14 @@ function voyageTick(s: PlayerState): string[] {
       } else {
         // thua: mất sạch trang bị mang theo, thuyền bị đánh chìm, người bơi về đảo
         sinkBoat(s);
-        s.voyage = null;
+        abortVoyage(s);
         notes.push(`Bị Thủy Tinh diệt sạch (gây ${o.boss?.dmg ?? 0} sát thương). Mất trang bị mang theo, thuyền bị đánh chìm.`);
         return notes;
       }
     } else if (v.kind === 'wild') {
       const w = wildOf(s, v.targetId);
       if (!w) {
-        s.voyage = null;
+        abortVoyage(s);
         return notes;
       }
       o = fightWild(s, w, true);
@@ -835,7 +852,7 @@ function voyageTick(s: PlayerState): string[] {
     } else if (v.kind === 'isle') {
       const isle = isleById(worldFor(s.khu), v.targetId);
       if (!isle) {
-        s.voyage = null;
+        abortVoyage(s);
         return notes;
       }
       o = fightIsle(s, isle, v.isleDef);
@@ -845,6 +862,23 @@ function voyageTick(s: PlayerState): string[] {
     }
     } finally {
       battleMod = undefined;
+    }
+    if (v.kind !== 'boss' && v.kind !== 'scout') {
+      settleTroops(s, v, o.battle, notes);
+      // thắng và cắm cờ đảo tự nhiên: quân còn lại đóng giữ đảo
+      if (v.kind === 'isle' && o.battle?.winner === 0 && s.isles.some((x) => x.id === v.targetId) && v.troops && troopCount(v.troops)) {
+        const g = (s.isleTroops[v.targetId] ??= {});
+        let room = ISLE_HOUSE - troopCount(g);
+        for (const k of TROOP_KEYS) {
+          const n = Math.min(v.troops[k] ?? 0, Math.max(0, room));
+          if (n > 0) {
+            g[k] = (g[k] ?? 0) + n;
+            v.troops[k] = (v.troops[k] ?? 0) - n;
+            room -= n;
+          }
+        }
+        notes.push('Quân còn lại ở lại giữ đảo vừa cắm cờ.');
+      }
     }
     if (v.kind !== 'boss' && v.kind !== 'scout') wearGear(s, s.kho);
     if (v.kind !== 'scout') wearFleet(s);
@@ -859,6 +893,7 @@ function voyageTick(s: PlayerState): string[] {
   }
   if (v.phase === 've' && s.gt >= v.returnAt) {
     voyageReturn(s, v);
+    if (v.troops) for (const k of TROOP_KEYS) if (v.troops[k]) s.troops[k] = (s.troops[k] ?? 0) + (v.troops[k] ?? 0);
     if (v.carry) for (const k of GEAR_KEYS) s.kho[k] = Math.min(GEAR[k].max, s.kho[k] + (v.carry[k] ?? 0));
     const got = addRes(s, v.loot);
     const txt = Object.keys(got).length ? `Thuyền về bến, chở về ${fmtLoot(got)}.` : 'Thuyền về bến tay không.';
@@ -916,7 +951,10 @@ export type Action =
   | { t: 'chuTuong'; id: GenId | null }
   | { t: 'deo'; id: LegWeaponId | null }
   | { t: 'ghep'; id: GenId }
-  | { t: 'doiLT'; dir: 'mua' | 'ban'; n: number };
+  | { t: 'doiLT'; dir: 'mua' | 'ban'; n: number }
+  | { t: 'luyen'; k: TroopKey; n: number }
+  | { t: 'mangQuan'; troops: Troops }
+  | { t: 'rutQuan'; isle: string };
 
 export interface Outcome {
   ok: boolean;
@@ -1268,6 +1306,35 @@ export function apply(s: PlayerState, a: Action): Outcome {
       const legs = out.filter((x) => x.leg).length;
       log(s, `Quay Vòng Vạn Linh ${n} lần${legs ? `: ra ${legs} đồ truyền thuyết!` : '.'}`);
       return { ok: true, msg: legs ? `Ra ${out.filter((x) => x.leg).map((x) => x.detail).join(', ')}!` : `Quay ${n} lần xong.`, spin: out };
+    }
+    case 'luyen': {
+      const d = TROOPS[a.k as TroopKey];
+      const n = Math.floor(a.n);
+      if (!d || !(n >= 1 && n <= 20)) return fail('Số lượng không hợp lệ.');
+      const site = isMech(a.k) ? 'xuongcg' : 'donbinh';
+      const lvB = bLevel(s.dinh, site);
+      if (!lvB) return fail(isMech(a.k) ? 'Cần xây Xưởng Cơ Giới để đóng quân cơ giới.' : 'Cần xây Trại Lính để luyện lính.');
+      if (lvB < d.need) return fail(`${d.name} cần ${site === 'xuongcg' ? 'Xưởng Cơ Giới' : 'Trại Lính'} cấp ${d.need}.`);
+      const cap = houseCap(bLevel(s.dinh, 'donbinh'), bLevel(s.dinh, 'xuongcg'));
+      const have = troopCount(s.troops);
+      if (have + n > cap) return fail(`Trại chỉ chứa ${cap} quân (đang có ${have}). Nâng Trại Lính hoặc Xưởng Cơ Giới.`);
+      const cost = Object.fromEntries(Object.entries(d.cost).map(([r, v]) => [r, (v ?? 0) * n])) as Partial<Record<ResKey, number>>;
+      if (!canPay(s, cost)) return fail('Chưa đủ vật liệu hoặc lương.');
+      pay(s, cost);
+      s.troops[a.k] = (s.troops[a.k] ?? 0) + n;
+      return { ok: true, msg: `${isMech(a.k) ? 'Đóng' : 'Luyện'} ${n} ${d.name}.` };
+    }
+    case 'mangQuan': {
+      s.mang = cleanTroops(a.troops);
+      return { ok: true, msg: `Mang theo ${troopCount(s.mang)} quân mỗi chuyến.` };
+    }
+    case 'rutQuan': {
+      const g = s.isleTroops[a.isle];
+      if (!g || !troopCount(g)) return fail('Đảo này không có quân đóng.');
+      if (s.voyage) return fail('Thuyền đang ngoài khơi, chờ về bến rồi hãy rút quân.');
+      for (const k of TROOP_KEYS) if (g[k]) s.troops[k] = (s.troops[k] ?? 0) + (g[k] ?? 0);
+      delete s.isleTroops[a.isle];
+      return { ok: true, msg: 'Đã rút quân về đảo nhà.' };
     }
     case 'chuTuong': {
       if (a.id === null) {
@@ -1650,6 +1717,8 @@ export interface IslandPub {
   gen?: { id: GenId; star: number; w: LegWeaponId | null };
   /** ô đảo nhà trên hải đồ */
   home?: { x: number; y: number };
+  /** quân giữ đảo nhà */
+  troops?: Troops;
   /** thuyền chiến giữ bến */
   ships?: { k: ShipKind; w: Partial<Record<ShipWeapon, boolean>>; vo: number }[];
   /** khiên bảo hộ tới lúc này: ẩn bên trong đảo */
@@ -1693,6 +1762,7 @@ export function publicOf(s: PlayerState): IslandPub {
     home: s.home ?? undefined,
     lvl: lordLevel(s),
     ships: shielded ? undefined : s.fleet.filter((x) => x.vo > 0).map((x) => ({ k: x.k, w: { ...x.w }, vo: x.vo })),
+    troops: shielded ? undefined : cleanTroops(s.troops),
   };
 }
 
@@ -1721,7 +1791,7 @@ export function raidSeed(attackerId: string, targetId: string, n: number) {
 /** Tính trận đột kích từ hai bản công khai — server dùng đúng hàm này để kiểm lại. */
 export function resolveRaid(att: TeamSpec, target: IslandPub, seed: number): { battle: BattleResult; loot: Partial<Record<ResKey, number>> } {
   const r = mulberry32(seed);
-  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear), fort: target.bot ? undefined : cleanDef(target.def), gen: cleanGen(target.gen), ships: target.bot ? undefined : cleanShips(target.ships) };
+  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear), fort: target.bot ? undefined : cleanDef(target.def), gen: cleanGen(target.gen), ships: target.bot ? undefined : cleanShips(target.ships), troops: target.bot ? undefined : cleanTroops(target.troops) };
   const battle = simulate(teamFromSpec(att, 0), teamFromSpec(defSpec, 1), r);
   const loot: Partial<Record<ResKey, number>> = {};
   if (battle.winner === 0) {
@@ -1844,7 +1914,7 @@ export function applyRaidAgainstMe(s: PlayerState, ev: RaidEvent): string | null
 
 /** Dấu vân tay ngắn của trạng thái: client và server so nhau để phát hiện lệch. */
 export function digest(s: PlayerState): string {
-  const parts = [s.rngN, s.seq, landCount(s), ...RES_KEYS.filter((k) => k !== 'tien' && k !== 'lt').map((k) => s.res[k]), ...LV_KEYS.map((k) => `${s.lv[k].tier}:${s.lv[k].xp}`), s.builds.length, s.voyage?.id ?? '-', s.chests.length];
+  const parts = [s.rngN, s.seq, landCount(s), ...RES_KEYS.filter((k) => k !== 'tien' && k !== 'lt').map((k) => s.res[k]), ...LV_KEYS.map((k) => `${s.lv[k].tier}:${s.lv[k].xp}`), s.builds.length, s.voyage?.id ?? '-', s.chests.length, troopCount(s.troops)];
   return hashStr(parts.join('|')).toString(36);
 }
 
@@ -1868,6 +1938,9 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   merged.ben = { ...fresh.ben, ...s.ben };
   if (typeof merged.shield !== 'number') merged.shield = 0;
   if (!Array.isArray(merged.fleet)) merged.fleet = [];
+  merged.troops = cleanTroops(s.troops);
+  merged.mang = cleanTroops(s.mang);
+  merged.isleTroops = Object.fromEntries(Object.entries(s.isleTroops ?? {}).map(([k, v]) => [k, cleanTroops(v)]));
   merged.tech = { ...s.tech };
   if (typeof merged.vo !== 'number') merged.vo = 100;
   merged.ltDay = { ...fresh.ltDay, ...s.ltDay };
@@ -2282,7 +2355,7 @@ function wearGear(s: PlayerState, keys: Partial<GearSet>) {
 /** Giờ thật ứng với một mốc giờ trong game. */
 const realAt = (s: PlayerState, gt: number) => s.lastReal - (s.gt - gt) / Math.max(1, s.speed);
 /** Số người ra trận (để tính lương). */
-const teamSize = (s: PlayerState) => COMP_KEYS.filter((k) => s.comps[k].unlocked).length + (s.chuTuong ? 1 : 0) + s.fleet.length * 2;
+const teamSize = (s: PlayerState) => COMP_KEYS.filter((k) => s.comps[k].unlocked).length + (s.chuTuong ? 1 : 0) + s.fleet.length * 2 + troopCount(s.voyage?.troops);
 
 /** Lương thực cần cho cả chuyến đi về. */
 export function rationNeed(s: PlayerState, oneWayMs: number) {
@@ -2462,8 +2535,41 @@ export function pending(s: PlayerState, d: Dinh, now = s.lastReal): { give: Part
 export const techLv = (s: PlayerState, k: TechKey) => s.tech[k] ?? 0;
 export { TECHS, TECH_MAX, techCost, techMs, CROPS, PENS, PROCS };
 
+/** Xếp quân lên thuyền theo kế hoạch mang theo: lấy từ quân ở đảo nhà. */
+function loadTroops(s: PlayerState, v: Voyage) {
+  const cargo = fitCargo(s.mang, s.troops, carryCap(s.lv.thuyen.tier, s.fleet), s.fleet);
+  if (!troopCount(cargo)) return;
+  for (const k of TROOP_KEYS) if (cargo[k]) s.troops[k] = (s.troops[k] ?? 0) - (cargo[k] ?? 0);
+  v.troops = cargo;
+}
+const ISLE_HOUSE = 24;
+/** Chuyến bị hủy giữa đường (đích không còn): quân trên thuyền về đảo nhà. */
+function abortVoyage(s: PlayerState) {
+  const tr = s.voyage?.troops;
+  if (tr) for (const k of TROOP_KEYS) if (tr[k]) s.troops[k] = (s.troops[k] ?? 0) + (tr[k] ?? 0);
+  s.voyage = null;
+}
+/** Sau trận: quân còn sống theo máu còn lại. Thắng đảo tự nhiên thì quân còn lại đóng ở đảo. */
+function settleTroops(s: PlayerState, v: Voyage, battle: BattleResult | undefined, notes: string[]) {
+  if (!v.troops || !troopCount(v.troops) || !battle) return;
+  const before = troopCount(v.troops);
+  const alive: Troops = {};
+  const mine = battle.a.filter((u) => !u.wall);
+  mine.forEach((u, i) => {
+    if (!u.key.startsWith('tq-')) return;
+    const k = u.key.slice(3) as TroopKey;
+    const n = v.troops![k] ?? 0;
+    const left = survivors(n, battle.hpA?.[i] ?? 0, u.maxHp);
+    if (left > 0) alive[k] = left;
+  });
+  v.troops = alive;
+  const lost = before - troopCount(alive);
+  if (lost > 0) notes.push(`Quân tử trận: ${lost}/${before}.`);
+}
+
 /** Xuất lương và thuốc cho chuyến đi. */
 function provision(s: PlayerState, v: Voyage, oneWayMs: number) {
+  if (v.kind !== 'scout' && v.kind !== 'boss') loadTroops(s, v);
   if (v.kind === 'scout') {
     v.need = Math.ceil(rationNeed(s, oneWayMs) / Math.max(1, teamSize(s)));
     const sc = takeRations(s, v.need);

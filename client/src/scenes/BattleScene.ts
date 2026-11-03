@@ -147,6 +147,10 @@ export class BattleScene extends Phaser.Scene {
       const m = u.key.match(/^tau-(ghe|buom|chien)(n?)(d?)(m?)$/);
       if (m) return ensureTex(this, u.key, () => drawBoat(m[1] as 'ghe' | 'buom' | 'chien', { no: !!m[2], da: !!m[3], dam: !!m[4] }, side === 0 ? '#ee5d4a' : '#5f6878'));
     }
+    if (u.key === 'tq-giao' || u.key === 'tq-cung' || u.key === 'tq-khien') {
+      const def = TROOPS.find((x) => x.id === MEN[u.key])!;
+      return ensureTex(this, `troop-${def.id}`, () => drawUnit(def.look));
+    }
     const gl = GEN_LOOKS.find((x) => x.id === u.key);
     if (gl) return ensureTex(this, `gen-${gl.id}`, () => drawUnit(gl.look));
     if (isRandKey(u.key)) return ensureTex(this, `ch-${u.key}`, () => charCanvas(u.key));

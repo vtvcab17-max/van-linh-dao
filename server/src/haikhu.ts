@@ -2,6 +2,7 @@
 // Máy người chơi chỉ gửi HÀNH ĐỘNG; server tự chạy đúng luật chơi dùng chung (shared/logic) rồi lưu.
 // Ai sửa dữ liệu trên máy cũng không có tác dụng: server so "dấu vân tay" và gửi lại trạng thái đúng.
 import { DurableObject } from 'cloudflare:workers';
+import { troopCount } from '../../shared/troops';
 import { allBots } from '../../shared/bots';
 import { GAME } from '../../shared/data';
 import { apply, applyRaidAgainstMe, ascend, digest, SERVER_RNG_ACTIONS, stripSecret, migrate, newPlayer, publicOf, tick, type Action, type IslandPub, type PlayerState } from '../../shared/logic';
@@ -296,7 +297,7 @@ export class HaiKhu extends DurableObject<Env> {
   private writeOwner(s: PlayerState, isle: string) {
     const o = s.isles.find((x) => x.id === isle);
     if (!o) return;
-    this.sql.exec('INSERT INTO isle_owner (isle, player, name, guild, don, thap, since) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(isle) DO UPDATE SET player = excluded.player, name = excluded.name, guild = excluded.guild, don = excluded.don, thap = excluded.thap, since = excluded.since', isle, s.id, s.name, s.guild?.tag ?? '', o.don, o.thap, o.since);
+    this.sql.exec('INSERT INTO isle_owner (isle, player, name, guild, don, thap, since) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(isle) DO UPDATE SET player = excluded.player, name = excluded.name, guild = excluded.guild, don = excluded.don, thap = excluded.thap, since = excluded.since', isle, s.id, s.name, s.guild?.tag ?? '', Math.min(3, o.don + Math.floor(troopCount(s.isleTroops?.[isle]) / 8)), o.thap, o.since);
   }
   /** Ghi sổ chủ quyền: thắng thì đảo về tay người thắng (người giữ cũ mất đảo), nhổ cờ thì xóa. */
   private settleClaims(s: PlayerState) {

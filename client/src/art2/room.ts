@@ -173,7 +173,7 @@ const DRAW: Record<string, (p: P) => void> = {
 };
 const OF: Record<BKey, string> = {
   ruong: 'field', vuon: 'field', nuongdau: 'field', chuong: 'barn', aoca: 'pond', nhadan: 'house', khothoc: 'store', benthuyen: 'pier',
-  cho: 'stall', tramthue: 'pier', thapcanh: 'tower', tuong: 'tower', donbinh: 'tower', xuongren: 'work', hocvien: 'work', coixay: 'work',
+  cho: 'stall', tramthue: 'pier', thapcanh: 'tower', tuong: 'tower', donbinh: 'tower', xuongcg: 'work', xuongren: 'work', hocvien: 'work', coixay: 'work',
   bep: 'house', nhathuoc: 'work', khungcui: 'work', den: 'shrine',
 };
 

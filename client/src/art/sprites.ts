@@ -430,8 +430,65 @@ const NGU = [
   '....kkk..kkk.t..',
   '................',
 ];
+const XE_NU = [
+  '................',
+  '.........w......',
+  '......kkkkkwk...',
+  '.....kuuuuuuwk..',
+  '...wwwkTTTTkkw..',
+  '..kkkkTTTTTTk...',
+  '.kTTTTTTTTTTTk..',
+  '.kTuuuuuuuuuTk..',
+  '.kTTTTTTTTTTTk..',
+  '..kkkkkkkkkkk...',
+  '.kTTTk...kTTTk..',
+  'kTuyuTk.kTuyuTk.',
+  'kTyYyTk.kTyYyTk.',
+  'kTuyuTk.kTuyuTk.',
+  '.kTTTk...kTTTk..',
+  '..kkk.....kkk...',
+];
+const XE_DA = [
+  '................',
+  '..........wk....',
+  '.........wwk....',
+  '........wkk.....',
+  '.......wk.k.....',
+  '......wk..k.....',
+  '.....kk..kTk....',
+  '....kuk..kTk....',
+  '...kuuk.kkTkk...',
+  '..kTTTTTTTTTTk..',
+  '..kTuuuuuuuuTk..',
+  '..kkkkkkkkkkkk..',
+  '.kTTTk....kTTTk.',
+  'kTuyuTk..kTuyuTk',
+  'kTuyuTk..kTuyuTk',
+  '.kTTTk....kTTTk.',
+];
+const VOI = [
+  '................',
+  '..kkkkkkk.......',
+  '.kNNNNNNNk.kk...',
+  'kNNNNNNNNNkNNk..',
+  'kNkNNNNNNNNNNNk.',
+  'kNNNNNNNNNNNNNNk',
+  'kNwNNNNNNNNNNNNk',
+  'kNwNNNNNNNNNNNNk',
+  'kNNNNNNNNNNNNNk.',
+  '.kNNNNNNNNNNNNk.',
+  '..kNNkNNNNkNNk..',
+  '..kNNk.kNNk.kNk.',
+  '..kNNk.kNNk.kNk.',
+  '..kkkk.kkkk.kkk.',
+  '................',
+  '................',
+];
 export function charCanvas(key: string): Canvas {
   if (isRandKey(key)) return drawMonster(randSeed(key), randBase(key).family);
+  if (key === 'tq-xenu') return fromMap(XE_NU);
+  if (key === 'tq-xeda') return fromMap(XE_DA);
+  if (key === 'tq-voi') return fromMap(VOI);
   if (key === 'trau') return fromMap(TRAU);
   if (key === 'ngu') return fromMap(NGU);
   if (key === 'thuytinh') return drawThuyTinh();

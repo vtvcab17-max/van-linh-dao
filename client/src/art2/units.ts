@@ -315,7 +315,7 @@ export const TROOPS: TroopDef[] = [
 ];
 
 /** Lính đi theo từng loại chỉ huy (đồng đội, tướng). */
-export const TROOP_OF: Record<string, string> = { an: 'danbinh', ngoc: 'khien', ha: 'cung', chau: 'no', don: 'khien', thap: 'cung', giong: 'khien', sontinh: 'khien', lac: 'thuy', auco: 'cung', caolo: 'no', nuthuy: 'thuy', nghiaquan: 'riu', ngudan: 'thuy', thaylang: 'cung' };
+export const TROOP_OF: Record<string, string> = { 'tq-giao': 'danbinh', 'tq-cung': 'cung', 'tq-khien': 'khien', 'tq-xenu': 'no', 'tq-xeda': 'riu', 'tq-voi': 'thuy', an: 'danbinh', ngoc: 'khien', ha: 'cung', chau: 'no', don: 'khien', thap: 'cung', giong: 'khien', sontinh: 'khien', lac: 'thuy', auco: 'cung', caolo: 'no', nuthuy: 'thuy', nghiaquan: 'riu', ngudan: 'thuy', thaylang: 'cung' };
 
 // ================= tướng (nhân vật truyền thuyết) =================
 export interface GeneralDef {

@@ -36,6 +36,7 @@ export const AI_GROUP_OF: Partial<Record<BKey, AiGroup>> = {
   thapcanh: 'def',
   tuong: 'def',
   donbinh: 'def',
+  xuongcg: 'def',
 };
 /** Tên nhóm trong bảng Xây dựng → nhóm tranh. */
 export const AI_GROUP_OF_TAB: Record<string, AiGroup | undefined> = { 'Nhà cửa': 'res', 'Kinh tế': 'eco', 'Học thuật': 'nav', 'Thành trì': 'def' };

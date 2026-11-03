@@ -380,6 +380,12 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 #trailer .tr-ctl { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; }
 #trailer .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.15); }
 #trailer .bar span { display: block; height: 100%; width: 0; background: var(--gold); }
+.garr { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px dashed rgba(240,200,100,.2); }
+.garr > div { min-width: 0; flex: 1; }
+.garr small { display: block; margin-top: 2px; text-transform: none; letter-spacing: 0; }
+.tstep { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.tstep b { min-width: 24px; text-align: center; font: 600 15px var(--font-pixel); color: var(--gold); }
+.tstep button { padding: 6px 9px; min-width: 38px; }
 .aistrip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
 .aistrip figure { margin: 0; position: relative; border: 2px solid var(--ink); border-radius: 6px; overflow: hidden; background: var(--lacquer); }
 .aistrip img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }

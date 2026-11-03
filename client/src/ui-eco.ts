@@ -1,5 +1,6 @@
 // Giao diện hệ sinh thái: ruộng vườn, chuồng ao, xưởng chế biến, học viện, sửa đồ, thời tiết, kho.
 import type { UI } from './ui';
+import { armyLine } from './ui-army';
 import { cropsFor, homeCell, pending, plotsOf, plotState, rationNeed, techLv, unitsOf, type PlayerState } from '../../shared/logic';
 import { CROPS, dayPhase, GAME_DAY_MS, HIRE_COST, PENS, PER_WORKER, PLOT_YIELD, plotSeed, PROCS, regionOf, seasonOf, TECH_KEYS, TECH_MAX, TECHS, techCost, techMs, WEATHER, weatherAt, WIND_DIRS, WX_MS, type CropKey, type TechKey } from '../../shared/eco';
 import { RES, RES_KEYS, type ResKey } from '../../shared/data';
@@ -48,6 +49,7 @@ function showIcon(k: string): string {
     case 'tuong': return troopUrl('no');
     case 'donbinh': return troopUrl('khien');
     case 'xuongren': return menuIcon('build');
+    case 'xuongcg': return troopUrl('no');
     case 'hocvien': return lookUrl('hoctro', { ...HOCTRO, cloth: [...HOCTRO.cloth] } as never);
     case 'den': return menuIcon('huong');
   }
@@ -323,6 +325,9 @@ export function openKho(ui: UI) {
 
 /** Dòng hậu cần trong bảng ra khơi: lương, thuốc, thân thuyền. */
 export function supplyLine(s: PlayerState, oneWayMs: number) {
+  return supplyCard(s, oneWayMs) + armyLine(s);
+}
+function supplyCard(s: PlayerState, oneWayMs: number) {
   const need = rationNeed(s, oneWayMs);
   const have = s.res.luong + Math.floor(s.res.gao / 2) + s.res.ca + s.res.thit;
   const ok = have >= need;

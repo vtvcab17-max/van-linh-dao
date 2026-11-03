@@ -1,4 +1,5 @@
 // Giao diện DOM: thanh tài nguyên, bảng linh vật, đội, chat, góp ý, hải đồ, credit Beta Holding.
+import { armySummary, openArmy } from './ui-army';
 import { AI_GROUP_OF_TAB, aiArt, aiGroupArt } from './art2/aiart';
 import type Phaser from 'phaser';
 import {
@@ -738,7 +739,7 @@ export class UI {
   openTeam() {
     const draw = () => {
       const s = this.store.s;
-      return this.gearHtml() + `<p class="hint">Đội ra trận tự động theo lượt. Chủ đảo (bạn) đánh mạnh hơn khi Cuốc tiến hóa.</p>` +
+      return armySummary(s) + this.gearHtml() + `<p class="hint">Đội ra trận tự động theo lượt. Chủ đảo (bạn) đánh mạnh hơn khi Cuốc tiến hóa.</p>` +
         COMP_KEYS.map((k) => {
           const c = k === 'an' ? { ...COMPANIONS.an, name: esc(s.name) } : COMPANIONS[k];
           const st = s.comps[k];
@@ -761,6 +762,7 @@ export class UI {
         const t = (e.target as HTMLElement).closest('button');
         if (!t) return;
         if (t.classList.contains('avEdit')) return this.openAvatar();
+        if (t.id === 'btnArmy') return openArmy(this);
         if (t.dataset.craft) {
           const o = this.store.do({ t: 'craft', g: t.dataset.craft as GearKey });
           this.toast(o.msg, o.ok ? 'gold' : 'bad');
