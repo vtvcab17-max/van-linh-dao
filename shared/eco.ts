@@ -186,7 +186,7 @@ export const PROCS: Record<'coixay' | 'bep' | 'nhathuoc' | 'khungcui', ProcDef> 
 };
 
 // ======================= HỌC VIỆN =======================
-export type TechKey = 'giongLua' | 'thuyLoi' | 'chanNuoi' | 'laBan' | 'dongTau' | 'renSat' | 'quanLuong' | 'namDuoc' | 'binhPhap';
+export type TechKey = 'giongLua' | 'thuyLoi' | 'chanNuoi' | 'laBan' | 'dongTau' | 'renSat' | 'quanLuong' | 'namDuoc' | 'binhPhap' | 'giapQuan' | 'vuKhiQuan' | 'coKhi';
 export interface TechDef {
   name: string;
   branch: 'Nông nghiệp' | 'Hàng hải' | 'Quân sự' | 'Y học';
@@ -202,6 +202,9 @@ export const TECHS: Record<TechKey, TechDef> = {
   quanLuong: { name: 'Quân lương', branch: 'Quân sự', desc: 'Quân ăn ít hơn 15% mỗi cấp khi hành quân.' },
   namDuoc: { name: 'Nam dược', branch: 'Y học', desc: 'Ít mắc bệnh hơn 20% mỗi cấp; mỗi liều thuốc chữa được nhiều hơn.' },
   binhPhap: { name: 'Binh pháp', branch: 'Quân sự', desc: 'Cả đội thêm 4% công mỗi cấp.' },
+  giapQuan: { name: 'Giáp quân', branch: 'Quân sự', desc: 'Lính (giáo, cung, khiên) thêm 8% máu mỗi cấp.' },
+  vuKhiQuan: { name: 'Vũ khí quân', branch: 'Quân sự', desc: 'Lính (giáo, cung, khiên) thêm 6% công mỗi cấp.' },
+  coKhi: { name: 'Cơ khí', branch: 'Quân sự', desc: 'Quân cơ giới (xe nỏ, xe đá, voi) thêm 8% công và máu mỗi cấp.' },
 };
 export const TECH_KEYS = Object.keys(TECHS) as TechKey[];
 export const TECH_MAX = 3;

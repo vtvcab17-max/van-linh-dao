@@ -5,7 +5,7 @@ import { bLevel, slotSum } from '../../shared/economy';
 import { fitCargo, carryCap, bedCap, parkCap, isMech, TROOP_KEYS, TROOPS, boardOk, mechCount, troopCount, type TroopKey, type Troops } from '../../shared/troops';
 import { worldFor } from '../../shared/map';
 import { isleById } from '../../shared/world';
-import type { PlayerState } from '../../shared/logic';
+import { lenhView, type LenhId, type PlayerState } from '../../shared/logic';
 import { iconUrl, portraitUrl } from './art/textures';
 import { troopUrl } from './art2/portrait';
 
@@ -108,7 +108,17 @@ export function openArmy(ui: UI) {
         <div class="tstep"><button type="button" data-luyen="${k}:1" ${can(1) ? '' : 'disabled'}>${isMech(k) ? 'Đóng' : 'Luyện'} 1</button><button type="button" data-luyen="${k}:5" ${can(5) ? '' : 'disabled'}>×5</button></div></div>`;
     }).join('');
 
-    return `<div class="card"><small>Tổng quan</small>
+    const lenh = lenhView(s)
+      .map((l) => `<div class="garr"><div><b>${esc(l.name)}</b> <span class="lvl">${l.have}/${l.need}</span><small>Thưởng: ${Object.entries(l.reward).map(([r, v]) => `+${v} ${RES[r as ResKey]?.name ?? r}`).join(', ')}</small></div>
+          <button type="button" data-lenh="${l.id}" ${l.done && !l.claimed ? '' : 'disabled'}>${l.claimed ? 'Đã nhận' : 'Nhận'}</button></div>`)
+      .join('');
+    const tq = [s.tech.giapQuan ?? 0, s.tech.vuKhiQuan ?? 0, s.tech.coKhi ?? 0];
+    const tqLine = tq.some((x) => x > 0)
+      ? `Nghiên cứu: lính +${8 * tq[0]}% máu, +${6 * tq[1]}% công · cơ giới +${8 * tq[2]}% công và máu.`
+      : 'Học Viện có Giáp quân, Vũ khí quân, Cơ khí để quân mạnh hơn.';
+    return `<div class="card"><small>Lệnh hôm nay</small>${lenh}</div>
+      <div class="card"><small>Tổng quan</small>
+      <p class="muted small">${tqLine}</p>
       <p>Quân ở đảo nhà <b>${home}</b> · lính <b>${homeInf}</b>/${beds} giường · cơ giới <b>${homeMech}</b>/${park} chỗ đậu</p>
       <p>Thuyền chở tối đa <b>${carry}</b> quân. Mỗi chuyến đang mang <b>${troopCount(cargo)}</b>.</p>
       <p class="muted small">Mỗi lính và mỗi cơ giới đều tính là 1 đơn vị, chiếm 1 giường (lính ngủ trong nhà: Nhà chính mỗi bậc 4 giường, mỗi gian nhà dân thêm 1) hoặc 1 chỗ đậu (cơ giới ở Xưởng Cơ Giới) và 1 chỗ trên thuyền. Trại Lính chỉ để huấn luyện. Quân ở nhà giữ đảo; quân mang đi ăn lương và có thể tử trận.</p></div>
@@ -134,6 +144,9 @@ export function openArmy(ui: UI) {
         const next: Troops = { ...s.mang };
         next[k as TroopKey] = Math.max(0, Math.min(99, (next[k as TroopKey] ?? 0) + Number(d)));
         ui.store.do({ t: 'mangQuan', troops: next });
+      } else if (t.dataset.lenh) {
+        const o = ui.store.do({ t: 'nhanLenh', id: t.dataset.lenh as LenhId });
+        ui.toast(o.msg, o.ok ? 'gold' : 'bad');
       } else if (t.dataset.row) {
         const [k, row] = t.dataset.row.split(':');
         const o = ui.store.do({ t: 'doiHang', k: k as TroopKey, row: row as 'front' | 'back' });

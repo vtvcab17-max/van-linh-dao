@@ -1,5 +1,5 @@
 // Mô phỏng trận đánh tự động theo lượt. Thuần logic, có hạt giống → server tính lại được y hệt.
-import { counterMult, squadUnit, survivors, TROOP_KEYS, type TroopRows, type Troops } from './troops';
+import { counterMult, isMech, squadUnit, survivors, TROOP_KEYS, type TroopRows, type Troops } from './troops';
 import { COMPANIONS, EFFECTS, enemyBase, LINH_VAT, type CompKey, type EnemyKey, type SkillKey, type UnitBase } from './data';
 import { shipUnit, type ShipKind, type ShipWeapon } from './navy';
 import { GENERALS, generalUnit, type GenId, type LegWeaponId } from './gacha';
@@ -121,6 +121,8 @@ export interface TeamSpec {
   troops?: Troops;
   /** hàng trước/sau người chơi chọn cho từng loại quân (mặc định theo loại) */
   rows?: TroopRows;
+  /** cấp nghiên cứu quân: giáp, vũ khí (lính), cơ khí (cơ giới) */
+  tq?: { giap: number; vukhi: number; cokhi: number };
   /** thuyền chiến theo đội */
   ships?: { k: ShipKind; w: Partial<Record<ShipWeapon, boolean>>; vo: number }[];
   /** điều kiện trận: lương, bệnh, thời tiết (nhân vào công/máu theo hàng) */
@@ -160,6 +162,13 @@ function teamFromSpec0(spec: TeamSpec, side: 0 | 1): BUnit[] {
     if (n > 0) {
       const u = makeUnit(squadUnit(k, n), `tq-${k}`, 1, side, out.length);
       if (spec.rows?.[k]) u.row = spec.rows[k]!;
+      if (spec.tq) {
+        const mech = isMech(k);
+        const hpK = 1 + 0.08 * (mech ? spec.tq.cokhi : spec.tq.giap);
+        const atkK = 1 + (mech ? 0.08 * spec.tq.cokhi : 0.06 * spec.tq.vukhi);
+        u.maxHp = u.hp = Math.round(u.maxHp * hpK);
+        u.atk = Math.round(u.atk * atkK);
+      }
       out.push(applyGear(u, spec.gear));
     }
   }

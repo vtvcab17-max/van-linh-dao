@@ -188,6 +188,12 @@ const armyText = await p.evaluate(() => document.querySelector('#sheet')?.textCo
 check('Bảng Quân đội có danh sách lính + cơ giới', /Giáo|Cung|Khiên/i.test(armyText) && /Xe|Voi/i.test(armyText));
 check('Bảng Quân đội ghi quân từng đảo', /Đảo nhà/.test(armyText));
 await shot('04-bang-quan-doi');
+// lệnh hằng ngày: luyện đủ 10 quân → nhận thưởng bằng nút
+const so0 = await p.evaluate(() => window.__vld.store.s.res.so);
+check('Thẻ "Lệnh hôm nay" có nút Nhận khi luyện đủ 10 quân', await p.evaluate(() => { const b = document.querySelector('#sheet [data-lenh="luyen"]'); return !!b && !b.disabled; }));
+await p.click('#sheet [data-lenh="luyen"]');
+await wait(300);
+check('Nhận thưởng lệnh luyện quân (+80 Vỏ Sò)', (await p.evaluate(() => window.__vld.store.s.res.so)) === so0 + 80);
 // chọn hàng: đưa Lính Giáo ra hàng sau bằng nút
 await p.click('#sheet [data-row="giao:back"]');
 await wait(300);

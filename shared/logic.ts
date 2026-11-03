@@ -170,6 +170,8 @@ export interface PlayerState {
   mang: Troops;
   /** hàng trước/sau của từng loại quân */
   hang: TroopRows;
+  /** lệnh hằng ngày về quân đội */
+  lenh: { day: number; luyen: number; ra: number; w0: number; nhan: string[] };
   /** Khiên bảo hộ tới lúc này (giờ thật): không ai đột kích, đánh chiếm, thám thính được. */
   shield: number;
   /** Nghiên cứu đã xong ở học viện. */
@@ -363,6 +365,7 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     isleTroops: {},
     mang: {},
     hang: {},
+    lenh: { day: -1, luyen: 0, ra: 0, w0: 0, nhan: [] },
     tech: {},
     research: null,
     ben: { giao: 100, khien: 100, thuoc: 100, bua: 100 },
@@ -529,6 +532,27 @@ export function xpForLevel(lv: number) {
   return Math.round(20 * Math.pow(lv, 1.5));
 }
 
+export type LenhId = 'luyen' | 'thang' | 'ra';
+export const LENH: { id: LenhId; name: string; need: number; reward: Partial<Record<ResKey, number>> }[] = [
+  { id: 'luyen', name: 'Luyện hoặc đóng 10 quân', need: 10, reward: { so: 80 } },
+  { id: 'thang', name: 'Thắng 2 trận', need: 2, reward: { ngoc: 1 } },
+  { id: 'ra', name: 'Ra khơi 1 chuyến mang từ 5 quân', need: 1, reward: { lt: 3 } },
+];
+const winsOf = (s: PlayerState) => s.stats.wins + s.stats.raidWins;
+function lenhRoll(s: PlayerState) {
+  const day = dayOf(s.lastReal);
+  if (s.lenh.day !== day) s.lenh = { day, luyen: 0, ra: 0, w0: winsOf(s), nhan: [] };
+}
+/** Tiến độ lệnh hôm nay (thuần: sang ngày mới thì về 0, không sửa trạng thái). */
+export function lenhView(s: PlayerState): { id: LenhId; name: string; need: number; have: number; done: boolean; claimed: boolean; reward: Partial<Record<ResKey, number>> }[] {
+  const fresh = s.lenh.day === dayOf(s.lastReal);
+  return LENH.map((d) => {
+    const raw = !fresh ? 0 : d.id === 'luyen' ? s.lenh.luyen : d.id === 'ra' ? s.lenh.ra : Math.max(0, winsOf(s) - s.lenh.w0);
+    const have = Math.min(d.need, raw);
+    return { ...d, have, done: have >= d.need, claimed: fresh && s.lenh.nhan.includes(d.id) };
+  });
+}
+
 export function teamSpec(s: PlayerState, defending: boolean): TeamSpec {
   return {
     comps: COMP_KEYS.filter((k) => s.comps[k].unlocked).map((k) => ({ k, lv: s.comps[k].lv })),
@@ -545,6 +569,7 @@ export function teamSpec(s: PlayerState, defending: boolean): TeamSpec {
     ships: s.fleet.filter((x) => x.vo > 0).map((x) => ({ k: x.k, w: { ...x.w }, vo: x.vo })),
     troops: defending ? cleanTroops(s.troops) : cleanTroops(s.voyage?.troops),
     rows: cleanRows(s.hang),
+    tq: { giap: s.tech.giapQuan ?? 0, vukhi: s.tech.vuKhiQuan ?? 0, cokhi: s.tech.coKhi ?? 0 },
     gen: s.chuTuong && s.tuong[s.chuTuong] ? { id: s.chuTuong, star: s.tuong[s.chuTuong]!, w: s.deo && (s.vuKhi[s.deo] ?? 0) > 0 ? s.deo : null } : undefined,
   };
 }
@@ -959,6 +984,7 @@ export type Action =
   | { t: 'luyen'; k: TroopKey; n: number }
   | { t: 'mangQuan'; troops: Troops }
   | { t: 'doiHang'; k: TroopKey; row: 'front' | 'back' }
+  | { t: 'nhanLenh'; id: LenhId }
   | { t: 'rutQuan'; isle: string };
 
 export interface Outcome {
@@ -1334,6 +1360,8 @@ export function apply(s: PlayerState, a: Action): Outcome {
       if (!canPay(s, cost)) return fail('Chưa đủ vật liệu hoặc lương.');
       pay(s, cost);
       s.troops[a.k] = (s.troops[a.k] ?? 0) + n;
+      lenhRoll(s);
+      s.lenh.luyen += n;
       return { ok: true, msg: `${isMech(a.k) ? 'Đóng' : 'Luyện'} ${n} ${d.name}.` };
     }
     case 'mangQuan': {
@@ -1345,6 +1373,17 @@ export function apply(s: PlayerState, a: Action): Outcome {
       if (a.row !== 'front' && a.row !== 'back') return fail('Chỉ có hàng trước hoặc hàng sau.');
       s.hang[a.k] = a.row;
       return { ok: true, msg: `${TROOPS[a.k].name} đứng ${a.row === 'front' ? 'hàng trước' : 'hàng sau'}.` };
+    }
+    case 'nhanLenh': {
+      const d = LENH.find((x) => x.id === a.id);
+      if (!d) return fail('Không có lệnh này.');
+      lenhRoll(s);
+      const v = lenhView(s).find((x) => x.id === a.id)!;
+      if (v.claimed) return fail('Lệnh này hôm nay đã nhận thưởng.');
+      if (!v.done) return fail(`Chưa xong: ${v.have}/${v.need}.`);
+      s.lenh.nhan.push(d.id);
+      addRes(s, d.reward);
+      return { ok: true, msg: `Nhận thưởng lệnh "${d.name}".` };
     }
     case 'rutQuan': {
       const g = s.isleTroops[a.isle];
@@ -1739,6 +1778,8 @@ export interface IslandPub {
   troops?: Troops;
   /** hàng trước/sau của quân giữ đảo */
   rows?: TroopRows;
+  /** cấp nghiên cứu quân của chủ đảo */
+  tq?: { giap: number; vukhi: number; cokhi: number };
   /** thuyền chiến giữ bến */
   ships?: { k: ShipKind; w: Partial<Record<ShipWeapon, boolean>>; vo: number }[];
   /** khiên bảo hộ tới lúc này: ẩn bên trong đảo */
@@ -1784,6 +1825,7 @@ export function publicOf(s: PlayerState): IslandPub {
     ships: shielded ? undefined : s.fleet.filter((x) => x.vo > 0).map((x) => ({ k: x.k, w: { ...x.w }, vo: x.vo })),
     troops: shielded ? undefined : cleanTroops(s.troops),
     rows: shielded ? undefined : cleanRows(s.hang),
+    tq: shielded ? undefined : { giap: s.tech.giapQuan ?? 0, vukhi: s.tech.vuKhiQuan ?? 0, cokhi: s.tech.coKhi ?? 0 },
   };
 }
 
@@ -1812,9 +1854,13 @@ export function raidSeed(attackerId: string, targetId: string, n: number) {
 }
 
 /** Tính trận đột kích từ hai bản công khai — server dùng đúng hàm này để kiểm lại. */
+const cleanTq = (t: unknown) => {
+  const g = (k: string) => Math.max(0, Math.min(TECH_MAX, Math.floor(Number((t as Record<string, unknown> | undefined)?.[k]) || 0)));
+  return { giap: g('giap'), vukhi: g('vukhi'), cokhi: g('cokhi') };
+};
 export function resolveRaid(att: TeamSpec, target: IslandPub, seed: number): { battle: BattleResult; loot: Partial<Record<ResKey, number>>; defLost: Troops } {
   const r = mulberry32(seed);
-  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear), fort: target.bot ? undefined : cleanDef(target.def), gen: cleanGen(target.gen), ships: target.bot ? undefined : cleanShips(target.ships), troops: target.bot ? undefined : cleanTroops(target.troops), rows: target.bot ? undefined : cleanRows(target.rows) };
+  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear), fort: target.bot ? undefined : cleanDef(target.def), gen: cleanGen(target.gen), ships: target.bot ? undefined : cleanShips(target.ships), troops: target.bot ? undefined : cleanTroops(target.troops), rows: target.bot ? undefined : cleanRows(target.rows), tq: target.bot ? undefined : cleanTq(target.tq) };
   const battle = simulate(teamFromSpec(att, 0), teamFromSpec(defSpec, 1), r);
   const loot: Partial<Record<ResKey, number>> = {};
   if (battle.winner === 0) {
@@ -1979,6 +2025,8 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   merged.troops = cleanTroops(s.troops);
   merged.mang = cleanTroops(s.mang);
   merged.hang = cleanRows(s.hang);
+  const L = (s as Partial<PlayerState>).lenh;
+  merged.lenh = L && typeof L.day === 'number' ? { day: L.day, luyen: Math.max(0, L.luyen | 0), ra: Math.max(0, L.ra | 0), w0: Math.max(0, L.w0 | 0), nhan: Array.isArray(L.nhan) ? L.nhan.filter((x) => LENH.some((d) => d.id === x)) : [] } : { day: -1, luyen: 0, ra: 0, w0: 0, nhan: [] };
   merged.isleTroops = Object.fromEntries(Object.entries(s.isleTroops ?? {}).map(([k, v]) => [k, cleanTroops(v)]));
   merged.tech = { ...s.tech };
   if (typeof merged.vo !== 'number') merged.vo = 100;
@@ -2580,6 +2628,10 @@ function loadTroops(s: PlayerState, v: Voyage) {
   if (!troopCount(cargo)) return;
   for (const k of TROOP_KEYS) if (cargo[k]) s.troops[k] = (s.troops[k] ?? 0) - (cargo[k] ?? 0);
   v.troops = cargo;
+  if (troopCount(cargo) >= 5) {
+    lenhRoll(s);
+    s.lenh.ra++;
+  }
 }
 const ISLE_HOUSE = 24;
 /** Chuyến bị hủy giữa đường (đích không còn): quân trên thuyền về đảo nhà. */
