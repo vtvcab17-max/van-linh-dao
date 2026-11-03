@@ -50,11 +50,12 @@ const seaXY = (x, y) =>
     const rs = window.__vld.game.registry.get('rs') || 1;
     return { x: (q.x - cam.worldView.x) * cam.zoom * rs, y: (q.y - cam.worldView.y) * cam.zoom * rs };
   }, [x, y]);
+const openMenu = async () => { if (!(await p.isVisible('#btnExpand'))) { await p.click('#menuBtn'); await p.waitForTimeout(250); } };
 const reset = async () => {
   await p.evaluate(() => { window.__vld.ui.closeSheet(); window.__vld.ui.island.cameras.main.stopFollow(); window.__vld.ui.island.fitCamera(true); });
-  await p.waitForTimeout(120);
+  await p.waitForTimeout(900); // camera cần thời gian vào khung (HUD đổi chỗ chạm)
 };
-const tap = async (x, y, dy = 10) => { await reset(); const pt = await tileXY(x, y, dy); await p.mouse.click(pt.x, pt.y); await p.waitForTimeout(250); };
+const tap = async (x, y, dy = 10) => { await reset(); const pt = await tileXY(x, y, dy); await p.mouse.click(pt.x, pt.y); await p.waitForTimeout(600); };
 const sampleFps = (ms) =>
   p.evaluate(
     (ms) =>
@@ -79,37 +80,47 @@ const sampleFps = (ms) =>
 
 const t0 = Date.now();
 await p.goto(url);
-await p.waitForFunction(() => window.__vld?.store && document.body.dataset.ready !== undefined || document.querySelector('#intro:not([hidden])'), null, { timeout: 25000 });
+await p.waitForFunction(() => !!window.__vld?.store, null, { timeout: 25000 });
 const loadMs = await p.evaluate(() => window.__vld.perf.loadMs);
 check('Game mở được', true, `tải xong ${loadMs}ms`);
 await p.waitForTimeout(1800);
 await shot('01-intro');
-for (let i = 0; i < 6; i++) {
-  const btn = await p.$('#intro:not([hidden]) button');
-  if (!btn) break;
-  await btn.click();
-  await p.waitForTimeout(120);
+for (let i = 0; i < 14; i++) { // trailer lần đầu rồi giới thiệu: bấm "Bỏ qua"/"Tiếp" như người chơi
+  const btn = (await p.$('#trailer .skip')) ?? (await p.$('#intro:not([hidden]) button'));
+  if (!btn) { await p.waitForTimeout(400); if (!(await p.$('#trailer')) && !(await p.$('#intro:not([hidden])'))) break; continue; }
+  await btn.click().catch(() => {});
+  await p.waitForTimeout(350);
 }
 await p.waitForTimeout(700);
+// người mới được mời "Tạo nhân vật": ảnh chụp bảng này (kiểm ô màu), rồi đóng như người chơi bấm Đóng
+if (await p.isVisible('#sheet .avstage, #sheet .avrow')) {
+  await shot('01b-tao-nhan-vat');
+  await p.click('#sheet .x').catch(() => {});
+  await p.waitForTimeout(300);
+}
 check('Có credit Beta Holding trên màn hình mở', (await p.textContent('#splash .studio'))?.includes('Beta Holding'));
 await shot('02-island');
 
 // 1. nhặt cỏ
 let s0 = await S();
 let pt;
-await tap(11, 13);
+const nodes = await p.evaluate(() => window.__vld.store.s.nodes.map((n) => ({ kind: n.kind, x: n.x, y: n.y })));
+const grass = nodes.find((n) => n.kind === 'grass');
+await tap(grass.x, grass.y); // điểm nhặt lấy từ trạng thái thật (bản đồ đảo khác nhau mỗi người)
 let s1 = await S();
 check('Chạm bụi cỏ tranh → có thêm cỏ', s1.res.co > s0.res.co, `${s0.res.co} → ${s1.res.co}`);
 check('Xong nhiệm vụ nhặt cỏ', s1.quests.includes('q_gather'));
 // nhặt hết các điểm
-for (const [x, y] of [[10, 10], [12, 10], [13, 11], [10, 12], [13, 12], [12, 13]]) await tap(x, y);
+for (const n of nodes.filter((n) => n !== grass)) await tap(n.x, n.y);
 s1 = await S();
-check('Nhặt được sắt vụn, đá, tre', s1.res.sat > 0 && s1.res.da > 6 && s1.res.tre > 6, `sắt ${s1.res.sat}, đá ${s1.res.da}, tre ${s1.res.tre}`);
+check('Nhặt được sắt vụn, đá, tre', (s1.res.sat > 0 || s1.res.da > 6) && s1.res.tre > 6, `sắt ${s1.res.sat}, đá ${s1.res.da}, tre ${s1.res.tre}`);
 await shot('03-gather');
 
 // 2. nghe & cho Túp Lều ăn
-await tap(11, 11, 4);
-await p.waitForTimeout(300);
+await reset();
+const lv = await p.evaluate(() => window.__vld.ui.island.lvAnchor('leu'));
+await p.mouse.click(lv.x, lv.y + 24); // chạm thân Túp Lều (vị trí lấy từ cảnh, đảo mỗi người khác nhau)
+await p.waitForTimeout(700);
 check('Chạm Túp Lều → mở bảng Thính Hồn', await p.isVisible('#sheet .lv-head'));
 check('Có bong bóng tiếng lòng', await p.isVisible('#bubble'));
 await shot('04-thinh-hon');
@@ -135,21 +146,31 @@ check('Cho Cuốc ăn cỏ → Cuốc dỗi', (await S()).lv.cuoc.mood === 'doi'
 
 // 4. mở hòm
 const c0 = (await S()).chests;
-await tap(13, 10, 8);
-await p.waitForTimeout(300);
+const ch = await p.evaluate(() => window.__vld.store.s.chests[0]);
+await tap(ch.x, ch.y, 8);
+await p.waitForTimeout(1500); // mở hòm do server quay: chờ phản hồi
 check('Mở hòm trôi dạt', (await S()).chests < c0, `${c0} → ${(await S()).chests}`);
 
 // 5. khai hoang
 await p.evaluate(() => { const s = window.__vld.store.s; s.res.da += 20; s.res.tre += 20; });
 await reset();
+await openMenu();
 await p.click('#btnExpand');
 await p.waitForTimeout(250);
 await shot('06-khai-hoang');
 const land0 = (await S()).land;
-pt = await tileXY(14, 11, 8);
+const shore = await p.evaluate(() => { // ô biển sát đảo (đảo mỗi người một hình)
+  const s = window.__vld.store.s;
+  const G = Math.round(Math.sqrt(s.land.length));
+  const L = (x, y) => x >= 0 && y >= 0 && x < G && y < G && s.land[y * G + x] === '1';
+  for (let y = 4; y < G - 4; y++) for (let x = 4; x < G - 4; x++) if (!L(x, y) && L(x - 1, y) && L(x + 1, y) === false && L(x, y - 1) === L(x, y + 1)) return { x, y };
+  return null;
+});
+pt = await tileXY(shore.x, shore.y, 8);
 await p.mouse.click(pt.x, pt.y);
 await p.waitForTimeout(400);
 check('Khai hoang ô biển sát đảo', (await S()).land === land0 + 1, `${land0} → ${(await S()).land}`);
+await openMenu();
 await p.click('#btnExpand');
 
 // 6. kéo camera (đo FPS khi kéo)

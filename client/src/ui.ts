@@ -1669,7 +1669,7 @@ export class UI {
     }
     let av: Avatar = { ...s.avatar };
     const swatch = (key: 'sk' | 'hc' | 'tc', list: readonly { name: string; c: readonly string[] }[]) =>
-      `<div class="sw" role="radiogroup">${list
+      `<div class="swatches" role="radiogroup">${list
         .map((o, i) => `<button type="button" role="radio" data-k="${key}" data-v="${i}" title="${o.name}" aria-label="${o.name}" style="--c:${o.c[0]};--d:${o.c[1]}"></button>`)
         .join('')}</div>`;
     const stepper = (key: keyof Avatar, label: string) =>
