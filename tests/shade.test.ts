@@ -31,3 +31,11 @@ describe('shadeEdges', () => {
     for (let k = 3; k < a.d.length; k += 4) expect(a.d[k]).toBe(255);
   });
 });
+
+import { AI_GROUP_OF } from '../client/src/art2/aiart';
+describe('tranh AI', () => {
+  it('chỉ gán nhóm tranh cho công trình có thật', async () => {
+    const { B_KEYS } = await import('../shared/economy');
+    for (const k of Object.keys(AI_GROUP_OF)) expect(B_KEYS).toContain(k);
+  });
+});
