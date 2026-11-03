@@ -82,11 +82,12 @@ type Tab = 'island' | 'sea' | 'team' | 'chat' | 'feedback' | 'bxh' | 'cho';
 /** Dáng vẻ của một đảo người khác (dữ liệu gửi qua mạng nên luôn kiểm lại). */
 export const pubAvatar = (p: { id: string; avatar?: unknown }): Avatar => cleanAvatar(p.avatar) ?? avatarFrom(p.id);
 
-/** Dải tranh minh họa 3 cấp của nhóm công trình (ảnh do AI sinh). */
-function aiStrip(tab: string): string {
+/** Dải tranh minh họa 3 cấp của nhóm công trình: ảnh AI nếu có, không thì sprite pixel của công trình đầu nhóm. */
+function aiStrip(tab: string, first?: BKey): string {
   const g = AI_GROUP_OF_TAB[tab];
-  if (!g) return '';
-  return `<div class="aistrip">${aiGroupArt(g).map((u, i) => `<figure><img src="${u}" alt=""><figcaption>Cấp ${i + 1}</figcaption></figure>`).join('')}</div>`;
+  const imgs = g ? aiGroupArt(g) : first ? [1, 2, 3].map((lv) => canvasUrl(`dinh2-ui-${first}-${lv}`, () => drawDinh(first, lv), 3)) : [];
+  if (!imgs.length) return '';
+  return `<div class="aistrip${g ? '' : ' px'}">${imgs.map((u, i) => `<figure><img src="${u}" alt=""><figcaption>${g ? '' : BUILDINGS[first!].names[i] + ' · '}Cấp ${i + 1}</figcaption></figure>`).join('')}</div>`;
 }
 
 export class UI {
@@ -1181,7 +1182,7 @@ export class UI {
         .join('');
       return `<p class="muted small">Thành trì <b>${fortName(s)}</b> · thợ ${busySlots(s)}/${buildSlots(s)} · kho ${storageCap(s)}. Bấm "Chọn chỗ" rồi chạm ô đất viền xanh.</p>
         <div class="btabs">${tabs}</div>
-        ${aiStrip(cur)}
+        ${aiStrip(cur, groups[cur][0])}
         <div class="card"><small>${ICON[cur]} ${cur} · ${groups[cur].length} loại</small>${groups[cur].map(row).join('')}</div>`;
     };
     const show = () => this.openSheet('build', 'Xây dựng', draw(), bind);
