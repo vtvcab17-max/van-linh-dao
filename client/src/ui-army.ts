@@ -148,6 +148,7 @@ export function openArmy(ui: UI) {
         const [k, n] = t.dataset.luyen.split(':');
         const o = ui.store.do({ t: 'luyen', k: k as TroopKey, n: Number(n) });
         ui.toast(o.msg, o.ok ? 'gold' : 'bad');
+        if (o.quest) ui.questDone(o.quest);
       } else if (t.dataset.mang) {
         const [k, d] = t.dataset.mang.split(':');
         const next: Troops = { ...s.mang };

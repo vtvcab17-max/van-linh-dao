@@ -334,6 +334,9 @@ export const QUESTS: QuestDef[] = [
   { id: 'q_evolve', text: 'Tiến hóa một linh vật lên bậc 2.', reward: { so: 20, go: 10 } },
   { id: 'q_boat', text: 'Cho Thuyền Thúng ăn tre để vá nan.', reward: { tre: 10 } },
   { id: 'q_raid', text: 'Chèo thuyền đi đột kích đảo của người khác.', reward: { so: 25 } },
+  { id: 'q_don', text: 'Nâng Nhà chính lên bậc 3 rồi xây Trại Lính để luyện quân.', reward: { so: 30, go: 20 } },
+  { id: 'q_luyen', text: 'Luyện lính ở Trại Lính (lính ngủ trong nhà, cần giường).', reward: { so: 30, sat: 15 } },
+  { id: 'q_ra', text: 'Mang quân ra khơi: chỉnh số quân mang theo trong bảng Quân đội rồi lên thuyền.', reward: { so: 40, ngoc: 1 } },
 ];
 
 export const INTRO = [

@@ -212,7 +212,7 @@ function dinhMore(ui: UI, d: Dinh, s: PlayerState): string {
 
 /** Xử lý bấm nút trong phần thêm. Trả true nếu đã xử lý. */
 export function dinhClick(ui: UI, d: Dinh, t: HTMLElement): boolean {
-  const run = (o: { ok: boolean; msg: string }) => ui.toast(o.msg, o.ok ? 'gold' : 'bad');
+  const run = (o: { ok: boolean; msg: string; quest?: string }) => { ui.toast(o.msg, o.ok ? 'gold' : 'bad'); if (o.quest) ui.questDone(o.quest); };
   const crops = cropsFor(d.k);
   const pickK = seedPick[d.k] && crops.includes(seedPick[d.k]!) ? seedPick[d.k]! : crops[0];
   if (t.dataset.seed) return (seedPick[d.k] = t.dataset.seed as CropKey), true;

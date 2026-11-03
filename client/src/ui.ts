@@ -232,6 +232,7 @@ export class UI {
   private sail(o: Outcome) {
     if (!o.ok) return this.toast(o.msg, 'bad');
     this.toast(o.msg);
+    if (o.quest) this.questDone(o.quest);
     sound.play('sail');
     this.closeSheet();
     this.renderVoyage();
@@ -453,7 +454,7 @@ export class UI {
     // nhiệm vụ cần bấm nút trên giao diện: nút đó nhấp nháy để người mới biết bấm vào đâu
     $('#btnExpand').classList.toggle('pulse', q?.id === 'q_expand');
     this.syncMenu();
-    $('#nav [data-tab="sea"]').classList.toggle('pulse', q?.id === 'q_fight' || q?.id === 'q_raid');
+    $('#nav [data-tab="sea"]').classList.toggle('pulse', q?.id === 'q_fight' || q?.id === 'q_raid' || q?.id === 'q_ra');
   }
 
   renderChatBadge() {

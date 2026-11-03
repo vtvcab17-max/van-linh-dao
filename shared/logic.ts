@@ -1210,7 +1210,8 @@ export function apply(s: PlayerState, a: Action): Outcome {
       reveal(s, voyagePath(from, to), 1);
       provision(s, s.voyage, one);
       log(s, `Thuyền rời bến đi ${targetName}.`);
-      return { ok: true, msg: `${LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1]} rời bến đi ${targetName}.` };
+      const qRa = s.voyage.troops && troopCount(s.voyage.troops) > 0 ? doneQuest(s, 'q_ra') : null;
+      return { ok: true, msg: `${LINH_VAT.thuyen.tiers[s.lv.thuyen.tier - 1]} rời bến đi ${targetName}.`, quest: qRa ?? undefined };
     }
     case 'rename': {
       const name = a.name.trim().slice(0, 18);
@@ -1232,7 +1233,8 @@ export function apply(s: PlayerState, a: Action): Outcome {
       pay(s, b.cost[0]);
       // chuồng/ao có sẵn 2 con giống, xưởng chế biến có sẵn 2 thợ
       s.dinh.push({ id: nid(s, 'd'), k: a.k, x: a.x, y: a.y, lv: 0, to: 1, doneAt: s.gt + b.ms[0], ...(a.k in PENS || a.k in PROCS ? { n: 2 } : {}) });
-      return { ok: true, msg: `Bắt đầu xây ${b.names[0]}.` };
+      const q = a.k === 'donbinh' ? doneQuest(s, 'q_don') : null;
+      return { ok: true, msg: `Bắt đầu xây ${b.names[0]}.`, quest: q ?? undefined };
     }
     case 'nang': {
       const d = s.dinh.find((x) => x.id === a.id);
@@ -1362,7 +1364,8 @@ export function apply(s: PlayerState, a: Action): Outcome {
       s.troops[a.k] = (s.troops[a.k] ?? 0) + n;
       lenhRoll(s);
       s.lenh.luyen += n;
-      return { ok: true, msg: `${isMech(a.k) ? 'Đóng' : 'Luyện'} ${n} ${d.name}.` };
+      const q = doneQuest(s, 'q_luyen');
+      return { ok: true, msg: `${isMech(a.k) ? 'Đóng' : 'Luyện'} ${n} ${d.name}.`, quest: q ?? undefined };
     }
     case 'mangQuan': {
       s.mang = cleanTroops(a.troops);
