@@ -6,6 +6,8 @@ import { troopCount } from '../../shared/troops';
 import { allBots } from '../../shared/bots';
 import { GAME } from '../../shared/data';
 import { actionCost, makeLimiter } from '../../shared/ratelimit';
+import { funnelOf } from '../../shared/funnel';
+import { QUESTS } from '../../shared/data';
 import { apply, applyRaidAgainstMe, ascend, digest, SERVER_RNG_ACTIONS, stripSecret, migrate, newPlayer, publicOf, tick, type Action, type IslandPub, type PlayerState } from '../../shared/logic';
 import { ascendSlots, bossPoolMax, weekOf, type BossWorld } from '../../shared/boss';
 import { islandCell, worldFor } from '../../shared/map';
@@ -390,7 +392,16 @@ export class HaiKhu extends DurableObject<Env> {
       const count = this.sql.exec<{ n: number }>('SELECT COUNT(*) AS n FROM players').one().n;
       const feedback = this.sql.exec<{ player: string; t: number; body: string }>('SELECT player, t, body FROM feedback ORDER BY t DESC LIMIT 100').toArray().map((r) => ({ player: r.player, t: r.t, ...JSON.parse(r.body) }));
       const telemetry = this.sql.exec<{ body: string }>('SELECT body FROM telemetry ORDER BY t DESC LIMIT 100').toArray().map((r) => JSON.parse(r.body));
-      return json({ players: count, online: this.online().length, top: this.pubs().sort((a, b) => b.power - a.power).slice(0, 20), feedback, telemetry });
+      const done = this.sql.exec<{ save: string }>('SELECT save FROM players').toArray().map((r) => {
+        try {
+          const q = (JSON.parse(r.save) as { quests?: unknown }).quests;
+          return Array.isArray(q) ? q.map(String) : [];
+        } catch {
+          return [];
+        }
+      });
+      const funnel = funnelOf(done, QUESTS);
+      return json({ players: count, online: this.online().length, funnel, top: this.pubs().sort((a, b) => b.power - a.power).slice(0, 20), feedback, telemetry });
     }
     if (req.headers.get('Upgrade') !== 'websocket') return json({ error: 'Cần kết nối WebSocket' }, 426);
     // Worker đã kiểm tra phiên đăng nhập và gắn danh tính vào header
