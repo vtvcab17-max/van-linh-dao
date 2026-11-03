@@ -10,7 +10,7 @@ const done = (c: HTMLCanvasElement, after?: (p: P) => void) => {
 };
 
 /** Mái ngói cong có đầu đao vểnh hai bên. */
-function curvedRoof(p: P, x0: number, x1: number, top: number, bottom: number, c1: string, c2: string, c3: string, inset = 5) {
+export function curvedRoof(p: P, x0: number, x1: number, top: number, bottom: number, c1: string, c2: string, c3: string, inset = 5) {
   const h = bottom - top;
   for (let y = top; y <= bottom; y++) {
     const t = (y - top) / h;

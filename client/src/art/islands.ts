@@ -19,12 +19,12 @@ export interface Look {
 export const LOOKS: Look[] = [
   { name: 'Đảo Dừa Xanh', grass: ['#86c95c', '#57a043', '#a6d86e', '#e8c56e'], sand: ['#f2d99c', '#d6b26d', '#fbf3dc'], shallow: '#5fb6d6', flowers: ['#f6d34d', '#fbf3dc'], flowerRate: 0.05, rockRate: 0.04, shellRate: 0.12, coralRate: 0.03 },
   { name: 'Đảo Cát Trắng', grass: ['#9ad66a', '#5fae4a', '#c3ea85', '#f0e2a0'], sand: ['#fbf6e6', '#e2d7bb', '#ffffff'], shallow: '#62d0e0', flowers: ['#ef7c98', '#fbf3dc'], flowerRate: 0.04, rockRate: 0.02, shellRate: 0.25, coralRate: 0.05 },
-  { name: 'Đảo Đất Đỏ', grass: ['#6fb04f', '#3f7f39', '#8fca62', '#b8613a'], sand: ['#e8c48a', '#c9995c', '#f4dcae'], shallow: '#4fa8cc', flowers: ['#f6d34d'], flowerRate: 0.03, rockRate: 0.05, shellRate: 0.06, coralRate: 0.02, soil: '#b8613a' },
-  { name: 'Đảo Đá Xám', grass: ['#8aa860', '#5d7d45', '#a9c27a', '#9aa0a8'], sand: ['#d8cfb8', '#b2a88f', '#ece6d4'], shallow: '#4f9cc0', flowers: ['#dbe3ea'], flowerRate: 0.02, rockRate: 0.22, shellRate: 0.05, coralRate: 0.01 },
+  { name: 'Đảo Đất Đỏ', grass: ['#7cc458', '#4f9440', '#9cd86c', '#c86a40'], sand: ['#f0cf96', '#d4a466', '#f8e2b8'], shallow: '#58b4d8', flowers: ['#f6d34d'], flowerRate: 0.03, rockRate: 0.04, shellRate: 0.06, coralRate: 0.02, soil: '#b8613a' },
+  { name: 'Đảo Đá Xám', grass: ['#98c66a', '#6a9a4c', '#b6da88', '#b0b4ba'], sand: ['#e8dfc6', '#c8bc9e', '#f6f0de'], shallow: '#58b0d4', flowers: ['#eef3f6'], flowerRate: 0.03, rockRate: 0.08, shellRate: 0.05, coralRate: 0.01 },
   { name: 'Đảo Hoa Dại', grass: ['#7cc45a', '#4f9a48', '#a6d86e', '#d6e88a'], sand: ['#f2d99c', '#d6b26d', '#fbf3dc'], shallow: '#5fb6d6', flowers: ['#ef7c98', '#f6d34d', '#9563c9', '#fbf3dc', '#ec9640'], flowerRate: 0.3, rockRate: 0.02, shellRate: 0.08, coralRate: 0.02 },
   { name: 'Đảo San Hô', grass: ['#86c95c', '#57a043', '#b5e07c', '#f2d99c'], sand: ['#f6d8c8', '#dcb3a0', '#fff0e6'], shallow: '#58c4d8', flowers: ['#ef7c98'], flowerRate: 0.04, rockRate: 0.02, shellRate: 0.2, coralRate: 0.22 },
-  { name: 'Đảo Lá Vàng', grass: ['#c9b85a', '#9a8a3a', '#e0d27a', '#d98a3a'], sand: ['#f2d99c', '#d6b26d', '#fbf3dc'], shallow: '#5fb6d6', flowers: ['#dc4a3e', '#ec9640'], flowerRate: 0.08, rockRate: 0.04, shellRate: 0.08, coralRate: 0.03 },
-  { name: 'Đảo Rêu Ngọc', grass: ['#5fae86', '#3a7d63', '#86cfa4', '#a6d86e'], sand: ['#e6d9a8', '#c4b37a', '#f3ead0'], shallow: '#4fbcc0', flowers: ['#5fd0e0', '#fbf3dc'], flowerRate: 0.06, rockRate: 0.06, shellRate: 0.06, coralRate: 0.06 },
+  { name: 'Đảo Lá Vàng', grass: ['#b4cf5c', '#88a63e', '#cfe27c', '#e6a24e'], sand: ['#f6e0a6', '#dcbb76', '#fdf6e2'], shallow: '#5fbede', flowers: ['#ee5d4a', '#f6d34d'], flowerRate: 0.05, rockRate: 0.04, shellRate: 0.08, coralRate: 0.03 },
+  { name: 'Đảo Rêu Ngọc', grass: ['#70c690', '#46966a', '#96dcb0', '#b4e080'], sand: ['#f0e4b4', '#d0bf86', '#f8f0d8'], shallow: '#58c4cc', flowers: ['#5fd0e0', '#fbf3dc'], flowerRate: 0.06, rockRate: 0.06, shellRate: 0.06, coralRate: 0.06 },
 ];
 
 /** Mắt Bão: đảo đá đen giữa vùng bão của Thủy Tinh. */
@@ -194,7 +194,7 @@ export function miniRadius(land: number) {
 export const MINI_SIZE = 44;
 
 /** Hình đảo nhìn từ xa: đường bờ sinh từ mã đảo (sóng hài ngẫu nhiên) nên không đảo nào giống đảo nào. */
-export function drawSeaIsland(id: string, land: number, kind: MiniKind, tier = 1): Canvas {
+export function drawSeaIsland(id: string, land: number, kind: MiniKind, tier = 1, withHouse = true): Canvas {
   const S = MINI_SIZE;
   const [c, ctx] = canvas(S, S);
   const p = new Pen(ctx);
@@ -259,7 +259,7 @@ export function drawSeaIsland(id: string, land: number, kind: MiniKind, tier = 1
     }
   }
   if (kind === 'wild') wildDecor(p, id, cx, cy, R);
-  else {
+  else if (withHouse) {
     house(p, cx, cy - 1, tier);
     const flag = kind === 'me' ? 'l' : kind === 'player' ? 'p' : 'o';
     p.vline(cx + 5, cy - 10, cy - 1, 'k');

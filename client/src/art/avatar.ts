@@ -3,6 +3,7 @@
 import { HAIR_COLORS, OUTFIT_COLORS, SKINS, avatarKey, type Avatar } from '../../../shared/avatar';
 import { canvas, Pen, type Canvas } from './pixel';
 import { enhance, HD } from './hd';
+import { avatarLook, drawUnit, UH, UW } from '../art2/units';
 
 const W = 16;
 export const AV_H = 20;
@@ -134,8 +135,13 @@ function paint(ctx: CanvasRenderingContext2D, pal: Record<string, string>, rows:
   }
 }
 
-/** Vẽ nhân vật 16x20 (neo ở đáy giữa). */
+/** Nhân vật chủ đảo theo bộ đồ họa mới: chibi 20x26 cùng kiểu với lính và tướng (neo đáy giữa). */
 export function drawAvatar(a: Avatar): Canvas {
+  return drawUnit(avatarLook(a));
+}
+
+/** Kiểu vẽ cũ 16x20 (giữ lại cho đoạn phim giới thiệu cũ nếu cần). */
+export function drawAvatarOld(a: Avatar): Canvas {
   const [c, ctx] = canvas(W, AV_H);
   const pal = palette(a);
   const g = a.g;
@@ -193,10 +199,12 @@ export function avatarUrl(a: Avatar, scale = 3, head = false): string {
   let u = urlCache.get(key);
   if (!u) {
     const src = enhance(drawAvatar(a));
-    const sh = (head ? 12 : AV_H) * HD;
+    // khung đầu: từ chóp mũ tới cổ (20 x 16), toàn thân: cả ảnh 20 x 26
+    const sy = (head ? 2 : 0) * HD;
+    const sh = (head ? 16 : UH) * HD;
     const k = Math.max(1, Math.round(scale / HD));
-    const [c, ctx] = canvas(W * HD * k, sh * k);
-    ctx.drawImage(src, 0, 0, W * HD, sh, 0, 0, W * HD * k, sh * k);
+    const [c, ctx] = canvas(UW * HD * k, sh * k);
+    ctx.drawImage(src, 0, sy, UW * HD, sh, 0, 0, UW * HD * k, sh * k);
     u = c.toDataURL();
     urlCache.set(key, u);
   }

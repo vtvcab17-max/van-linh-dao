@@ -7,6 +7,8 @@ import { drawIsland, drawScaffold, LV_SIZE } from '../art/sprites';
 import { avatarTex, dinhTex, ensureTex, HD, lvTex, preloadAll, texBox, waterTex } from '../art/textures';
 import { BUILDINGS, type BKey } from '../../../shared/economy';
 import { occupied } from '../../../shared/logic';
+import { drawUnit, GENERALS as GEN_LOOKS, TROOP_OF, TROOPS } from '../art2/units';
+import { drawBoat } from '../art2/builds';
 
 /** Hình vẽ chi tiết gấp HD lần nên thu lại cho đúng kích thước trong thế giới. */
 const Q = 1 / HD;
@@ -18,10 +20,14 @@ export const T = 16;
 export const PAD = 160;
 const WORLD = GRID * T + PAD * 2;
 const wx = (tx: number) => PAD + tx * T;
+/** Chân người/lính (bộ chibi mới) đứng sát đáy ô; nhà cửa thấp hơn một chút cho có bóng. */
+const FOOT = 18;
+const DINH_FOOT = 19;
 
 /** Mức phóng to camera theo kích thước khung game (đã chia cho hệ số vẽ rs). */
 export function zoomFor(w: number, h: number, rs = 1) {
-  const z = Math.min((w * rs) / (T * 9), (h * rs) / (T * 10)) / rs;
+  // thấy trọn hòn đảo cùng nhà cửa, lính tráng (khoảng 9 ô ngang, 15 ô dọc)
+  const z = Math.min((w * rs) / (T * 9), (h * rs) / (T * 15)) / rs;
   return Math.max(rs > 1 ? 2 : 2, Math.min(5, Math.round(z)));
 }
 
@@ -93,7 +99,8 @@ export class IslandScene extends Phaser.Scene {
     }
     this.tweens.add({ targets: this.lvs.thuyen, angle: { from: -2, to: 2 }, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     // nhân vật chủ đảo (nam/nữ); chỉ đi theo ô vuông, chạm vào không mở gì cả
-    this.an = this.add.image(wx(11) + 8, wx(12) + 15, avatarTex(this, this.store.s.avatar)).setOrigin(0.5, 1).setScale(Q);
+    this.an = this.add.image(wx(11) + 8, wx(12) + FOOT, avatarTex(this, this.store.s.avatar)).setOrigin(0.5, 1).setScale(Q);
+    this.time.addEvent({ delay: 1800, loop: true, callback: () => this.wanderTroop() });
     this.events.on('wake', () => this.enterFromSea());
     this.rua = this.add.image(wx(9) + 8, wx(14) + 12, 'ch-rua').setOrigin(0.5, 1).setDepth(wx(14)).setScale(Q);
     const labelsBox = () => document.getElementById('buildlabels');
@@ -203,7 +210,7 @@ export class IslandScene extends Phaser.Scene {
 
   /** Ô lưới hiện tại của nhân vật. */
   private cellOf() {
-    return { x: Math.round((this.an.x - PAD - 8) / T), y: Math.round((this.an.y - PAD - 15) / T) };
+    return { x: Math.round((this.an.x - PAD - 8) / T), y: Math.round((this.an.y - PAD - FOOT) / T) };
   }
   private walkable(tx: number, ty: number) {
     const s = this.store.s;
@@ -245,14 +252,14 @@ export class IslandScene extends Phaser.Scene {
     this.tweens.killTweensOf(this.an);
     // đang đi dở thì dừng ở giữa ô: kéo về ô gần nhất cho khỏi lệch lưới
     const c0 = this.cellOf();
-    this.an.setPosition(wx(c0.x) + 8, wx(c0.y) + 15);
+    this.an.setPosition(wx(c0.x) + 8, wx(c0.y) + FOOT);
     if (!path || !path.length) return;
     // đi từng ô, mỗi ô một nhịp, không cắt chéo
     this.walkChain = this.tweens.chain({
       targets: this.an,
       tweens: path.map((c) => ({
         x: wx(c.x) + 8,
-        y: wx(c.y) + 15,
+        y: wx(c.y) + FOOT,
         duration: 150,
         ease: 'Linear',
         onStart: () => this.an.setFlipX(wx(c.x) + 8 < this.an.x),
@@ -370,8 +377,10 @@ export class IslandScene extends Phaser.Scene {
       const key = dinhTex(this, d.k, Math.max(1, d.lv || d.to || 1));
       let v = this.dinhImgs.get(d.id);
       if (!v) {
-        const img = this.add.image(wx(d.x) + 8, wx(d.y) + 15, key).setOrigin(0.5, 1).setDepth(wx(d.y) + 15).setScale(Q);
-        img.setInteractive({ useHandCursor: true }).on('pointerup', () => !this.dragged && this.ui.openDinh(d.id));
+        const img = this.add.image(wx(d.x) + 8, wx(d.y) + DINH_FOOT, key).setOrigin(0.5, 1).setDepth(wx(d.y) + 15).setScale(Q);
+        // vùng chạm khít phần có hình, không lấn sang ô bên cạnh
+        img.setInteractive({ hitArea: new Phaser.Geom.Rectangle(0, 0, 1, 1), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true }).on('pointerup', () => !this.dragged && this.ui.openDinh(d.id));
+        this.fitHit(img);
         const scaf = this.add.image(img.x, img.y, ensureTex(this, 'scaf-16x24', () => drawScaffold(16, 24))).setOrigin(0.5, 1).setDepth(img.depth + 1).setScale(Q);
         v = { img, scaf, key };
         this.dinhImgs.set(d.id, v);
@@ -379,6 +388,7 @@ export class IslandScene extends Phaser.Scene {
       }
       if (v.key !== key) {
         v.img.setTexture(key);
+        this.fitHit(v.img);
         v.key = key;
         this.cameras.main.flash(250, 255, 230, 140);
       }
@@ -577,6 +587,124 @@ export class IslandScene extends Phaser.Scene {
     for (const [id, img] of this.chests) if (!seenC.has(id)) (img.destroy(), this.chests.delete(id));
     this.syncLv();
     this.syncDinh(s);
+    this.syncTroops(s);
+    this.syncFleet(s);
+  }
+
+  private fitHit(img: Phaser.GameObjects.Image) {
+    const b = texBox(this, img.texture.key);
+    (img.input!.hitArea as Phaser.Geom.Rectangle).setTo(b.x, b.y, b.w, b.h);
+  }
+
+  // ---------------- quân đồn trú: tướng chủ lực và lính chibi đứng quanh nhà ----------------
+  private troops: { img: Phaser.GameObjects.Image; x: number; y: number }[] = [];
+  private troopKey = '';
+  private syncTroops(s: PlayerState) {
+    const keys: string[] = [];
+    const gl = s.chuTuong ? GEN_LOOKS.find((g) => g.id === s.chuTuong) : undefined;
+    if (gl) keys.push(ensureTex(this, `gen-${gl.id}`, () => drawUnit(gl.look)));
+    const types = (Object.keys(s.comps) as (keyof typeof s.comps)[]).filter((k) => s.comps[k].unlocked).map((k) => TROOP_OF[k] ?? 'danbinh');
+    const don = s.dinh.filter((d) => d.k === 'donbinh').reduce((a, d) => a + (d.lv || 0), 0);
+    const n = Math.min(8, Math.max(1, types.length) + don * 2);
+    for (let i = 0; i < n; i++) {
+      const t = types[i % Math.max(1, types.length)] ?? 'danbinh';
+      const def = TROOPS.find((x) => x.id === t) ?? TROOPS[0];
+      keys.push(ensureTex(this, `troop-${def.id}`, () => drawUnit(def.look)));
+    }
+    const key = `${keys.join(',')}|${s.land}|${s.dinh.map((d) => `${d.x},${d.y}`).join(';')}|${s.nodes.length}`;
+    if (key === this.troopKey) return;
+    this.troopKey = key;
+    for (const t of this.troops) t.img.destroy();
+    this.troops = [];
+    // ô trống gần nhà Lều, lan dần ra (cách một ô cho thoáng)
+    const me = this.cellOf();
+    const start = LV_POS.leu;
+    const seen = new Set<number>([start.y * GRID + start.x]);
+    const q = [start];
+    const free: { x: number; y: number }[] = [];
+    for (let i = 0; i < q.length && free.length < keys.length * 2 + 2; i++) {
+      const c = q[i];
+      if (this.walkable(c.x, c.y) && !(c.x === me.x && c.y === me.y)) free.push(c);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = c.x + dx, ny = c.y + dy;
+        if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID || seen.has(ny * GRID + nx) || !isLand(s, nx, ny)) continue;
+        seen.add(ny * GRID + nx);
+        q.push({ x: nx, y: ny });
+      }
+    }
+    const spots = free.filter((_, i) => i % 2 === 1).concat(free.filter((_, i) => i % 2 === 0));
+    keys.forEach((tk, i) => {
+      const c = spots[i];
+      if (!c) return;
+      const img = this.add.image(wx(c.x) + 8, wx(c.y) + FOOT, tk).setOrigin(0.5, 1).setScale(Q).setDepth(wx(c.y) + FOOT);
+      img.setFlipX(((c.x * 7 + c.y * 3) & 1) === 1);
+      this.troops.push({ img, x: c.x, y: c.y });
+    });
+  }
+  /** Thỉnh thoảng một người lính bước sang ô bên cạnh cho đảo có sức sống. */
+  private wanderTroop() {
+    if (!this.troops.length) return;
+    const t = this.troops[Math.floor(Math.random() * this.troops.length)];
+    const me = this.cellOf();
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].sort(() => Math.random() - 0.5);
+    for (const [dx, dy] of dirs) {
+      const nx = t.x + dx, ny = t.y + dy;
+      if (!this.walkable(nx, ny) || (nx === me.x && ny === me.y) || this.troops.some((o) => o.x === nx && o.y === ny)) continue;
+      // không đi xa chỗ đóng quân quá 3 ô
+      if (Math.abs(nx - LV_POS.leu.x) + Math.abs(ny - LV_POS.leu.y) > 6) continue;
+      t.x = nx;
+      t.y = ny;
+      if (dx) t.img.setFlipX(dx < 0);
+      this.tweens.add({ targets: t.img, x: wx(nx) + 8, y: wx(ny) + FOOT, duration: 320, ease: 'Linear', onUpdate: () => t.img.setDepth(t.img.y) });
+      return;
+    }
+    // không có chỗ đi thì quay mặt
+    t.img.setFlipX(!t.img.flipX);
+  }
+
+  // ---------------- chiến thuyền neo quanh bến ----------------
+  private boats: Phaser.GameObjects.Image[] = [];
+  private boatKey = '';
+  private syncFleet(s: PlayerState) {
+    const ships = s.voyage ? [] : s.fleet;
+    const key = `${ships.map((x) => `${x.k}${x.w.no ? 'n' : ''}${x.w.da ? 'd' : ''}${x.w.dam ? 'm' : ''}`).join(',')}|${s.land}`;
+    if (key === this.boatKey) return;
+    this.boatKey = key;
+    for (const b of this.boats) b.destroy();
+    this.boats = [];
+    if (!ships.length) return;
+    const dock = dockPos(s);
+    const rua = { x: Math.floor((this.rua.x - PAD) / T), y: Math.floor((this.rua.y - PAD) / T) };
+    // ô nước sát bờ quanh bến, mỗi thuyền cách nhau ít nhất 3 ô
+    const cands: { x: number; y: number; d: number }[] = [];
+    for (let y = 1; y < GRID - 1; y++)
+      for (let x = 1; x < GRID - 1; x++) {
+        if (isLand(s, x, y) || (x === dock.x && y === dock.y) || (x === rua.x && y === rua.y)) continue;
+        let near = false;
+        for (let oy = -2; oy <= 2 && !near; oy++) for (let ox = -2; ox <= 2 && !near; ox++) near = isLand(s, x + ox, y + oy);
+        const touching = isLand(s, x + 1, y) || isLand(s, x - 1, y) || isLand(s, x, y + 1) || isLand(s, x, y - 1);
+        if (!near || touching) continue;
+        cands.push({ x, y, d: Math.hypot(x - dock.x, y - dock.y) });
+      }
+    cands.sort((a, b) => a.d - b.d);
+    const used: { x: number; y: number }[] = [dock];
+    ships.forEach((sh, i) => {
+      const c = cands.find((p) => used.every((u) => Math.abs(u.x - p.x) + Math.abs(u.y - p.y) >= 3));
+      if (!c) return;
+      used.push(c);
+      const g = { no: !!sh.w.no, da: !!sh.w.da, dam: !!sh.w.dam };
+      const tk = ensureTex(this, `fleet-${sh.k}${g.no ? 'n' : ''}${g.da ? 'd' : ''}${g.dam ? 'm' : ''}`, () => drawBoat(sh.k, g));
+      const img = this.add.image(wx(c.x) + 8, wx(c.y) + 14, tk).setOrigin(0.5, 1).setScale(Q).setDepth(wx(c.y) + 14);
+      // mũi thuyền hướng ra biển
+      img.setFlipX(isLand(s, c.x + 1, c.y) || isLand(s, c.x + 2, c.y));
+      img.setInteractive({ useHandCursor: true }).on('pointerup', () => {
+        if (this.dragged) return;
+        const by = s.dinh.find((d) => d.k === 'benthuyen');
+        if (by) this.ui.openDinh(by.id);
+      });
+      this.tweens.add({ targets: img, y: img.y + 1, angle: { from: -1.5, to: 1.5 }, duration: 1100 + i * 170, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+      this.boats.push(img);
+    });
   }
 
   /** Chỗ mũi tên hướng dẫn cần chỉ (toạ độ thế giới) theo nhiệm vụ hiện tại. */

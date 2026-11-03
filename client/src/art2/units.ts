@@ -1,4 +1,5 @@
 // Lính và tướng chibi: đầu to bằng nửa người, mặt hai chấm mắt, nhìn mũ là biết binh chủng.
+import { HAIR_COLORS, OUTFIT_COLORS, SKINS, type Avatar } from '../../../shared/avatar';
 import { C, cnv, outline, P, shadow } from './pal';
 
 export const UW = 20;
@@ -34,8 +35,8 @@ const LONG_HAIR = [
   '....R...........',
 ];
 
-export type Hat = 'nonla' | 'mu_sat' | 'khan_trum' | 'khan_ran' | 'mu_da' | 'khan_do' | 'mu_tuong' | 'mien' | 'hoa' | 'toc_bui' | 'mu_sat_den';
-export type Weapon = 'giao' | 'cung' | 'khien' | 'riu' | 'no' | 'chia' | 'tre' | 'gay' | 'quat' | 'no_vang' | 'kiem' | 'none';
+export type Hat = 'nonla' | 'mu_sat' | 'khan_trum' | 'khan_ran' | 'mu_da' | 'khan_do' | 'mu_tuong' | 'mien' | 'hoa' | 'toc_bui' | 'mu_sat_den' | 'tran' | 'mu_rom' | 'khan_van' | 'bang_do';
+export type Weapon = 'giao' | 'cung' | 'khien' | 'riu' | 'no' | 'chia' | 'tre' | 'gay' | 'quat' | 'no_vang' | 'kiem' | 'none' | 'cheo' | 'can' | 'gio';
 
 export interface Look {
   hat: Hat;
@@ -142,6 +143,28 @@ function hat(p: P, h: Hat, ox: number, oy: number, hairC: [string, string]) {
       at(6, 1, C.red); at(9, 1, C.red);
       break;
     }
+    case 'mu_rom': {
+      // mũ rơm vành phẳng, dải đỏ quanh chóp
+      row(5, 10, 0, C.straw); row(4, 11, 1, C.straw); row(4, 11, 2, C.straw);
+      row(9, 11, 1, C.straw2); row(9, 11, 2, C.straw2);
+      row(4, 11, 3, C.red);
+      row(1, 14, 4, C.straw); row(2, 13, 5, C.straw2);
+      at(5, 1, '#fff6cf');
+      break;
+    }
+    case 'khan_van': {
+      // khăn vấn quấn tròn quanh đầu (màu theo áo)
+      const k1 = '#3b3442';
+      row(4, 11, 1, k1); row(3, 12, 2, '#5a5266'); row(3, 12, 3, k1); row(3, 12, 4, '#5a5266');
+      for (let x = 4; x <= 11; x += 2) at(x, 3, '#6e6680');
+      at(5, 1, '#7a7290');
+      break;
+    }
+    case 'bang_do': {
+      row(3, 12, 4, C.red); at(2, 4, C.red); at(1, 5, C.red2); at(2, 5, C.red); at(0, 6, C.red2);
+      at(5, 4, '#ffd7c4');
+      break;
+    }
   }
 }
 
@@ -212,6 +235,25 @@ function weapon(p: P, w: Weapon, ox: number, oy: number) {
     case 'kiem':
       col(14, 2, 9, C.metal); col(15, 3, 9, C.metal2); p.h(ox + 13, ox + 16, oy + 10, C.gold2); col(14, 11, 12, C.wood3);
       break;
+    case 'cheo':
+      // mái chèo gỗ dựng bên người
+      col(14, 0, 12, C.wood); col(15, 0, 12, C.wood2);
+      p.rect(ox + 13, oy + 12, 3, 4, C.wood); col(15, 12, 15, C.wood2);
+      break;
+    case 'can':
+      // cần câu tre cong, dây và lưỡi
+      p.line(ox + 12, oy + 12, ox + 17, oy - 2, C.straw2);
+      at(17, -3, C.straw3);
+      col(18, -2, 6, '#cfe9f2');
+      at(18, 7, C.red);
+      break;
+    case 'gio':
+      // giỏ tre đựng cá
+      p.rect(ox + 12, oy + 11, 5, 4, C.straw2);
+      p.h(ox + 12, ox + 16, oy + 11, C.straw3);
+      p.h(ox + 12, ox + 16, oy + 13, C.straw3);
+      at(14, 10, C.blue); at(15, 10, C.blue2);
+      break;
   }
 }
 
@@ -263,6 +305,9 @@ export const TROOPS: TroopDef[] = [
   { id: 'thuy', name: 'Thủy Binh', role: 'Đánh trên thuyền, đổ bộ', look: { hat: 'khan_do', weapon: 'chia', cloth: [C.white, C.white2], belt: C.blue } },
 ];
 
+/** Lính đi theo từng loại chỉ huy (đồng đội, tướng). */
+export const TROOP_OF: Record<string, string> = { an: 'danbinh', ngoc: 'khien', ha: 'cung', chau: 'no', don: 'khien', thap: 'cung', giong: 'khien', sontinh: 'khien', lac: 'thuy', auco: 'cung', caolo: 'no', nuthuy: 'thuy', nghiaquan: 'riu', ngudan: 'thuy', thaylang: 'cung' };
+
 // ================= tướng (nhân vật truyền thuyết) =================
 export interface GeneralDef {
   id: string;
@@ -284,3 +329,33 @@ export const GENERALS: GeneralDef[] = [
   { id: 'ngudan', name: 'Lão Ngư Mắt Bão', title: 'Người Nghe Sóng', skill: 'Cả đội tăng 25% công', rarity: 'Hiếm', look: { hat: 'nonla', weapon: 'chia', cloth: [C.indigo, C.indigo2], hair: ['#d8d2c8', '#b0a898'] } },
   { id: 'thaylang', name: 'Thầy Lang Đảo', title: 'Nam Dược Thần Hiệu', skill: 'Hồi máu đồng đội yếu nhất', rarity: 'Hiếm', look: { hat: 'toc_bui', weapon: 'gay', cloth: [C.white, C.white2], belt: C.green2 } },
 ];
+
+// ================= nhân vật chủ đảo theo dáng vẻ đã chỉnh =================
+
+const AV_HATS: Hat[] = ['tran', 'nonla', 'khan_ran', 'khan_van', 'mu_rom', 'bang_do'];
+const AV_ITEMS: Weapon[] = ['none', 'cheo', 'can', 'gio', 'quat'];
+
+/** Đổi dáng vẻ người chơi chọn sang kiểu chibi của bộ đồ họa mới. */
+export function avatarLook(a: Avatar): Look {
+  const cl = OUTFIT_COLORS[a.tc % OUTFIT_COLORS.length].c;
+  const sk = SKINS[a.sk % SKINS.length].c;
+  const hc = HAIR_COLORS[a.hc % HAIR_COLORS.length].c;
+  const female = a.g === 1;
+  // kiểu tóc: búi tó (nam) / búi cao (nữ) hiện búi khi đầu trần; nữ tóc ngắn thì không xõa
+  const bun = (female ? a.ha === 2 : a.ha === 3) && a.hat === 0;
+  const hat: Hat = bun ? 'toc_bui' : AV_HATS[a.hat % AV_HATS.length];
+  const look: Look = {
+    hat,
+    weapon: AV_ITEMS[a.it % AV_ITEMS.length],
+    cloth: [cl[0], cl[1]],
+    hair: [hc[0], hc[1]],
+    skin: [sk[0], sk[1]],
+    female: female && a.ha % 5 !== 4 && !(a.ha === 2 && a.hat === 0),
+  };
+  // trang phục: áo ngư dân có đai nâu, áo thủy thủ sọc trắng, áo tơi lá khoác ngoài, áo dài vạt dài
+  if (a.to === 2) look.belt = C.brown2;
+  else if (a.to === 3) look.belt = C.white;
+  else if (a.to === 4) look.cape = C.straw2;
+  else if (a.to === 1) look.cloth = [cl[0], cl[1], cl[0]];
+  return look;
+}

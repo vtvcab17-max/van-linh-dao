@@ -338,3 +338,17 @@ if (mode === 'mixisland') {
   label(big.getContext('2d')!, 'Đảo Vạn Linh', Wc * K, 2.6 * 16 * K * 2, 40, '#ffe27a');
   root.appendChild(big);
 }
+import { drawDinh2 } from '../../client/src/art2/dinh2';
+import { avatarLook } from '../../client/src/art2/units';
+import { BUILDINGS, type BKey } from '../../shared/economy';
+if (mode === 'dinh2') {
+  for (const k of Object.keys(BUILDINGS) as BKey[]) {
+    const r = sec(`${k}`);
+    for (const L of [1, 2, 3]) put(r, enhance(drawDinh2(k, L)), 2, BUILDINGS[k].names[L - 1]);
+  }
+  const r = sec('Chủ đảo');
+  for (let i = 0; i < 12; i++) {
+    const a = { g: (i % 2) as 0 | 1, sk: i % 4, ha: i % 5, hc: i % 6, to: i % 5, tc: i % 8, hat: i % 6, it: i % 5 };
+    put(r, enhance(drawUnit(avatarLook(a))), 3);
+  }
+}

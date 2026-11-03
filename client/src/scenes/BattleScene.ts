@@ -10,7 +10,7 @@ import { pubAvatar } from '../ui';
 import type { Store } from '../store';
 import { zoomFor } from './IslandScene';
 import type { UI } from '../ui';
-import { drawUnit, GENERALS as GEN_LOOKS, TROOPS } from '../art2/units';
+import { drawUnit, GENERALS as GEN_LOOKS, TROOP_OF, TROOPS } from '../art2/units';
 import { drawBoat } from '../art2/builds';
 
 interface Squad {
@@ -36,7 +36,7 @@ export interface BattleData {
 const COLS = 12;
 const ROWS = 5;
 /** lính đi theo từng loại chỉ huy */
-const MEN: Record<string, string> = { an: 'danbinh', ngoc: 'khien', ha: 'cung', chau: 'no', don: 'khien', thap: 'cung', giong: 'khien', sontinh: 'khien', lac: 'thuy', auco: 'cung', caolo: 'no', nuthuy: 'thuy', nghiaquan: 'riu', ngudan: 'thuy', thaylang: 'cung' };
+const MEN = TROOP_OF;
 
 export class BattleScene extends Phaser.Scene {
   private views = new Map<string, Squad>();

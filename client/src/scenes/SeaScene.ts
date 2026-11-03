@@ -10,7 +10,7 @@ import { hexCenterPx, hexNeighbors, pxToHex } from '../../../shared/hex';
 import { CENTER, fleetPos, terrainAt, WORLD_H, WORLD_W, ZONE_NAMES, zoneLevel, type FleetView, type Terrain } from '../../../shared/world';
 import type { Store } from '../store';
 import type { UI } from '../ui';
-import { HD, merchantTex, seaIslandTex, waterTex } from '../art/textures';
+import { HD, hallTex, merchantTex, seaBoatTex, seaIslandTex, waterTex } from '../art/textures';
 import { CamCtl } from './camctl';
 
 const CH = 16; // khối 16x16 ô
@@ -465,8 +465,11 @@ export class SeaScene extends Phaser.Scene {
     this.add1(this.add.rectangle(x + 3, y, 6, 4, col).setStrokeStyle(1, 0x1d1b2a));
   }
   private island(id: string, x: number, y: number, kind: 'me' | 'player' | 'bot' | 'wild', land: number, tier: number, online = false) {
-    const img = this.add.image(x, y, seaIslandTex(this, id, land, kind, tier)).setScale(0.85 / HD);
+    const img = this.add.image(x, y, seaIslandTex(this, id, land, kind, tier, false)).setScale(0.85 / HD);
     this.add1(img);
+    // phủ chúa kiểu mới trên đảo, bậc nhà chính càng cao mái càng đẹp; cờ màu theo phe
+    this.add1(this.add.image(x, y + 6, hallTex(this, tier)).setOrigin(0.5, 1).setScale(0.5 / HD));
+    this.flag(x + 9, y - 13, kind === 'me' ? 0xffe27a : kind === 'player' ? 0xf0554a : 0xffb35a);
     if (online) {
       const ring = this.add.circle(x, y + 2, 16).setStrokeStyle(1, 0x7cff9a, 0.9);
       this.tweens.add({ targets: ring, scale: { from: 0.9, to: 1.15 }, alpha: { from: 1, to: 0.3 }, duration: 900, yoyo: true, repeat: -1 });
@@ -505,8 +508,7 @@ export class SeaScene extends Phaser.Scene {
     const seen = seenOf(s);
     const list = this.store.net.fleets(s);
     for (const f of list) {
-      const img = this.add.image(0, 0, `boat-${Math.max(1, Math.min(5, f.t))}`).setOrigin(0.5, 0.85).setDepth(12).setScale(0.6 / HD);
-      if (!f.mine && !f.who) img.setTint(0xbcc4cf);
+      const img = this.add.image(0, 0, seaBoatTex(this, Math.max(1, Math.min(5, f.t)), !!(f.mine || f.who))).setOrigin(0.5, 0.85).setDepth(12).setScale(0.55 / HD);
       const label = this.label(0, 0, f.mine ? 'Thuyền của bạn' : f.who ? `Thuyền ${f.who}` : 'Thuyền lạ', f.mine ? '#ffe27a' : f.who ? '#bfe0ff' : '#e9eef3');
       this.fleets.push({ f, img, label });
       void seen;

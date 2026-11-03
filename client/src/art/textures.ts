@@ -5,7 +5,9 @@ import { charCanvas, drawChest, drawCuoc, drawEmote, drawIcon, drawLeu, drawNode
 import { opaqueBox } from './buildings';
 import { drawSeaIsland, miniRadius, type MiniKind } from './islands';
 import { avatarTexKey, drawAvatar } from './avatar';
-import { drawDinh, drawMerchant } from './dinh';
+import { drawMerchant } from './dinh';
+import { drawDinh2 } from '../art2/dinh2';
+import { drawBoat, drawHall } from '../art2/builds';
 import type { BKey } from '../../../shared/economy';
 import type { Canvas } from './pixel';
 import { enhance, HD } from './hd';
@@ -52,9 +54,9 @@ export function preloadAll(scene: Phaser.Scene) {
   for (let t = 1; t <= 5; t++) ensureTex(scene, `boat-${t}`, () => drawThuyen(t, false, 'thuong'));
 }
 
-/** Nhà cửa, thành trì theo loại và cấp. */
+/** Nhà cửa, thành trì theo loại và cấp (bộ đồ họa mới, qua bộ lọc 32-bit). */
 export function dinhTex(scene: Phaser.Scene, k: BKey, lv: number): string {
-  return ensureTex(scene, `dinh-${k}-${lv}`, () => drawDinh(k, lv));
+  return ensureTex(scene, `dinh2-${k}-${lv}`, () => drawDinh2(k, lv));
 }
 export function merchantTex(scene: Phaser.Scene, id: string, color: string): string {
   return ensureTex(scene, `merchant-${id}`, () => drawMerchant(color));
@@ -66,8 +68,18 @@ export function avatarTex(scene: Phaser.Scene, a: Avatar): string {
 }
 
 /** Đảo trên hải đồ: mỗi đảo một hình riêng; vẽ lại khi đảo lớn thêm hoặc nhà chính lên bậc. */
-export function seaIslandTex(scene: Phaser.Scene, id: string, land: number, kind: MiniKind, tier: number): string {
-  return ensureTex(scene, `sea-${id}-${miniRadius(land)}-${kind}-${tier}`, () => drawSeaIsland(id, land, kind, tier));
+export function seaIslandTex(scene: Phaser.Scene, id: string, land: number, kind: MiniKind, tier: number, withHouse = true): string {
+  return ensureTex(scene, `sea-${id}-${miniRadius(land)}-${kind}-${tier}${withHouse ? '' : '-n'}`, () => drawSeaIsland(id, land, kind, tier, withHouse));
+}
+/** Phủ chúa (bộ mới) đặt trên đảo người chơi ở hải đồ. */
+export function hallTex(scene: Phaser.Scene, tier: number): string {
+  const t = Math.max(1, Math.min(5, tier));
+  return ensureTex(scene, `hall2-${t}`, () => drawHall(t));
+}
+/** Thuyền trên hải đồ: cờ đỏ cho thuyền mình/đồng minh, cờ xám cho thuyền lạ. */
+export function seaBoatTex(scene: Phaser.Scene, tier: number, known: boolean): string {
+  const kind = tier <= 1 ? 'ghe' : tier <= 3 ? 'buom' : 'chien';
+  return ensureTex(scene, `seaboat-${kind}-${known ? 'r' : 'g'}`, () => drawBoat(kind, { no: tier >= 3, da: tier >= 4 }, known ? '#ee5d4a' : '#9aa3ad'));
 }
 
 const boxCache = new Map<string, { x: number; y: number; w: number; h: number }>();
