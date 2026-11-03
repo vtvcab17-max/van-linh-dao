@@ -48,6 +48,8 @@ export interface Look {
   cape?: string;
   /** dải màu ngang thân (áo sọc, đai) */
   belt?: string;
+  /** hào quang dưới chân và đốm sáng (tướng hiếm) */
+  aura?: string;
 }
 
 function hat(p: P, h: Hat, ox: number, oy: number, hairC: [string, string]) {
@@ -283,6 +285,13 @@ export function drawUnit(look: Look): HTMLCanvasElement {
   // bóng đổ vẽ sau viền để không bị viền bao
   const [c, x] = cnv(UW, UH);
   const ps = new P(x);
+  if (look.aura) {
+    // vòng hào quang dưới chân + vài đốm sáng quanh người
+    x.fillStyle = look.aura + '88';
+    for (const [dx, dy, w] of [[-7, 0, 15], [-6, 1, 13], [-6, -1, 13]]) x.fillRect(OX + 8 + dx, OY + 16 + dy, w, 1);
+    x.fillStyle = look.aura;
+    for (const [px, py] of [[1, 8], [18, 12], [3, 3], [17, 5]]) x.fillRect(px, py, 1, 1);
+  }
   shadow(ps, OX + 8, OY + 16, 5);
   x.drawImage(o, 0, 0);
   return c;
@@ -319,15 +328,15 @@ export interface GeneralDef {
 }
 
 export const GENERALS: GeneralDef[] = [
-  { id: 'giong', name: 'Thánh Gióng', title: 'Phù Đổng Thiên Vương', skill: 'Nhổ tre quét ngang 3 ô, hất văng địch', rarity: 'Truyền Thuyết', look: { hat: 'mu_sat_den', weapon: 'tre', cloth: ['#7d8797', '#5a6372', '#4a5260'], cape: C.red } },
-  { id: 'sontinh', name: 'Sơn Tinh', title: 'Thần Núi Tản Viên', skill: 'Dựng núi chắn 2 lượt, quân mình +30% thủ', rarity: 'Truyền Thuyết', look: { hat: 'mien', weapon: 'gay', cloth: [C.green2, C.green3], cape: C.leaf3 } },
-  { id: 'lac', name: 'Lạc Long Quân', title: 'Vua Biển Cả', skill: 'Gọi sóng: đẩy lùi cả hàng địch, đánh trên biển +40%', rarity: 'Truyền Thuyết', look: { hat: 'mu_tuong', weapon: 'chia', cloth: [C.blue, C.blue2, C.gold2], cape: C.teal2 } },
-  { id: 'auco', name: 'Âu Cơ', title: 'Mẹ Tiên', skill: 'Hồi máu cho cả đội mỗi lượt', rarity: 'Sử Thi', look: { hat: 'hoa', weapon: 'quat', cloth: [C.pink, C.pink2], female: true, cape: C.white } },
-  { id: 'caolo', name: 'Cao Lỗ', title: 'Thần Nỏ', skill: 'Nỏ thần bắn một phát trúng mười', rarity: 'Sử Thi', look: { hat: 'toc_bui', weapon: 'no_vang', cloth: [C.brown, C.brown2, C.gold2], cape: C.gold2 } },
-  { id: 'nuthuy', name: 'Nữ Tướng Hải Âu', title: 'Thủy Quân Đô Đốc', skill: 'Thuyền mình đi nhanh hơn 30%', rarity: 'Hiếm', look: { hat: 'khan_do', weapon: 'kiem', cloth: [C.white, C.blue2], female: true, cape: C.blue } },
-  { id: 'nghiaquan', name: 'Thủ Lĩnh Nghĩa Quân', title: 'Áo Vải Cờ Đào', skill: 'Đòn hiểm 140% công', rarity: 'Hiếm', look: { hat: 'khan_ran', weapon: 'giao', cloth: [C.brown, C.brown2], cape: C.red } },
-  { id: 'ngudan', name: 'Lão Ngư Mắt Bão', title: 'Người Nghe Sóng', skill: 'Cả đội tăng 25% công', rarity: 'Hiếm', look: { hat: 'nonla', weapon: 'chia', cloth: [C.indigo, C.indigo2], hair: ['#d8d2c8', '#b0a898'] } },
-  { id: 'thaylang', name: 'Thầy Lang Đảo', title: 'Nam Dược Thần Hiệu', skill: 'Hồi máu đồng đội yếu nhất', rarity: 'Hiếm', look: { hat: 'toc_bui', weapon: 'gay', cloth: [C.white, C.white2], belt: C.green2 } },
+  { id: 'giong', name: 'Thánh Gióng', title: 'Phù Đổng Thiên Vương', skill: 'Nhổ tre quét ngang 3 ô, hất văng địch', rarity: 'Truyền Thuyết', look: { hat: 'mu_sat_den', weapon: 'tre', cloth: ['#7d8797', '#5a6372', '#4a5260'], cape: C.red , aura: '#ffd24a' } },
+  { id: 'sontinh', name: 'Sơn Tinh', title: 'Thần Núi Tản Viên', skill: 'Dựng núi chắn 2 lượt, quân mình +30% thủ', rarity: 'Truyền Thuyết', look: { hat: 'mien', weapon: 'gay', cloth: [C.green2, C.green3], cape: C.leaf3 , aura: '#ffd24a' } },
+  { id: 'lac', name: 'Lạc Long Quân', title: 'Vua Biển Cả', skill: 'Gọi sóng: đẩy lùi cả hàng địch, đánh trên biển +40%', rarity: 'Truyền Thuyết', look: { hat: 'mu_tuong', weapon: 'chia', cloth: [C.blue, C.blue2, C.gold2], cape: C.teal2 , aura: '#ffd24a' } },
+  { id: 'auco', name: 'Âu Cơ', title: 'Mẹ Tiên', skill: 'Hồi máu cho cả đội mỗi lượt', rarity: 'Sử Thi', look: { hat: 'hoa', weapon: 'quat', cloth: [C.pink, C.pink2], female: true, cape: C.white , aura: '#c58bff' } },
+  { id: 'caolo', name: 'Cao Lỗ', title: 'Thần Nỏ', skill: 'Nỏ thần bắn một phát trúng mười', rarity: 'Sử Thi', look: { hat: 'toc_bui', weapon: 'no_vang', cloth: [C.brown, C.brown2, C.gold2], cape: C.gold2 , aura: '#c58bff' } },
+  { id: 'nuthuy', name: 'Nữ Tướng Hải Âu', title: 'Thủy Quân Đô Đốc', skill: 'Thuyền mình đi nhanh hơn 30%', rarity: 'Hiếm', look: { hat: 'khan_do', weapon: 'kiem', cloth: [C.white, C.blue2], female: true, cape: C.blue , aura: '#6fb7ff' } },
+  { id: 'nghiaquan', name: 'Thủ Lĩnh Nghĩa Quân', title: 'Áo Vải Cờ Đào', skill: 'Đòn hiểm 140% công', rarity: 'Hiếm', look: { hat: 'khan_ran', weapon: 'giao', cloth: [C.brown, C.brown2], cape: C.red , aura: '#6fb7ff' } },
+  { id: 'ngudan', name: 'Lão Ngư Mắt Bão', title: 'Người Nghe Sóng', skill: 'Cả đội tăng 25% công', rarity: 'Hiếm', look: { hat: 'nonla', weapon: 'chia', cloth: [C.indigo, C.indigo2], hair: ['#d8d2c8', '#b0a898'] , aura: '#6fb7ff' } },
+  { id: 'thaylang', name: 'Thầy Lang Đảo', title: 'Nam Dược Thần Hiệu', skill: 'Hồi máu đồng đội yếu nhất', rarity: 'Hiếm', look: { hat: 'toc_bui', weapon: 'gay', cloth: [C.white, C.white2], belt: C.green2 , aura: '#6fb7ff' } },
 ];
 
 // ================= nhân vật chủ đảo theo dáng vẻ đã chỉnh =================

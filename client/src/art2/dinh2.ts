@@ -2,7 +2,7 @@
 // Bậc 1 mái tranh, bậc 2 mái ngói đỏ, bậc 3 mái ngói men xanh có đầu đao vàng.
 import type { BKey } from '../../../shared/economy';
 import { curvedRoof } from './builds';
-import { C, cnv, outline, P, shadow } from './pal';
+import { C, cnv, lit, outline, P, shadow } from './pal';
 
 /** Bề ngang và mặt đất chung: ảnh neo đáy giữa ô, chân nhà cách đáy ảnh 3 điểm ảnh. */
 export const DW = 22;
@@ -22,7 +22,7 @@ function make(h = H0) {
 }
 /** Viền rồi vẽ thêm phần không viền (khói, ánh lửa, bọt nước). */
 function fin(c: HTMLCanvasElement, after?: (p: P) => void) {
-  const o = outline(c);
+  const o = lit(outline(c));
   if (after) after(new P(o.getContext('2d')!));
   return o;
 }
@@ -212,7 +212,7 @@ export function drawDinh2(k: BKey, lv: number): HTMLCanvasElement {
         p.rect(3, 11, 16, 2, C.stone);
         p.h(3, 18, 12, C.stone2);
         for (const mx of [3, 9, 15]) { p.rect(mx, 7, 4, 4, C.stone); p.h(mx, mx + 3, 10, C.stone2); }
-        if (L === 3) p.px(11, 6, C.gold);
+        if (L === 3) { p.px(11, 6, C.gold); p.h(3, 18, G - 2, br[2]); }
       }
       return fin(c);
     }
