@@ -366,15 +366,18 @@ export function sideHp(units: BUnit[]): { hp: number; max: number } {
   return { hp, max };
 }
 
-/** Báo cáo thương vong từng đội quân của bên 0: ra trận, còn sống, mất. */
-export function squadReport(troops: Troops | undefined, res: BattleResult): { k: (typeof TROOP_KEYS)[number]; n: number; left: number; lost: number }[] {
-  const mine = res.a.filter((u) => !u.wall);
+/** Báo cáo thương vong từng đội quân của một bên (mặc định bên 0): ra trận, còn sống, mất. */
+export function squadReport(troops: Troops | undefined, res: BattleResult, side: 0 | 1 = 0): { k: (typeof TROOP_KEYS)[number]; n: number; left: number; lost: number }[] {
+  const units = side === 0 ? res.a : res.b;
+  // máu còn lại: bên 0 không tính tường, bên 1 tính đủ theo thứ tự
+  const mine = side === 0 ? units.filter((u) => !u.wall) : units;
+  const hps = side === 0 ? res.hpA : res.hpB;
   const out: { k: (typeof TROOP_KEYS)[number]; n: number; left: number; lost: number }[] = [];
   for (const k of TROOP_KEYS) {
     const n = troops?.[k] ?? 0;
     if (n <= 0) continue;
     const i = mine.findIndex((u) => u.key === `tq-${k}`);
-    const hp = i >= 0 ? (res.hpA?.[i] ?? 0) : 0;
+    const hp = i >= 0 ? (hps?.[i] ?? 0) : 0;
     const left = i >= 0 ? survivors(n, hp, mine[i].maxHp) : 0;
     out.push({ k, n, left, lost: n - left });
   }

@@ -32,7 +32,7 @@ import {
   type NodeKind,
   type ResKey,
 } from './data';
-import { simulate, teamFromMonsters, teamFromSpec, type BattleResult, type TeamSpec } from './battle';
+import { simulate, squadReport, teamFromMonsters, teamFromSpec, type BattleResult, type TeamSpec } from './battle';
 import { hashStr, mulberry32, pick, rint, weighted, type Rng } from './rng';
 import { avatarFrom, cleanAvatar, type Avatar } from './avatar';
 import { LV_LABEL, ASCEND_REWARD, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, cleanGear, GEAR, GEAR_KEYS, gearBonus, gearPower, noGear, weekOf, type GearKey, type GearSet } from './boss';
@@ -1737,6 +1737,8 @@ export interface IslandPub {
   home?: { x: number; y: number };
   /** quân giữ đảo nhà */
   troops?: Troops;
+  /** hàng trước/sau của quân giữ đảo */
+  rows?: TroopRows;
   /** thuyền chiến giữ bến */
   ships?: { k: ShipKind; w: Partial<Record<ShipWeapon, boolean>>; vo: number }[];
   /** khiên bảo hộ tới lúc này: ẩn bên trong đảo */
@@ -1781,6 +1783,7 @@ export function publicOf(s: PlayerState): IslandPub {
     lvl: lordLevel(s),
     ships: shielded ? undefined : s.fleet.filter((x) => x.vo > 0).map((x) => ({ k: x.k, w: { ...x.w }, vo: x.vo })),
     troops: shielded ? undefined : cleanTroops(s.troops),
+    rows: shielded ? undefined : cleanRows(s.hang),
   };
 }
 
@@ -1800,6 +1803,8 @@ export interface RaidEvent {
   liberate?: boolean;
   until?: number;
   attackerIsland?: string;
+  /** quân giữ đảo của người bị đánh mất sau trận */
+  defLost?: Troops;
 }
 
 export function raidSeed(attackerId: string, targetId: string, n: number) {
@@ -1807,9 +1812,9 @@ export function raidSeed(attackerId: string, targetId: string, n: number) {
 }
 
 /** Tính trận đột kích từ hai bản công khai — server dùng đúng hàm này để kiểm lại. */
-export function resolveRaid(att: TeamSpec, target: IslandPub, seed: number): { battle: BattleResult; loot: Partial<Record<ResKey, number>> } {
+export function resolveRaid(att: TeamSpec, target: IslandPub, seed: number): { battle: BattleResult; loot: Partial<Record<ResKey, number>>; defLost: Troops } {
   const r = mulberry32(seed);
-  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear), fort: target.bot ? undefined : cleanDef(target.def), gen: cleanGen(target.gen), ships: target.bot ? undefined : cleanShips(target.ships), troops: target.bot ? undefined : cleanTroops(target.troops) };
+  const defSpec: TeamSpec = { comps: target.team, cuocTier: target.tiers.cuoc, raoTier: target.tiers.rao, hero: target.name, gear: gearBonus(target.gear), fort: target.bot ? undefined : cleanDef(target.def), gen: cleanGen(target.gen), ships: target.bot ? undefined : cleanShips(target.ships), troops: target.bot ? undefined : cleanTroops(target.troops), rows: target.bot ? undefined : cleanRows(target.rows) };
   const battle = simulate(teamFromSpec(att, 0), teamFromSpec(defSpec, 1), r);
   const loot: Partial<Record<ResKey, number>> = {};
   if (battle.winner === 0) {
@@ -1818,7 +1823,10 @@ export function resolveRaid(att: TeamSpec, target: IslandPub, seed: number): { b
       if (take > 0) loot[k as ResKey] = take;
     }
   }
-  return { battle, loot };
+  const defTroops = defSpec.troops;
+  const defLost: Troops = {};
+  for (const r of squadReport(defTroops, battle, 1)) if (r.lost > 0) defLost[r.k] = r.lost;
+  return { battle, loot, defLost };
 }
 
 /** Đánh chiếm: cần Đồn binh, còn chỗ giữ chư hầu. */
@@ -1848,7 +1856,7 @@ export function raid(s: PlayerState, target: IslandPub, holdLoot = false, conque
   s.stats.raids++;
   const seed = raidSeed(s.id, target.id, s.stats.raids + s.seq);
   const spec = teamSpec(s, false);
-  const { battle, loot } = resolveRaid(spec, target, seed);
+  const { battle, loot, defLost } = resolveRaid(spec, target, seed);
   s.raidCd[target.id] = s.gt + RAID_COOLDOWN_MS;
   const win = battle.winner === 0;
   const got = win ? (holdLoot ? loot : addRes(s, loot)) : {};
@@ -1870,6 +1878,7 @@ export function raid(s: PlayerState, target: IslandPub, holdLoot = false, conque
     liberate: liberate && win,
     until: s.lastReal + VASSAL_MS,
     attackerIsland: s.islandName,
+    defLost: troopCount(defLost) ? defLost : undefined,
   };
   if (win && liberate) {
     s.chuQuan = null;
@@ -1898,10 +1907,21 @@ export function applyRaidAgainstMe(s: PlayerState, ev: RaidEvent): string | null
   if (ev.targetId !== s.id || s.applied.includes(ev.id)) return null;
   s.applied.push(ev.id);
   if (s.applied.length > 200) s.applied.splice(0, s.applied.length - 200);
+  // quân giữ đảo ngã thật (thắng hay thua đều mất)
+  const fell: string[] = [];
+  for (const k of TROOP_KEYS) {
+    const take = Math.min(s.troops[k] ?? 0, Math.max(0, Math.floor(ev.defLost?.[k] ?? 0)));
+    if (take > 0) {
+      s.troops[k] = (s.troops[k] ?? 0) - take;
+      if (!s.troops[k]) delete s.troops[k];
+      fell.push(`${take} ${TROOPS[k].name}`);
+    }
+  }
+  const fellText = fell.length ? ` Quân giữ đảo mất ${fell.join(', ')}.` : '';
   if (!ev.win) {
     s.stats.defended++;
     addRes(s, { so: 5 });
-    const text = `${ev.attackerName} đột kích nhưng ${LINH_VAT.rao.tiers[s.lv.rao.tier - 1]} đã giữ đảo. +5 Vỏ Sò.`;
+    const text = `${ev.attackerName} đột kích nhưng ${LINH_VAT.rao.tiers[s.lv.rao.tier - 1]} đã giữ đảo. +5 Vỏ Sò.${fellText}`;
     log(s, text);
     return text;
   }
@@ -1926,8 +1946,8 @@ export function applyRaidAgainstMe(s: PlayerState, ev: RaidEvent): string | null
     : ev.conquer
       ? `${ev.attackerName} đánh chiếm đảo bạn! Đảo thành chư hầu, phải cống nạp 72 giờ. Đánh thắng họ để khởi nghĩa.${lost.length ? ` Mất ${lost.join(', ')}.` : ''}`
       : `${ev.attackerName} đột kích đảo bạn${lost.length ? `, lấy mất ${lost.join(', ')}` : ''}.`;
-  log(s, text);
-  return text;
+  log(s, text + fellText);
+  return text + fellText;
 }
 
 /** Dấu vân tay ngắn của trạng thái: client và server so nhau để phát hiện lệch. */
