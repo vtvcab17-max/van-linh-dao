@@ -114,7 +114,9 @@ body[data-tab="sea"] .mi.isl { display: none; }
 .col-left { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; min-width: 0; }
 #voyage { display: flex; align-items: center; gap: 8px; text-align: left; padding: 4px 10px 4px 4px; max-width: min(320px, 62vw); box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--ink); }
 #voyage img { width: 46px; image-rendering: pixelated; flex: none; }
+#voyage > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 #voyage b { display: block; font: 19px/1 var(--font-pixel); color: var(--gold); }
+#voyage b, #voyage span, #vassal b, #vassal span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 #voyage span { display: block; font-size: 12px; font-weight: 400; color: var(--paper); }
 
 .btn, button { cursor: pointer; border: 2px solid var(--gold-dim); background: var(--lacquer-3); color: var(--paper); border-radius: 5px; padding: 6px 10px; box-shadow: 0 0 0 2px var(--ink), 0 3px 0 var(--ink); font-weight: 600; font-size: 13px; }

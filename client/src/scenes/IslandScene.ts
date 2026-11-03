@@ -102,6 +102,8 @@ export class IslandScene extends Phaser.Scene {
     // nhân vật chủ đảo (nam/nữ); chỉ đi theo ô vuông, chạm vào không mở gì cả
     this.an = this.add.image(wx(11) + 8, wx(12) + FOOT, avatarTex(this, this.store.s.avatar)).setOrigin(0.5, 1).setScale(Q);
     this.time.addEvent({ delay: 1800, loop: true, callback: () => this.wanderTroop() });
+    // bóng mờ nhân vật hiện xuyên qua nhà/cây khi đứng khuất phía sau
+    this.anGhost = this.add.image(this.an.x, this.an.y, this.an.texture.key).setOrigin(0.5, 1).setScale(Q).setAlpha(0.5).setDepth(4500).setVisible(false);
     this.events.on('wake', () => this.enterFromSea());
     this.rua = this.add.image(wx(9) + 8, wx(14) + 12, 'ch-rua').setOrigin(0.5, 1).setDepth(wx(14)).setScale(Q);
     const labelsBox = () => document.getElementById('buildlabels');
@@ -630,7 +632,7 @@ export class IslandScene extends Phaser.Scene {
     const free: { x: number; y: number }[] = [];
     for (let i = 0; i < q.length && free.length < keys.length * 2 + 2; i++) {
       const c = q[i];
-      if (this.walkable(c.x, c.y) && !(c.x === me.x && c.y === me.y)) free.push(c);
+      if (this.standable(c.x, c.y, false) && Math.abs(c.x - me.x) + Math.abs(c.y - me.y) > 1) free.push(c);
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = c.x + dx, ny = c.y + dy;
         if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID || seen.has(ny * GRID + nx) || !isLand(s, nx, ny)) continue;
@@ -638,7 +640,10 @@ export class IslandScene extends Phaser.Scene {
         q.push({ x: nx, y: ny });
       }
     }
-    const spots = free.filter((_, i) => i % 2 === 1).concat(free.filter((_, i) => i % 2 === 0));
+    // ưu tiên ô trong đảo; đảo nhỏ quá thì mới cho đứng sát bờ
+    const inner = free.filter((c) => this.standable(c.x, c.y));
+    const edge = free.filter((c) => !inner.includes(c));
+    const spots = [...inner.filter((_, i) => i % 2 === 1), ...inner.filter((_, i) => i % 2 === 0), ...edge];
     keys.forEach((tk, i) => {
       const c = spots[i];
       if (!c) return;
@@ -647,6 +652,37 @@ export class IslandScene extends Phaser.Scene {
       this.troops.push({ img, x: c.x, y: c.y });
     });
   }
+  /** Phần có hình của một ảnh (toạ độ thế giới), bỏ phần trong suốt. */
+  private solidRect(img: Phaser.GameObjects.Image) {
+    const b = texBox(this, img.texture.key);
+    const sx = img.scaleX, sy = img.scaleY;
+    return { x: img.x - img.width * img.originX * sx + b.x * sx, y: img.y - img.height * img.originY * sy + b.y * sy, w: b.w * sx, h: b.h * sy, d: img.depth };
+  }
+  /** Những hình cao có thể che người đứng phía sau (nhà, linh vật, cây). */
+  private occluders() {
+    const out: Phaser.GameObjects.Image[] = [];
+    for (const k of LV_KEYS) if (this.lvs[k].visible) out.push(this.lvs[k]);
+    for (const v of this.dinhImgs.values()) out.push(v.img);
+    for (const img of this.nodes.values()) if (img.height > 18 * HD) out.push(img);
+    return out;
+  }
+  /** Điểm (x, y) có bị một hình đứng trước (sâu hơn `depth`) che không. */
+  private covered(x: number, y: number, depth: number) {
+    return this.occluders().some((img) => {
+      if (img.depth <= depth) return false;
+      const r = this.solidRect(img);
+      return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+    });
+  }
+  /** Ô lính đứng được: đất trong (không sát mép biển), trống, không bị nhà hay cây che khuất. */
+  private standable(tx: number, ty: number, innerOnly = true) {
+    const s = this.store.s;
+    if (!this.walkable(tx, ty)) return false;
+    if (innerOnly && !(isLand(s, tx + 1, ty) && isLand(s, tx - 1, ty) && isLand(s, tx, ty + 1) && isLand(s, tx, ty - 1))) return false;
+    const x = wx(tx) + 8, foot = wx(ty) + FOOT;
+    return !this.covered(x, foot - 4, foot) && !this.covered(x, foot - 16, foot);
+  }
+
   /** Thỉnh thoảng một người lính bước sang ô bên cạnh cho đảo có sức sống. */
   private wanderTroop() {
     if (!this.troops.length) return;
@@ -655,7 +691,7 @@ export class IslandScene extends Phaser.Scene {
     const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].sort(() => Math.random() - 0.5);
     for (const [dx, dy] of dirs) {
       const nx = t.x + dx, ny = t.y + dy;
-      if (!this.walkable(nx, ny) || (nx === me.x && ny === me.y) || this.troops.some((o) => o.x === nx && o.y === ny)) continue;
+      if (!this.standable(nx, ny) || (nx === me.x && ny === me.y) || this.troops.some((o) => o.x === nx && o.y === ny)) continue;
       // không đi xa chỗ đóng quân quá 3 ô
       if (Math.abs(nx - LV_POS.leu.x) + Math.abs(ny - LV_POS.leu.y) > 6) continue;
       t.x = nx;
@@ -686,10 +722,11 @@ export class IslandScene extends Phaser.Scene {
     for (let y = 1; y < GRID - 1; y++)
       for (let x = 1; x < GRID - 1; x++) {
         if (isLand(s, x, y) || (x === dock.x && y === dock.y) || (x === rua.x && y === rua.y)) continue;
-        let near = false;
-        for (let oy = -2; oy <= 2 && !near; oy++) for (let ox = -2; ox <= 2 && !near; ox++) near = isLand(s, x + ox, y + oy);
-        const touching = isLand(s, x + 1, y) || isLand(s, x - 1, y) || isLand(s, x, y + 1) || isLand(s, x, y - 1);
-        if (!near || touching) continue;
+        // thuyền cao hơn 2 ô, rộng 3 ô: cần khoảng nước trống phía trên và hai bên để không đè lên đảo
+        let near = false, blocked = false;
+        for (let oy = -3; oy <= 3 && !near; oy++) for (let ox = -3; ox <= 3 && !near; ox++) near = isLand(s, x + ox, y + oy);
+        for (let oy = -2; oy <= 0 && !blocked; oy++) for (let ox = -2; ox <= 2 && !blocked; ox++) blocked = isLand(s, x + ox, y + oy);
+        if (!near || blocked) continue;
         cands.push({ x, y, d: Math.hypot(x - dock.x, y - dock.y) });
       }
     cands.sort((a, b) => a.d - b.d);
@@ -743,7 +780,10 @@ export class IslandScene extends Phaser.Scene {
     return null;
   }
 
+  private anGhost!: Phaser.GameObjects.Image;
   update(time: number) {
+    if (this.anGhost.texture.key !== this.an.texture.key) this.anGhost.setTexture(this.an.texture.key);
+    this.anGhost.setPosition(this.an.x, this.an.y).setFlipX(this.an.flipX);
     this.halo.setVisible(this.store.s.asc > 0);
     if (this.halo.visible) this.halo.setPosition(this.an.x, this.an.y - this.an.displayHeight + 1 + Math.round(Math.sin(time / 400))).setDepth(this.an.depth + 1);
     const g = this.guideAt();
@@ -754,6 +794,7 @@ export class IslandScene extends Phaser.Scene {
     this.an.setDepth(this.an.y);
     if (time - this.lastSlow > 120) {
       this.lastSlow = time;
+      this.anGhost.setVisible(this.covered(this.an.x, this.an.y - 8, this.an.depth) || this.covered(this.an.x, this.an.y - 18, this.an.depth));
       this.ui.updateBubble();
     }
   }

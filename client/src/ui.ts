@@ -174,7 +174,7 @@ export class UI {
       const left = secs((end - s.gt) / s.speed);
       text = v.phase === 'di' ? `<b>${esc(name)} đang đi</b><span>tới ${esc(v.targetName)} sau ${left}</span>` : `<b>${esc(name)} đang về</b><span>về bến sau ${left}</span>`;
     }
-    el.innerHTML = `<img src="${canvasUrl('boat-ui-' + s.lv.thuyen.tier, () => lvCanvas('thuyen', s.lv.thuyen.tier), 2)}" alt="">${text}`;
+    el.innerHTML = `<img src="${canvasUrl('boat-ui-' + s.lv.thuyen.tier, () => lvCanvas('thuyen', s.lv.thuyen.tier), 2)}" alt=""><div>${text}</div>`;
   }
 
   onVoyageChip() {
@@ -381,7 +381,7 @@ export class UI {
     const lord = s.chuQuan && s.chuQuan.until > this.store.now() ? s.chuQuan : null;
     vb.hidden = !lord && !s.chuHau.length;
     vb.innerHTML = lord
-      ? `<b class="bad">Chư hầu của ${esc(lord.name)}</b><span>nộp ${tributePerHour(power(s))} đồng/giờ · còn ${hms(lord.until - this.store.now())}</span>`
+      ? `<b class="bad">Chư hầu của ${esc(lord.name)}</b><span>nộp ${tributePerHour(power(s))}/giờ · còn ${clock(lord.until - this.store.now())}</span>`
       : s.chuHau.length
         ? `<b>Lãnh chúa ${s.chuHau.length} đảo</b><span>${s.chuHau.map((v) => esc(v.islandName)).slice(0, 2).join(', ')}</span>`
         : '';
@@ -1732,3 +1732,9 @@ function drawGearIcon(k: GearKey) {
   return c;
 }
 
+/** Thời gian còn lại gọn: 64:59 (giờ:phút) hoặc 12:05 (phút:giây) khi dưới 1 giờ. */
+function clock(ms: number) {
+  const t = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = t % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+}
