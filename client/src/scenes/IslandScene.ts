@@ -15,6 +15,7 @@ const Q = 1 / HD;
 import { hashStr } from '../../../shared/rng';
 import type { Store } from '../store';
 import type { UI } from '../ui';
+import { sound } from '../audio';
 
 export const T = 16;
 export const PAD = 160;
@@ -319,6 +320,7 @@ export class IslandScene extends Phaser.Scene {
       if (o.ok) {
         this.walkTo(tx, ty);
         this.ui.floatAt(at.x, at.y, 'Đất mới!', 'good');
+        sound.play('expand');
         this.ui.toggleExpand(true);
         if (o.quest) this.ui.questDone(o.quest);
         this.cameras.main.shake(120, 0.004);
@@ -384,9 +386,13 @@ export class IslandScene extends Phaser.Scene {
         const scaf = this.add.image(img.x, img.y, ensureTex(this, 'scaf-16x24', () => drawScaffold(16, 24))).setOrigin(0.5, 1).setDepth(img.depth + 1).setScale(Q);
         v = { img, scaf, key };
         this.dinhImgs.set(d.id, v);
-        if (this.time.now > 2000) this.tweens.add({ targets: img, scaleY: { from: 0, to: Q }, duration: 300, ease: 'Back.out' });
+        if (this.time.now > 2000) {
+          this.tweens.add({ targets: img, scaleY: { from: 0, to: Q }, duration: 300, ease: 'Back.out' });
+          sound.play('build');
+        }
       }
       if (v.key !== key) {
+        sound.play('levelup');
         v.img.setTexture(key);
         this.fitHit(v.img);
         v.key = key;

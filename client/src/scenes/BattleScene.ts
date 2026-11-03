@@ -12,6 +12,7 @@ import { zoomFor } from './IslandScene';
 import type { UI } from '../ui';
 import { drawUnit, GENERALS as GEN_LOOKS, TROOP_OF, TROOPS } from '../art2/units';
 import { drawBoat } from '../art2/builds';
+import { sound } from '../audio';
 
 interface Squad {
   u: BUnit;
@@ -263,6 +264,7 @@ export class BattleScene extends Phaser.Scene {
           this.time.delayedCall(go, () => targets.forEach((t) => this.slash(t.x - dir * 4, t.y - 8, dir)));
         } else if (t0) {
           targets.forEach((t) => this.arrow(a, t));
+          sound.play('arrow');
           a.men.forEach((m) => m.visible && targets.forEach((t) => this.time.delayedCall(60, () => this.arrow({ ...a, x: m.x, y: m.y } as Squad, t))));
         }
         const hitAt = ranged ? 220 / sp : 230 / sp;
@@ -273,6 +275,7 @@ export class BattleScene extends Phaser.Scene {
             this.time.delayedCall(160, () => g.destroy());
           }
           this.time.delayedCall(hitAt, () => {
+            if (i === 0) sound.play(ev.crit ? 'crit' : 'hit');
             t.hp = Math.max(0, t.hp - (ev.v?.[i] ?? 0));
             this.drawBar(t);
             t.img.setTintFill(0xffffff);
@@ -295,6 +298,7 @@ export class BattleScene extends Phaser.Scene {
       case 'heal': {
         const t = this.views.get(ev.t?.[0] ?? '');
         this.pop(a.x, a.y - a.img.displayHeight - 6, SKILLS.lalanh.name, '#a6d86e', 9);
+        sound.play('heal');
         if (t) {
           t.hp = Math.min(t.u.maxHp, t.hp + (ev.v?.[0] ?? 0));
           this.drawBar(t);

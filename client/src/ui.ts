@@ -35,12 +35,16 @@ import { openGenerals, openWheel } from './ui-gacha';
 import { openHex as openHexPanel, openMap } from './ui-sea';
 import { addFriend, openFriends } from './ui-social';
 import { openScout } from './ui-scout';
-import { dinhClick, dinhExtra, openKho, openWeather, renderWxFx, supplyLine, wxChip } from './ui-eco';
+import { dinhClick, dinhExtra, openKho, openWeather, renderWxFx, supplyLine, wxChip, wxNow } from './ui-eco';
 import {
   B_KEYS, BUILDINGS, DAY0, dayOf, GUILD_COST, guildLevel, ITEM_KEYS, ITEMS, marketFee, PORT_MULT, RARITY_COLOR, ROUTE_MS, routePeriod, routesNear, SHOP_BASE, shopSpecial, tollPerHour, tributePerHour, goodRarity, bLevel,
   type BKey, type ItemKey, type Route,
 } from '../../shared/economy';
 import { canvas, Pen } from './art/pixel';
+import { drawItemIcon } from './art/items';
+import { sound } from './audio';
+import { menuIcon } from './art2/icons';
+import { SPIN_COST } from '../../shared/gacha';
 import { drawDinh } from './art/dinh';
 import { playTrailer } from './trailer';
 import type { IslandScene } from './scenes/IslandScene';
@@ -127,8 +131,8 @@ export class UI {
   private setTabUi(tab: 'island' | 'sea') {
     this.tab = tab;
     document.querySelectorAll<HTMLButtonElement>('#nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
-    $('#tools').hidden = tab !== 'island';
-    $('#zMode').textContent = tab === 'island' ? 'Ra biển' : 'Về đảo';
+    document.body.dataset.tab = tab;
+    sound.setMood(tab);
     this.renderQuest();
   }
 
@@ -211,7 +215,8 @@ export class UI {
 
   private sail(o: Outcome) {
     if (!o.ok) return this.toast(o.msg, 'bad');
-    this.toast(o.msg, 'gold');
+    this.toast(o.msg);
+    sound.play('sail');
     this.closeSheet();
     this.renderVoyage();
     if (this.tab !== 'sea') this.goSea();
@@ -240,8 +245,31 @@ export class UI {
     $('#sheet .x').addEventListener('click', () => this.closeSheet());
     $('#zIn').addEventListener('click', () => this.zoom(1));
     $('#zOut').addEventListener('click', () => this.zoom(-1));
-    $('#zMode').addEventListener('click', () => (this.tab === 'island' ? this.goSea() : this.goIsland()));
     $('#zMap').addEventListener('click', () => (this.tab === 'sea' ? openMap(this) : this.goSea()));
+    // ---- menu gom một chỗ: bấm Menu thả danh sách xuống, chạm ra ngoài hoặc chọn mục thì thu lại ----
+    document.querySelectorAll<HTMLElement>('#menuList [data-ic]').forEach((b) => {
+      const img = document.createElement('img');
+      img.src = menuIcon(b.dataset.ic!);
+      img.alt = '';
+      b.prepend(img);
+    });
+    $('#menuBtn').addEventListener('click', () => this.menu(!$('#tools').classList.contains('open')));
+    $('#menuList').addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('button');
+      if (b && !b.closest('.mi-zoom')) this.menu(false);
+    });
+    document.addEventListener(
+      'pointerdown',
+      (e) => {
+        // lần chạm đầu tiên mới được mở âm thanh (luật của trình duyệt)
+        sound.unlock();
+        const t = e.target as HTMLElement;
+        if (t.closest?.('button, .chip, [role="button"]')) sound.play('tap');
+        if (!$('#tools').contains(t)) this.menu(false);
+      },
+      true,
+    );
+    addEventListener('keydown', (e) => e.key === 'Escape' && this.menu(false));
     $('#voyage').addEventListener('click', () => this.onVoyageChip());
     addEventListener('resize', () => setTimeout(() => this.updatePads(), 120));
     $('#btnSkip').addEventListener('click', () => (this.game.scene.getScene('battle') as BattleScene).skip());
@@ -267,6 +295,8 @@ export class UI {
       const now = this.store.now();
       $('#wxChip').textContent = wxChip(this.store.s, now);
       renderWxFx(this.store.s, now);
+      const w = wxNow(this.store.s, now);
+      sound.setWeather(w.wx.kind, w.wx.wind, w.phase.night);
       this.sheetRefresh?.();
       if (this.perfOn) this.renderPerf();
     });
@@ -307,8 +337,37 @@ export class UI {
     this.renderRes();
     this.renderQuest();
     this.renderVoyage();
-    $('#btnSpeed').textContent = `Tốc độ x${this.store.s.speed}`;
-    $('#btnSpeed').classList.toggle('hot', this.store.s.speed > 1);
+    $('#btnSpeed .mi-t').textContent = `Tốc độ x${this.store.s.speed}`;
+    // số lượt quay đang có (lượt mua + Linh Thạch đủ quay)
+    const s = this.store.s;
+    const spins = (s.luot ?? 0) + Math.floor(s.res.lt / SPIN_COST);
+    const n = $('#btnWheel .mi-n');
+    n.hidden = spins <= 0;
+    n.textContent = String(Math.min(99, spins));
+    this.syncMenu();
+  }
+
+  /** Mở/đóng danh sách menu bên phải. */
+  menu(open: boolean) {
+    const tools = $('#tools');
+    if (tools.classList.contains('open') === open) return;
+    tools.classList.toggle('open', open);
+    $('#menuBtn').setAttribute('aria-expanded', String(open));
+    this.syncMenu();
+  }
+  /** Nút đang bật chế độ (khai hoang, chọn chỗ xây) hiện ngay dưới Menu; việc cần làm thì Menu nhấp nháy. */
+  syncMenu() {
+    const tools = $('#tools');
+    let mode = false;
+    for (const id of ['#btnExpand', '#btnBuild']) {
+      const b = $(id);
+      const on = b.classList.contains('hot');
+      b.classList.toggle('mode', on);
+      mode ||= on;
+    }
+    tools.classList.toggle('moding', mode);
+    const pulse = !!tools.querySelector('#menuList > button.pulse:not([hidden])');
+    $('#menuBtn').classList.toggle('pulse', pulse && !tools.classList.contains('open'));
   }
 
   renderTop() {
@@ -368,6 +427,7 @@ export class UI {
     el.onclick = () => this.openRua();
     // nhiệm vụ cần bấm nút trên giao diện: nút đó nhấp nháy để người mới biết bấm vào đâu
     $('#btnExpand').classList.toggle('pulse', q?.id === 'q_expand');
+    this.syncMenu();
     $('#nav [data-tab="sea"]').classList.toggle('pulse', q?.id === 'q_fight' || q?.id === 'q_raid');
   }
 
@@ -408,16 +468,20 @@ export class UI {
     const b = $('#btnExpand');
     b.classList.toggle('hot', v);
     const s = this.store.s;
+    const t = b.querySelector('.mi-t')!;
     if (v) {
       const full = landCount(s) >= landCap(s);
-      b.innerHTML = full ? 'Đảo đã đủ đất' : `Ô đất thứ ${landCount(s) + 1}: ${costHtml(expandCost(s), s.res)}`;
+      t.innerHTML = full ? 'Đảo đã đủ đất' : `Ô đất thứ ${landCount(s) + 1}: ${costHtml(expandCost(s), s.res)}`;
       if (full) this.toast('Nâng Nhà chính để mở thêm đất.', 'muted');
-    } else b.textContent = 'Khai hoang';
+    } else t.textContent = 'Khai hoang';
+    this.syncMenu();
   }
 
   // ---------------- thông báo ----------------
   toast(text: string, kind: 'good' | 'bad' | 'muted' | 'gold' | '' = '', ms = 3200) {
     if (!text) return;
+    if (kind === 'bad') sound.play('error');
+    else if (kind === 'gold') sound.play('coin');
     const box = $('#toasts');
     const el = document.createElement('div');
     el.className = `toast ${kind}`;
@@ -441,6 +505,7 @@ export class UI {
   }
 
   floatGains(x: number, y: number, g: Partial<Record<ResKey, number>>) {
+    if (Object.keys(g).length) sound.play('gather');
     Object.entries(g).forEach(([k, v], i) => setTimeout(() => this.floatAt(x, y - i * 16, `+${v}`, 'good', iconUrl(k)), i * 120));
   }
 
@@ -459,6 +524,7 @@ export class UI {
 
   chestOpened(o: Outcome, at: { x: number; y: number }) {
     const c = CHESTS[o.chest ?? 0];
+    sound.play('chest');
     this.floatGains(at.x, at.y, o.gained ?? {});
     this.toast(`${c.name} (${c.rarity})`, o.chest && o.chest >= 3 ? 'gold' : 'good');
   }
@@ -496,6 +562,7 @@ export class UI {
     this.bubble = null;
     $('#bubble').hidden = true;
     const sheet = $('#sheet');
+    sheet.dataset.kind = kind;
     sheet.querySelector('h2')!.textContent = title;
     // thay khung nội dung mới để bỏ hết trình xử lý bấm của bảng trước
     const old = sheet.querySelector<HTMLElement>('.sheet-body')!;
@@ -883,7 +950,8 @@ export class UI {
     $('#battlebar').hidden = false;
     $('#battleTitle').textContent = title;
     $('#nav').classList.add('dim');
-    $('#zoombar').hidden = true;
+    $('#tools').hidden = true;
+    sound.setMood('battle');
     $('#btnSkip').hidden = !!o.pvp;
     $('#battleTitle').textContent = o.pvp ? `${title} · trận người chơi, không tua` : title;
     const data: BattleData = {
@@ -894,8 +962,10 @@ export class UI {
         this.game.scene.stop('battle');
         this.game.scene.wake(from);
         $('#battlebar').hidden = true;
-        $('#zoombar').hidden = false;
+        $('#tools').hidden = false;
         $('#nav').classList.remove('dim');
+        sound.setMood(from);
+        sound.play(o.battle?.winner === 0 ? 'victory' : 'defeat');
         this.showResult(o, title, fromVoyage);
       },
     };
@@ -923,7 +993,15 @@ export class UI {
   // ---------------- cài đặt, credit ----------------
   openSettings() {
     const s = this.store.s;
+    const sw = (k: 'music' | 'amb' | 'sfx', name: string, sub: string) =>
+      `<label class="sw-row"><span><b>${name}</b><small>${sub}</small></span><input type="checkbox" data-snd="${k}" ${sound.prefs[k] ? 'checked' : ''}><i class="sw" aria-hidden="true"></i></label>`;
     const html = `
+      <div class="card snd"><small>Âm thanh</small>
+        ${sw('music', 'Nhạc nền', 'Sáo trúc, đàn tranh; ra trận có trống')}
+        ${sw('amb', 'Âm thanh môi trường', 'Sóng, gió, mưa, sấm, chim, dế theo thời tiết')}
+        ${sw('sfx', 'Hiệu ứng', 'Chạm nút, nhặt đồ, xây nhà, đánh nhau, vòng quay')}
+        <label class="vol"><span>Âm lượng</span><input type="range" id="sndVol" min="0" max="100" value="${Math.round(sound.prefs.vol * 100)}"><output>${Math.round(sound.prefs.vol * 100)}</output></label>
+      </div>
       <form id="nameForm" class="stack">
         <label for="inName">Tên của bạn</label><input id="inName" maxlength="18" value="${esc(s.name)}">
         <label for="inIsland">Tên đảo</label><input id="inIsland" maxlength="24" value="${esc(s.islandName)}">
@@ -946,6 +1024,18 @@ export class UI {
       ${this.store.auth ? '' : '<details class="danger"><summary>Chơi lại từ đầu</summary><p class="muted small">Xóa đảo hiện tại trên máy này và bắt đầu lại.</p><button type="button" id="btnReset">Xóa và chơi lại</button></details>'}
       <p class="credit">© 2026 ${GAME.studio}. Bảo lưu mọi quyền. · ${GAME.name} ${GAME.version}</p>`;
     this.openSheet('settings', 'Cài đặt', html, (body) => {
+      body.querySelectorAll<HTMLInputElement>('[data-snd]').forEach((el) =>
+        el.addEventListener('change', () => {
+          sound.unlock();
+          sound.set(el.dataset.snd as 'music' | 'amb' | 'sfx', el.checked);
+          if (el.checked && el.dataset.snd === 'sfx') sound.play('coin');
+        }),
+      );
+      const vol = body.querySelector<HTMLInputElement>('#sndVol')!;
+      vol.addEventListener('input', () => {
+        sound.setVol(Number(vol.value) / 100);
+        vol.nextElementSibling!.textContent = vol.value;
+      });
       body.querySelector('#btnAv')?.addEventListener('click', () => this.openAvatar());
       body.querySelector('#btnTrailer')?.addEventListener('click', () => {
         this.closeSheet();
@@ -1062,8 +1152,9 @@ export class UI {
 
   onPlacing(k: BKey | null) {
     const b = $('#btnBuild');
-    b.textContent = k ? 'Hủy chọn chỗ' : 'Xây dựng';
+    b.querySelector('.mi-t')!.textContent = k ? 'Hủy chọn chỗ' : 'Xây dựng';
     b.classList.toggle('hot', !!k);
+    this.syncMenu();
     if (k) this.toast(`Chạm một ô đất có viền xanh để xây ${BUILDINGS[k].names[0]}.`, 'gold', 4000);
   }
 
@@ -1641,63 +1732,3 @@ function drawGearIcon(k: GearKey) {
   return c;
 }
 
-/** Biểu tượng vật phẩm. */
-function drawItemIcon(k: ItemKey) {
-  const [c, ctx] = canvas(12, 12);
-  const p = new Pen(ctx);
-  switch (k) {
-    case 'banhchung':
-      p.rect(2, 2, 8, 8, 'G');
-      p.rect(2, 2, 8, 8, 'H');
-      p.rect(3, 3, 6, 6, 'G');
-      p.hline(2, 9, 6, 'y');
-      p.vline(6, 2, 9, 'y');
-      break;
-    case 'ruounep':
-      p.ellipse(6, 8, 4, 3, 'u');
-      p.rect(5, 1, 2, 4, 'u');
-      p.rect(4, 0, 4, 1, 'e');
-      p.px(4, 7, 'w');
-      break;
-    case 'haido':
-      p.rect(1, 2, 10, 8, 'y');
-      p.line(2, 8, 5, 4, 'E');
-      p.line(5, 4, 9, 6, 'E');
-      p.px(9, 6, 'e');
-      p.vline(1, 2, 9, 'z');
-      p.vline(10, 2, 9, 'z');
-      break;
-    case 'goquy':
-      p.rect(1, 4, 10, 4, 'T');
-      p.hline(1, 10, 4, 'u');
-      p.ellipse(10, 6, 1, 2, 'u');
-      p.px(4, 2, 'q');
-      p.px(7, 1, 'q');
-      break;
-    case 'ngoctraiden':
-      p.ellipse(6, 6, 4, 4, 'K');
-      p.ellipse(5, 5, 2, 2, 'v');
-      p.px(4, 4, 'i');
-      break;
-    case 'lenhbai':
-      p.rect(3, 1, 6, 10, 'l');
-      p.rect(4, 2, 4, 8, 'L');
-      p.hline(4, 7, 5, 'E');
-      p.vline(6, 3, 8, 'E');
-      p.px(6, 0, 'e');
-      break;
-    case 'vayrong':
-      p.poly([[6, 0], [11, 6], [6, 11], [1, 6]], 'x');
-      p.poly([[6, 2], [9, 6], [6, 9], [3, 6]], 'X');
-      p.px(5, 4, 'i');
-      break;
-    case 'trongdong':
-      p.ellipse(6, 5, 5, 3, 'L');
-      p.ellipse(6, 5, 3, 2, 'l');
-      p.px(6, 5, 'i');
-      p.rect(2, 6, 8, 4, 'L');
-      p.hline(2, 9, 9, 'z');
-      break;
-  }
-  return c;
-}

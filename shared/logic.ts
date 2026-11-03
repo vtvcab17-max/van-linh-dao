@@ -1748,6 +1748,8 @@ export interface SpinResult {
   label: string;
   detail: string;
   leg: boolean;
+  /** mã tướng hoặc vũ khí trúng (để hiện đúng hình) */
+  id?: string;
 }
 
 /** Nhận một tướng: chưa có thì 1 sao, có rồi thì lên sao, đủ 5 sao thì đổi ra mảnh. */
@@ -1773,15 +1775,18 @@ function spinOnce(s: PlayerState, r: Rng): SpinResult {
   s.gacha.pity = slot.leg ? 0 : s.gacha.pity + 1;
   const p = slot.prize;
   let detail = slot.label;
+  let got: string | undefined;
   if (p.k === 'gen') {
     const pool = GEN_IDS.filter((id) => GENERALS[id].rarity === (p.pool as Rarity));
     const id = pick(r, pool);
     detail = addGeneral(s, id);
+    got = id;
   } else if (p.k === 'weapon') {
     const id = pick(r, LEG_IDS);
     s.vuKhi[id] = (s.vuKhi[id] ?? 0) + 1;
     if (!s.deo) s.deo = id;
     detail = LEG_WEAPONS[id].name;
+    got = id;
   } else if (p.k === 'frag') {
     s.manh += p.n;
   } else if (p.k === 'item') {
@@ -1790,7 +1795,7 @@ function spinOnce(s: PlayerState, r: Rng): SpinResult {
     // quà từ vòng quay không bị giới hạn kho
     for (const [k, v] of Object.entries(p.res)) s.res[k as ResKey] += v ?? 0;
   }
-  return { slot: slot.id, label: slot.label, detail, leg: !!slot.leg };
+  return { slot: slot.id, label: slot.label, detail, leg: !!slot.leg, id: got };
 }
 
 /** Sức mạnh cộng thêm từ tướng và vũ khí truyền thuyết. */
