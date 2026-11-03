@@ -7,6 +7,7 @@
 // - Thua Thủy Tinh: mất sạch trang bị mang theo, thuyền bị đánh chìm (về Thuyền Thúng, phải xây lại từ đầu).
 // - Thắng: phi thăng (danh hiệu Tiên Nhân, mở cổng Thượng Giới), trang bị theo thuyền về nhà.
 // - Thủy Tinh đổi dạng và hồi sinh mỗi thứ Hai 00:00 (giờ Việt Nam); bảng sát thương tuần cũng làm mới.
+import { SEA_COLS, SEA_ROWS } from './mapsize';
 import type { ResKey, SkillKey, UnitBase } from './data';
 
 /** Tên gọi chung của công trình. */
@@ -64,7 +65,8 @@ export const gearPower = (g: Partial<GearSet> | undefined) => {
 
 // ---------- Thủy Tinh ----------
 /** Mắt Bão: góc xa nhất của Hải Khu. */
-export const BOSS_CELL = { x: 60, y: 40 };
+/** Mắt Bão ở chính giữa hải đồ. */
+export const BOSS_CELL = { x: Math.floor(SEA_COLS / 2), y: Math.floor(SEA_ROWS / 2) };
 /** Hải trình qua vùng bão: chậm gấp nhiều lần đường thường. */
 export const BOSS_TRAVEL_MUL = 5;
 /** Điều kiện ra khơi đánh Thủy Tinh. */

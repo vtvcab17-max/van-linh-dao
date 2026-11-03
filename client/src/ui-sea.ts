@@ -1,10 +1,10 @@
 // Bảng thông tin ô hải đồ: thám hiểm, đảo tự nhiên (cắm cờ chủ quyền, thu sản lượng, xây trên đảo),
 // bản đồ thu nhỏ và tìm theo toạ độ / tên / ID.
 import type { UI } from './ui';
-import { claimCheck, homeCell, isleCap, isleReady, isleYield, ISLE_BUILD, ISLE_STORE_H, isSeen, lordLevel, seenOf, wildCell, type IsleBuild } from '../../shared/logic';
+import { claimCheck, homeCell, isleCap, isleReady, isleYield, ISLE_BUILD, ISLE_STORE_H, isSeen, lordLevel, seenChunks, seenOf, wildCell, type IsleBuild } from '../../shared/logic';
 import { MONSTERS, SKILLS, WILDS, type ResKey } from '../../shared/data';
 import { islandCell, worldFor } from '../../shared/map';
-import { CENTER, ISLE_KIND, TERRAIN_NAME, WORLD_H, WORLD_W, ZONE_NAMES, zoneLevel, type Isle } from '../../shared/world';
+import { CENTER, isleById, ISLE_KIND, TERRAIN_NAME, WORLD_H, WORLD_W, ZONE_NAMES, zoneLevel, type Isle } from '../../shared/world';
 import { hexDist } from '../../shared/hex';
 import { iconUrl, portraitUrl, canvasUrl } from './art/textures';
 import { drawSeaIsland } from './art/islands';
@@ -35,7 +35,7 @@ export function openHex(ui: UI, c: number, r: number) {
       const h = wildCell(s, wd.id);
       if (here(h.x, h.y)) return ui.openWild(wd);
     }
-    const o = w.at.get(`${c},${r}`);
+    const o = w.at(c, r);
     if (o?.kind === 'lair') return ui.openWild(o.v);
     if (o?.kind === 'isle') return openIsle(ui, o.v);
   }
@@ -135,16 +135,18 @@ export function openIsle(ui: UI, isle: Isle) {
 }
 
 // ---------------- bản đồ thu nhỏ + tìm kiếm ----------------
+/** Mỗi điểm ảnh của bản đồ thu nhỏ là một khối 4x4 ô (hải đồ 1024 x 1024 ô). */
+const MK = 4;
 export function openMap(ui: UI) {
   const s = ui.store.s;
-  const K = 3; // điểm ảnh mỗi ô
+  const MW = Math.ceil(WORLD_W / MK), MH = Math.ceil(WORLD_H / MK);
   const html = `
-    <div class="row"><input id="mapQ" placeholder="Toạ độ (vd 34,20), tên đảo, tên người chơi hoặc ID" style="flex:1"><button type="button" class="primary" id="mapGo">Tìm</button></div>
-    <canvas id="mini" width="${WORLD_W * K + 2}" height="${WORLD_H * K + 2}"></canvas>
-    <p class="muted small">Chạm vào bản đồ để tới nơi đó. Vàng: đảo bạn · Xanh lá: lãnh thổ của bạn · Xanh dương: cùng thương hội · Đỏ: người khác · Tím: đảo bí ẩn · Đỏ sậm: Mắt Bão.</p>
-    <div class="card"><small>Đảo của bạn</small><p>(${homeCell(s).x}, ${homeCell(s).y}) · cấp chúa đảo <b>${lordLevel(s)}</b> · giữ ${s.isles.length}/${isleCap(s)} đảo tự nhiên</p>
+    <div class="row"><input id="mapQ" placeholder="Toạ độ (vd 340,520), tên đảo, tên người chơi hoặc ID" style="flex:1"><button type="button" class="primary" id="mapGo">Tìm</button></div>
+    <canvas id="mini" width="${MW}" height="${MH}"></canvas>
+    <p class="muted small">Hải đồ ${WORLD_W} × ${WORLD_H} = ${(WORLD_W * WORLD_H).toLocaleString('vi-VN')} ô. Chạm vào bản đồ để tới nơi đó. Vàng: đảo bạn · Xanh lá: lãnh thổ của bạn · Xanh dương: cùng thương hội · Đỏ: người khác · Tím: đảo bí ẩn · Đỏ sậm: Mắt Bão. Vùng xám là biển chưa khám phá.</p>
+    <div class="card"><small>Đảo của bạn</small><p>(${homeCell(s).x}, ${homeCell(s).y}) · ${ZONE_NAMES[zoneLevel(homeCell(s).x, homeCell(s).y)]} · cấp chúa đảo <b>${lordLevel(s)}</b> · giữ ${s.isles.length}/${isleCap(s)} đảo tự nhiên</p>
       ${s.isles.map((o) => {
-        const i = worldFor(s.khu).isles.find((x) => x.id === o.id);
+        const i = isleById(worldFor(s.khu), o.id);
         return i ? `<button type="button" class="link" data-go="${i.c},${i.r}">${esc(i.name)} (${i.c}, ${i.r}) · cấp ${i.lv}</button>` : '';
       }).join(' ')}</div>`;
   ui.openSheet('map', 'Hải đồ', html, (body) => {
@@ -153,45 +155,63 @@ export function openMap(ui: UI) {
     const seen = seenOf(s);
     const w = worldFor(s.khu);
     const owners = ui.store.net.owners();
-    for (let r = 0; r < WORLD_H; r++)
-      for (let c = 0; c < WORLD_W; c++) {
-        const i = r * WORLD_W + c;
-        const known = (seen[i >> 3] & (1 << (i & 7))) !== 0;
+    const img = x.createImageData(MW, MH);
+    for (let py = 0; py < MH; py++)
+      for (let px = 0; px < MW; px++) {
+        const c = px * MK + 2, r = py * MK + 2;
         const z = zoneLevel(c, r);
-        x.fillStyle = known ? `hsl(203, 55%, ${48 - z * 2.2}%)` : '#d9e0e8';
-        x.fillRect(1 + c * K + (r & 1) * (K >> 1), 1 + r * K, K, K);
+        const k = (py * MW + px) * 4;
+        if (isSeen(s, c, r, seen)) {
+          // biển đã khám phá: càng gần Mắt Bão càng sẫm
+          img.data[k] = 70 - z * 4;
+          img.data[k + 1] = 150 - z * 7;
+          img.data[k + 2] = 205 - z * 6;
+        } else {
+          // sương mù: vẫn thấy vành vùng để định hướng
+          const g = 214 - (z % 2) * 10 - z * 2;
+          img.data[k] = g;
+          img.data[k + 1] = g + 6;
+          img.data[k + 2] = g + 14;
+        }
+        img.data[k + 3] = 255;
       }
-    const dot = (c: number, r: number, col: string, k = K) => {
+    x.putImageData(img, 0, 0);
+    const dot = (c: number, r: number, col: string, k = 3) => {
+      x.fillStyle = '#1d1b2a';
+      x.fillRect(Math.round(c / MK) - (k >> 1) - 1, Math.round(r / MK) - (k >> 1) - 1, k + 2, k + 2);
       x.fillStyle = col;
-      x.fillRect(1 + c * K + (r & 1) * (K >> 1) - (k - K) / 2, 1 + r * K - (k - K) / 2, k, k);
+      x.fillRect(Math.round(c / MK) - (k >> 1), Math.round(r / MK) - (k >> 1), k, k);
     };
-    const isSeenAt = (c: number, r: number) => {
-      const i = r * WORLD_W + c;
-      return (seen[i >> 3] & (1 << (i & 7))) !== 0;
-    };
-    for (const i of w.isles) if (isSeenAt(i.c, i.r)) dot(i.c, i.r, owners[i.id] ? (owners[i.id].p === s.id ? '#4fd06a' : owners[i.id].g && [s.guild?.tag, ...(s.guild?.allyTags ?? [])].includes(owners[i.id].g) ? '#5aa8ff' : '#f0554a') : i.kind === 'bian' ? '#c07cff' : '#cfe8a0');
+    const allies = [s.guild?.tag, ...(s.guild?.allyTags ?? [])].filter(Boolean);
+    for (const [id, o] of Object.entries(owners)) {
+      const i = isleById(w, id);
+      if (i && isSeen(s, i.c, i.r, seen)) dot(i.c, i.r, o.p === s.id ? '#4fd06a' : o.g && allies.includes(o.g) ? '#5aa8ff' : '#f0554a', 2);
+    }
+    // đảo bí ẩn đã thấy (trong các khoang đã khám phá)
+    for (const ch of seenChunks(s))
+      for (const i of w.islesIn(ch.cx * ch.size, ch.cy * ch.size, (ch.cx + 1) * ch.size - 1, (ch.cy + 1) * ch.size - 1))
+        if (i.kind === 'bian' && isSeen(s, i.c, i.r, seen) && !owners[i.id]) dot(i.c, i.r, '#c07cff', 2);
     for (const o of s.isles) {
-      const i = w.isles.find((y) => y.id === o.id);
-      if (i) dot(i.c, i.r, '#4fd06a', K + 2);
+      const i = isleById(w, o.id);
+      if (i) dot(i.c, i.r, '#4fd06a', 3);
     }
     for (const p of ui.store.net.islands()) {
       const h = p.home ?? islandCell(p.id, s.khu);
-      if (isSeenAt(h.x, h.y)) dot(h.x, h.y, p.bot ? '#ffc36a' : p.guild && [s.guild?.tag, ...(s.guild?.allyTags ?? [])].includes(p.guild) ? '#5aa8ff' : '#f0554a', K + 1);
+      if (isSeen(s, h.x, h.y, seen)) dot(h.x, h.y, p.bot ? '#ffc36a' : p.guild && allies.includes(p.guild) ? '#5aa8ff' : '#f0554a', 3);
     }
-    dot(CENTER.c, CENTER.r, '#8a1f1f', K + 4);
+    dot(CENTER.c, CENTER.r, '#8a1f1f', 6);
     const me = homeCell(s);
-    dot(me.x, me.y, '#ffe27a', K + 3);
+    dot(me.x, me.y, '#ffe27a', 5);
     cv.addEventListener('click', (e) => {
       const rect = cv.getBoundingClientRect();
-      const px = ((e.clientX - rect.left) / rect.width) * cv.width, py = ((e.clientY - rect.top) / rect.height) * cv.height;
-      const r = Math.max(0, Math.min(WORLD_H - 1, Math.floor((py - 1) / K)));
-      const c = Math.max(0, Math.min(WORLD_W - 1, Math.floor((px - 1 - (r & 1) * (K >> 1)) / K)));
+      const c = Math.max(0, Math.min(WORLD_W - 1, Math.floor(((e.clientX - rect.left) / rect.width) * WORLD_W)));
+      const r = Math.max(0, Math.min(WORLD_H - 1, Math.floor(((e.clientY - rect.top) / rect.height) * WORLD_H)));
       ui.closeSheet();
       ui.sea.focusCell(c, r);
     });
     const go = () => {
       const q = (body.querySelector<HTMLInputElement>('#mapQ')!.value || '').trim();
-      const m = q.match(/^\(?\s*(\d{1,3})\s*[,; ]\s*(\d{1,3})\s*\)?$/);
+      const m = q.match(/^\(?\s*(\d{1,4})\s*[,; ]\s*(\d{1,4})\s*\)?$/);
       let target: { c: number; r: number } | null = null;
       if (m) target = { c: Math.min(WORLD_W - 1, Number(m[1])), r: Math.min(WORLD_H - 1, Number(m[2])) };
       else if (q) {
@@ -201,11 +221,16 @@ export function openMap(ui: UI) {
           const h = p.home ?? islandCell(p.id, s.khu);
           target = { c: h.x, r: h.y };
         } else {
-          const i = w.isles.find((x) => x.name.toLowerCase().includes(low) && isSeenAt(x.c, x.r));
-          if (i) target = { c: i.c, r: i.r };
+          // tìm đảo tự nhiên theo tên trong vùng đã khám phá
+          outer: for (const ch of seenChunks(s))
+            for (const i of w.islesIn(ch.cx * ch.size, ch.cy * ch.size, (ch.cx + 1) * ch.size - 1, (ch.cy + 1) * ch.size - 1))
+              if (i.name.toLowerCase().includes(low) && isSeen(s, i.c, i.r, seen)) {
+                target = { c: i.c, r: i.r };
+                break outer;
+              }
         }
       }
-      if (!target) return ui.toast('Không tìm thấy. Thử toạ độ dạng 34,20 hoặc tên đảo đã khám phá.', 'bad');
+      if (!target) return ui.toast('Không tìm thấy. Thử toạ độ dạng 340,520 hoặc tên đảo đã khám phá.', 'bad');
       ui.closeSheet();
       ui.sea.focusCell(target.c, target.r);
       openHex(ui, target.c, target.r);
@@ -221,4 +246,3 @@ export function openMap(ui: UI) {
     );
   });
 }
-

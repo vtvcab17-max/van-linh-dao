@@ -8,9 +8,9 @@ import { WILDS, XP_TO_NEXT } from '../shared/data';
 const T0 = Date.UTC(2026, 10, 2, 12);
 
 describe('đảo khởi đầu', () => {
-  it('có 16 ô đất, 7 điểm tài nguyên, 1 hòm', () => {
+  it('có 48 ô đất, 7 điểm tài nguyên, 1 hòm', () => {
     const s = newPlayer('u1', 'An', T0);
-    expect(landCount(s)).toBe(16);
+    expect(landCount(s)).toBe(48);
     expect(s.nodes.length).toBe(7);
     expect(s.chests.length).toBe(1);
   });
@@ -70,11 +70,18 @@ describe('khai hoang', () => {
   it('chỉ khai hoang ô sát đảo và tốn đá + tre', () => {
     const s = newPlayer('u1', 'An', T0);
     s.res.da = 50; s.res.tre = 50; s.quests.push('q_expand');
-    expect(apply(s, { t: 'expand', x: 2, y: 2 }).ok).toBe(false);
+    expect(apply(s, { t: 'expand', x: 0, y: 0 }).ok).toBe(false);
     const c = expandCost(s);
-    expect(apply(s, { t: 'expand', x: 14, y: 11 }).ok).toBe(true);
+    let spot = { x: 0, y: 0 };
+    for (let y = 1; y < 23 && !spot.x; y++)
+      for (let x = 1; x < 23; x++)
+        if (s.land[y * 24 + x] === '0' && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => s.land[(y + dy) * 24 + x + dx] === '1')) {
+          spot = { x, y };
+          break;
+        }
+    expect(apply(s, { t: 'expand', ...spot }).ok).toBe(true);
     expect(s.res.da).toBe(50 - (c.da ?? 0));
-    expect(landCount(s)).toBe(17);
+    expect(landCount(s)).toBe(49);
   });
 });
 
@@ -162,12 +169,12 @@ import { cleanAvatar, avatarFrom } from '../shared/avatar';
 import { islandCell } from '../shared/map';
 
 describe('Đảo và nhân vật', () => {
-  it('mỗi người một hình đảo, luôn đủ 16 ô và chỗ cho công trình', () => {
+  it('mỗi người một hình đảo, luôn đủ 48 ô và chỗ cho công trình', () => {
     const shapes = new Set<string>();
     for (let i = 0; i < 100; i++) {
       const s = newPlayer('p' + i, 'X', T0);
       shapes.add(s.land + s.nodes.map((n) => `${n.x},${n.y}`).join(';'));
-      expect(s.land.split('').filter((c) => c === '1').length).toBe(16);
+      expect(s.land.split('').filter((c) => c === '1').length).toBe(48);
       for (const [x, y] of [[11, 11], [12, 12], [10, 13]]) expect(s.land[y * 24 + x]).toBe('1');
       for (const n of s.nodes) expect(s.land[n.y * 24 + n.x]).toBe('1');
     }
@@ -217,7 +224,7 @@ describe('Thủy Tinh, trang bị, phi thăng', () => {
     s.kho = { giao: 2, khien: 1, thuoc: 0, bua: 0 };
     expect(apply(s, { t: 'sail', kind: 'boss', carry: { giao: 2 } }).ok).toBe(true);
     expect(s.kho.giao).toBe(0);
-    tick(s, s.lastReal + 3 * 3600_000);
+    tick(s, s.lastReal + 12 * 3600_000);
     expect(s.voyage).toBeNull();
     expect(s.lv.thuyen.tier).toBe(1);
     expect(s.kho).toEqual({ giao: 0, khien: 1, thuoc: 0, bua: 0 });
@@ -286,7 +293,7 @@ describe('Kinh tế: nhà cửa, thuế, cửa hàng, thôn tính', () => {
     expect(apply(s, { t: 'xay', k: 'nhadan', x: t.x, y: t.y }).ok).toBe(false);
     tick(s, s.lastReal + 3 * 60_000);
     expect(s.dinh[0].lv).toBe(1);
-    expect(incomePerHour(s).dan).toBe(4);
+    expect(incomePerHour(s).dan).toBe(6); // 6 gian, mỗi gian một hộ
     const before = s.res.tien;
     tick(s, s.lastReal + 3600_000);
     expect(s.res.tien).toBeGreaterThanOrEqual(before + 4);
@@ -393,28 +400,35 @@ describe('Linh Thạch, vòng quay, tướng', () => {
 });
 
 import { worldFor } from '../shared/map';
-import { pickSpawn } from '../shared/world';
+import { isleById, pickSpawn, WORLD_H, WORLD_W, zoneLevel } from '../shared/world';
 import { hexDist } from '../shared/hex';
 import { isSeen, lordLevel, setHome, cellDist } from '../shared/logic';
 describe('Hải đồ lục giác, khám phá, chủ quyền đảo', () => {
-  it('thế giới sinh giống nhau ở mọi máy, rộng, nhiều đảo và hang quái', () => {
+  it('hải đồ hơn 1 triệu ô, sinh giống nhau ở mọi máy, nhiều đảo và hang quái', () => {
+    expect(WORLD_W * WORLD_H).toBeGreaterThanOrEqual(1_000_000);
     const a = worldFor('07'), b = worldFor('07');
-    expect(a.isles.map((i) => i.id).join()).toBe(b.isles.map((i) => i.id).join());
-    expect(a.isles.length).toBeGreaterThan(180);
-    expect(a.lairs.length).toBeGreaterThan(80);
-    expect(a.isles.some((i) => i.kind === 'bian')).toBe(true);
+    const ia = a.islesIn(0, 0, 200, 200), ib = b.islesIn(0, 0, 200, 200);
+    expect(ia.map((i) => i.id).join()).toBe(ib.map((i) => i.id).join());
+    const all = a.islesIn(0, 0, WORLD_W - 1, WORLD_H - 1);
+    expect(all.length).toBeGreaterThan(20000);
+    expect(a.lairsIn(0, 0, WORLD_W - 1, WORLD_H - 1).length).toBeGreaterThan(12000);
+    expect(all.some((i) => i.kind === 'bian')).toBe(true);
+    // tra theo mã ra đúng đảo
+    expect(isleById(a, all[123].id)?.name).toBe(all[123].name);
     // đảo gần Mắt Bão giàu hơn, khó hơn
-    const far = a.isles.filter((i) => i.lv === 1)[0], near = a.isles.filter((i) => i.lv >= 8)[0];
+    const far = all.filter((i) => i.lv === 1)[0], near = all.filter((i) => i.lv >= 8)[0];
     expect(near.needLvl).toBeGreaterThan(far.needLvl);
     expect(near.guard[0][1]).toBeGreaterThan(far.guard[0][1]);
   });
   it('người chơi mới được rải xa nhau', () => {
     const w = worldFor('01');
     const taken: { c: number; r: number }[] = [];
-    for (let i = 0; i < 40; i++) taken.push(pickSpawn(w.spawns, taken, 8)!);
-    let min = 99;
+    for (let i = 0; i < 150; i++) taken.push(pickSpawn(w, taken, 12, i * 37)!);
+    let min = 999;
     for (let i = 0; i < taken.length; i++) for (let j = i + 1; j < taken.length; j++) min = Math.min(min, hexDist(taken[i], taken[j]));
-    expect(min).toBeGreaterThanOrEqual(8);
+    expect(min).toBeGreaterThanOrEqual(12);
+    // ai cũng khởi đầu ở vành ngoài (vùng cấp 1–2)
+    expect(taken.every((h) => zoneLevel(h.c, h.r) <= 2)).toBe(true);
   });
   it('sương mù: thấy quanh nhà, thám hiểm thì mở thêm', () => {
     const s = newPlayer('f1', 'An', T0);
@@ -431,7 +445,7 @@ describe('Hải đồ lục giác, khám phá, chủ quyền đảo', () => {
     for (const k of ['leu', 'cuoc', 'rao', 'thuyen'] as const) s.lv[k].tier = 5;
     for (const k of ['an', 'ngoc', 'ha', 'chau'] as const) s.comps[k] = { lv: 20, xp: 0, unlocked: true };
     const w = worldFor('01');
-    const isle = w.isles.find((i) => i.lv === 1 && i.kind !== 'bian')!;
+    const isle = w.islesIn(0, 0, WORLD_W - 1, 600).find((i) => i.lv === 1 && i.kind !== 'bian')!;
     setHome(s, '01', { x: isle.c + 2, y: isle.r });
     expect(lordLevel(s)).toBeGreaterThanOrEqual(isle.needLvl);
     expect(apply(s, { t: 'sail', kind: 'isle', id: isle.id }).ok).toBe(true);
@@ -451,7 +465,7 @@ describe('Hải đồ lục giác, khám phá, chủ quyền đảo', () => {
   });
   it('chưa đủ cấp chúa đảo thì không cắm cờ được đảo cấp cao', () => {
     const s = newPlayer('f3', 'An', T0);
-    const isle = worldFor('01').isles.find((i) => i.lv >= 6)!;
+    const isle = worldFor('01').islesIn(400, 400, 620, 620).find((i) => i.lv >= 6)!;
     expect(lordLevel(s)).toBeLessThan(isle.needLvl);
   });
 });
@@ -584,5 +598,55 @@ describe('Hạm đội', () => {
     expect(s.fleet[0].vo).toBeLessThan(100);
     expect(apply(s, { t: 'suaThuyen' }).ok).toBe(true);
     expect(s.fleet[0].vo).toBe(100);
+  });
+});
+
+import { plotsOf, plotState, unitsOf } from '../shared/logic';
+import { slotsOf } from '../shared/economy';
+describe('Ô làm việc bên trong công trình', () => {
+  const mk = (id: string) => {
+    const s = newPlayer(id, 'Nông', T0);
+    s.res = { ...s.res, tien: 5000, thoc: 500, rau: 200 };
+    return s;
+  };
+  it('cấp 1 có 6 ô, cấp 2 có 9, cấp 3 có 12', () => {
+    expect([1, 2, 3].map(slotsOf)).toEqual([6, 9, 12]);
+  });
+  it('ruộng: gieo từng ô hoặc gieo hết, chín thì gặt từng ô', () => {
+    const s = mk('o1');
+    s.dinh.push({ id: 'r1', k: 'ruong', x: 11, y: 14, lv: 1 });
+    const d = s.dinh[s.dinh.length - 1];
+    expect(apply(s, { t: 'trong', id: 'r1', k: 'lua', slot: 2 }).ok).toBe(true);
+    expect(plotsOf(d)[2]?.k).toBe('lua');
+    expect(apply(s, { t: 'trong', id: 'r1', k: 'lua', slot: 2 }).ok).toBe(false);
+    expect(apply(s, { t: 'trong', id: 'r1', k: 'lua' }).ok).toBe(true);
+    expect(plotsOf(d).filter(Boolean).length).toBe(6);
+    expect(apply(s, { t: 'gat', id: 'r1' }).ok).toBe(false);
+    tick(s, T0 + 9 * 3600_000);
+    expect(plotState(s, d, 0)?.ripe).toBe(true);
+    s.res.thoc = 0;
+    const thoc = s.res.thoc;
+    expect(apply(s, { t: 'gat', id: 'r1', slot: 0 }).ok).toBe(true);
+    expect(plotsOf(d)[0]).toBeNull();
+    expect(apply(s, { t: 'gat', id: 'r1' }).ok).toBe(true);
+    expect(plotsOf(d).filter(Boolean).length).toBe(0);
+    expect(s.res.thoc).toBeGreaterThan(thoc);
+  });
+  it('chuồng: mua thêm con giống tới đủ ô, càng nhiều con càng nhiều trứng', () => {
+    const s = mk('o2');
+    s.dinh.push({ id: 'c1', k: 'chuong', x: 11, y: 14, lv: 1, n: 2, last: s.lastReal });
+    const d = s.dinh[s.dinh.length - 1];
+    for (let i = 0; i < 4; i++) expect(apply(s, { t: 'nuoi', id: 'c1' }).ok).toBe(true);
+    expect(unitsOf(d)).toBe(6);
+    expect(apply(s, { t: 'nuoi', id: 'c1' }).ok).toBe(false);
+  });
+  it('bến thuyền: chỗ neo theo cỡ thuyền', () => {
+    const s = mk('o3');
+    s.res = { ...s.res, go: 99999, tre: 99999, vai: 999, sat: 9999, tien: 99999 };
+    s.dinh.push({ id: 'b1', k: 'benthuyen', x: 11, y: 14, lv: 1 });
+    expect(apply(s, { t: 'dongTau', k: 'ghe' }).ok).toBe(true);
+    expect(apply(s, { t: 'dongTau', k: 'ghe' }).ok).toBe(true);
+    expect(apply(s, { t: 'dongTau', k: 'ghe' }).ok).toBe(true);
+    expect(apply(s, { t: 'dongTau', k: 'ghe' }).ok).toBe(false);
   });
 });

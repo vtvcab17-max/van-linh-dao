@@ -75,6 +75,25 @@ const ICONS: Record<string, Draw> = {
     p.v(7, 3, 8, C.green);
     p.px(5, 4, C.green3);
   },
+  // gà mái trắng
+  ga: (p) => {
+    p.ell(7, 10, 5, 4, C.white);
+    p.ell(11, 6, 2, 2, C.white);
+    p.px(12, 3, C.red); p.px(11, 3, C.red); p.px(12, 4, C.red);
+    p.px(14, 6, C.gold2);
+    p.px(11, 6, '#3d2b2b');
+    p.h(3, 6, 8, C.white2);
+    p.v(6, 14, 15, C.gold2); p.v(9, 14, 15, C.gold2);
+    p.px(2, 7, C.white2); p.px(1, 6, C.white2);
+  },
+  // bát hương có khói
+  huong: (p) => {
+    p.ell(8, 12, 5, 2, C.gold2);
+    p.rect(3, 11, 11, 2, C.gold2);
+    p.h(4, 12, 14, C.gold3);
+    for (const x of [6, 8, 10]) { p.v(x, 5, 10, C.red2); p.px(x, 4, C.gold); }
+    p.px(7, 2, '#dcd6cc'); p.px(9, 1, '#f4f1ea'); p.px(11, 2, '#dcd6cc');
+  },
   // đồng hồ cát (tốc độ)
   speed: (p) => {
     p.h(3, 12, 1, C.wood2);

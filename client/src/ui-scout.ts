@@ -8,7 +8,7 @@ import { GEAR, GEAR_KEYS } from '../../shared/boss';
 import { GENERALS, LEG_WEAPONS } from '../../shared/gacha';
 import { hashStr } from '../../shared/rng';
 import { drawIsland } from './art/islands';
-import { drawDinh } from './art/dinh';
+import { drawDinh2 as drawDinh } from './art2/dinh2';
 import { drawCuoc, drawLeu, drawRao } from './art/buildings';
 import { iconUrl } from './art/textures';
 

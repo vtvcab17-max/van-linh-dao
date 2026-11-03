@@ -175,7 +175,7 @@ export const LINH_VAT: Record<LvKey, LinhVatDef> = {
 /** Hiệu ứng theo bậc (chỉ số 0 = bậc 1). */
 export const EFFECTS = {
   storageCap: [150, 400, 1000, 2500, 6000],
-  landCap: [24, 40, 64, 96, 140],
+  landCap: [60, 84, 112, 144, 180],
   protect: [40, 120, 300, 700, 1500],
   chestSlots: [2, 3, 3, 4, 5],
   gatherMult: [1, 1.3, 1.7, 2.2, 3],

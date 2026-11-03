@@ -45,7 +45,7 @@ import { drawItemIcon } from './art/items';
 import { sound } from './audio';
 import { menuIcon } from './art2/icons';
 import { SPIN_COST } from '../../shared/gacha';
-import { drawDinh } from './art/dinh';
+import { drawDinh2 as drawDinh } from './art2/dinh2';
 import { playTrailer } from './trailer';
 import type { IslandScene } from './scenes/IslandScene';
 import type { SeaScene } from './scenes/SeaScene';
@@ -1132,7 +1132,7 @@ export class UI {
         const b = BUILDINGS[k];
         const have = s.dinh.filter((d) => d.k === k).length;
         const lock = s.lv.leu.tier < b.needLeu ? `Cần Nhà chính bậc ${b.needLeu}` : have >= b.max ? `Đã đủ ${b.max}` : '';
-        return `<div class="gear"><img src="${canvasUrl('dinh-ui-' + k, () => drawDinh(k, 1), 2)}" alt=""><div><b>${b.names[0]} <span class="lvl">${have}/${b.max}</span></b><small>${b.desc} · xây ${hms(b.ms[0])}</small><div class="costs">${costHtml(b.cost[0], s.res)}</div></div>
+        return `<div class="gear"><img src="${canvasUrl('dinh2-ui-' + k, () => drawDinh(k, 1), 2)}" alt=""><div><b>${b.names[0]} <span class="lvl">${have}/${b.max}</span></b><small>${b.desc} · xây ${hms(b.ms[0])}</small><div class="costs">${costHtml(b.cost[0], s.res)}</div></div>
           <button type="button" data-b="${k}" ${lock || !canPay(s, b.cost[0]) ? 'disabled' : ''}>${lock || 'Chọn chỗ'}</button></div>`;
       };
       return `<div class="card"><small>Đảo của bạn</small><p>Thành trì: <b>${fortName(s)}</b> · Đội thợ: ${busySlots(s)}/${buildSlots(s)} đang bận · Kho chứa ${storageCap(s)}</p>
@@ -1170,7 +1170,7 @@ export class UI {
       const left = busy ? d.doneAt! - (s.gt + (Date.now() - s.lastReal) * s.speed) : 0;
       const next = d.lv < 3 && !busy ? `<div class="card"><small>Nâng lên ${b.names[d.lv]}</small><div class="costs">${costHtml(b.cost[d.lv], s.res)}</div><p class="muted small">Xây mất ${hms(b.ms[d.lv])}</p>
         <button class="primary wide" id="btnUp" ${canPay(s, b.cost[d.lv]) && busySlots(s) < buildSlots(s) ? '' : 'disabled'}>${busySlots(s) >= buildSlots(s) ? 'Thợ đang bận hết' : 'Nâng cấp'}</button></div>` : '';
-      return `<div class="lv-head"><img class="lv-img" src="${canvasUrl(`dinh-ui-${d.k}-${lv}`, () => drawDinh(d.k, lv), 4)}" alt=""><div><h3>${b.names[lv - 1]}</h3><p class="tier">Cấp ${d.lv || 0}/3${busy ? ` · đang xây lên cấp ${d.to}` : ''}</p><p class="muted">${b.desc}</p></div></div>
+      return `<div class="lv-head"><img class="lv-img" src="${canvasUrl(`dinh2-ui-${d.k}-${lv}`, () => drawDinh(d.k, lv), 4)}" alt=""><div><h3>${b.names[lv - 1]}</h3><p class="tier">Cấp ${d.lv || 0}/3${busy ? ` · đang xây lên cấp ${d.to}` : ''}</p><p class="muted">${b.desc}</p></div></div>
         ${busy ? `<div class="card"><small>Đang xây</small><p>Còn <b>${hms(left / s.speed)}</b></p></div>` : ''}
         ${dinhExtra(this, d)}
         ${next}

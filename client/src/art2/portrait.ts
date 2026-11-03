@@ -1,7 +1,7 @@
 // Ảnh tướng, vũ khí truyền thuyết cho giao diện (vẽ một lần, giữ trong bộ nhớ).
 import { enhance } from '../art/hd';
 import { C, cnv, outline, P, scaleUp } from './pal';
-import { drawUnit, GENERALS as LOOKS } from './units';
+import { drawUnit, GENERALS as LOOKS, TROOPS, type Look } from './units';
 
 const cache = new Map<string, string>();
 const url = (key: string, make: () => HTMLCanvasElement) => {
@@ -42,4 +42,13 @@ export function legWeaponUrl(id: string, k = 4): string {
     }
     return scaleUp(enhance(outline(c)), Math.max(1, Math.round(k / 2)));
   });
+}
+
+/** Lính chibi theo binh chủng (danbinh, khien, cung, no, riu, thuy). */
+export function troopUrl(id: string, k = 2): string {
+  return url(`t:${id}:${k}`, () => scaleUp(enhance(drawUnit((TROOPS.find((x) => x.id === id) ?? TROOPS[0]).look)), k));
+}
+/** Nhân vật chibi theo dáng tự đặt (thợ, dân, học trò...). */
+export function lookUrl(key: string, look: Look, k = 2): string {
+  return url(`l:${key}:${k}`, () => scaleUp(enhance(drawUnit(look)), k));
 }

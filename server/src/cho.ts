@@ -3,7 +3,7 @@
 // Hàng và tiền luôn được giữ (ký quỹ) trước khi vào chợ nên không thể bán khống hay mua chịu.
 import { DurableObject } from 'cloudflare:workers';
 import { goodLabel } from '../../shared/logic';
-import { GUILD_COST, guildLevel, guildMax, isGood, ITEMS, MERCHANTS, routePeriod, routesAt, goodRarity, type GoodKey } from '../../shared/economy';
+import { GUILD_COST, guildLevel, guildMax, isGood, ITEMS, MERCHANTS, routePeriod, goodRarity, type GoodKey } from '../../shared/economy';
 import { hashStr, mulberry32 } from '../../shared/rng';
 import type { Env } from './haikhu';
 
@@ -441,8 +441,7 @@ export class Cho extends DurableObject<Env> {
     this.sql.exec('DELETE FROM listings WHERE npc = 1');
     this.sql.exec('DELETE FROM orders WHERE npc = 1');
     const now = Date.now();
-    for (const rt of routesAt(period).filter((x) => !x.k)) {
-      const m = rt.m;
+    for (const m of MERCHANTS) {
       const r = mulberry32(hashStr(`npcmarket:${m.id}:${period}`));
       for (const g of m.goods) {
         const isItem = g in ITEMS;

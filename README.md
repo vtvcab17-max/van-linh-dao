@@ -73,13 +73,14 @@ Chế tạo từ tài nguyên, cần công trình đủ bậc. Trang bị cất 
 
 ## Hải đồ lục giác
 
-Mỗi Hải Khu là một thế giới **120 × 80 ô lục giác** sinh theo mã Hải Khu (máy nào cũng ra giống nhau).
+Mỗi Hải Khu là một thế giới **1024 × 1024 = 1.048.576 ô lục giác** sinh theo mã Hải Khu (máy nào cũng ra giống nhau). Hải đồ sinh dần theo từng khối 5×5 ô khi có người tới gần, nên không cần lưu sẵn; sương mù chỉ lưu những khoang 32×32 ô đã khám phá.
 
 - **Vùng biển cấp 1–10**: vành ngoài lặng sóng (cấp 1), càng vào gần Mắt Bão càng giàu, càng nguy hiểm (cấp 10).
 - **Địa hình**: biển, biển sâu, bãi cạn (đi chậm), rạn đá ngầm (không đi qua được), vùng bão quanh Mắt Bão.
-- **~240 đảo tự nhiên**: Đảo Rừng, Đảo Đá, Đảo Quặng, Đảo Ngọc Trai, Đảo Dừa và **Đảo Bí Ẩn** (hiện "???", giàu gấp đôi, quái canh giữ mạnh nhất).
-- **~120 hang quái**: sào huyệt hải tặc, hang thủy quái, bãi cua gai, rạn sứa lửa, đảo khỉ đá. Mỗi người còn có 6 bãi luyện quân riêng quanh nhà.
-- **Rải xa nhau**: server chọn chỗ cho người mới ở vành ngoài, cách người khác ít nhất 8 ô. Mỗi Hải Khu tối đa 150 người.
+- **Hơn 20.000 đảo tự nhiên**: Đảo Rừng, Đảo Đá, Đảo Quặng, Đảo Ngọc Trai, Đảo Dừa và **Đảo Bí Ẩn** (hiện "???", giàu gấp đôi, quái canh giữ mạnh nhất).
+- **Hơn 12.000 hang quái**: sào huyệt hải tặc, hang thủy quái, bãi cua gai, rạn sứa lửa, đảo khỉ đá. Mỗi người còn có 6 bãi luyện quân riêng quanh nhà.
+- **Rải xa nhau**: server chọn chỗ ngẫu nhiên cho người mới trên vành ngoài (vùng cấp 1–2), cách người khác ít nhất 12 ô. Mỗi Hải Khu tối đa 150 người.
+- **Tuyến buôn theo vùng**: hải đồ chia thành vùng buôn 96×96 ô, mỗi vùng 8 tuyến thương thuyền đổi mỗi 6 giờ.
 - **Sương mù**: chỉ thấy quanh đảo nhà (tháp canh nhìn xa hơn). Đi thuyền, thám hiểm, cắm cờ thì mở thêm.
 - **Đoàn thuyền**: ai cũng thấy thuyền đang chạy trên biển, nhưng chỉ thuyền của mình, cùng thương hội và hội đồng minh mới biết là của ai; còn lại là "Thuyền lạ".
 - **Bản đồ thu nhỏ**: nút **Hải đồ** xem cả thế giới, tìm theo toạ độ (vd `34,20`), tên đảo, tên người chơi hoặc ID.
@@ -112,9 +113,21 @@ Mỗi Hải Khu là một thế giới **120 × 80 ô lục giác** sinh theo m�
 - **Độ bền**: trang bị mòn sau mỗi trận (sửa ở Lò Rèn); thân thuyền mòn mỗi chuyến, bão mòn nhanh (sửa ở Bến Thuyền bằng gỗ và vải buồm). Dưới 40% chỉ còn nửa tác dụng; thuyền dưới 30% đi chậm, hỏng hẳn thì không ra khơi được.
 - Nông sản, lương, thuốc, vải đều cất vào **Kho** và bán được ở chợ.
 
+## Ô làm việc bên trong công trình
+
+Chạm vào một công trình là thấy bên trong: **tối thiểu 6 ô** ở cấp 1, **9 ô** ở cấp 2, **12 ô** ở cấp 3 (ô của cấp sau hiện mờ).
+
+- **Ruộng, vườn, nương dâu**: mỗi ô là một thửa/luống/gốc trồng riêng. Chạm ô trống để gieo, ô chín để gặt, hoặc "Gieo hết", "Gặt hết".
+- **Chuồng, ao**: mỗi ô nuôi một con giống (mua thêm bằng đồng vàng); càng nhiều con càng nhiều trứng, thịt, cá.
+- **Cối xay, bếp, nhà thuốc, khung cửi**: mỗi ô một thợ (thuê thêm); càng nhiều thợ làm càng nhanh.
+- **Nhà dân**: mỗi gian một hộ nộp thuế. **Vựa thóc**: mỗi ô kho thêm sức chứa. **Bến thuyền**: chỗ neo cho hạm đội.
+- Chợ, trạm thuế, tháp canh, tường, trại lính, lò rèn, học viện, đền: hiện sạp hàng, chỗ neo thương thuyền, xạ thủ, lỗ châu mai, giường lính, lò, chỗ ngồi, bát hương theo số ô.
+
+Đảo khởi đầu có **48 ô đất** (đảo cũ nhỏ hơn được nới thêm cho đủ).
+
 ## Hạm đội
 
-- **Xưởng Đóng Tàu** (Bến Thuyền) cấp 1–3 giữ được 1–3 thuyền chiến: **Ghe Chiến** (nhẹ, xông lên đầu), **Thuyền Buồm Chiến** (bắn xa), **Chiến Hạm Lâu Thuyền** (đánh cả hàng).
+- **Xưởng Đóng Tàu** (Bến Thuyền) có 6 / 9 / 12 chỗ neo theo cấp; ghe chiến chiếm 2 chỗ, thuyền buồm 3, chiến hạm 4: **Ghe Chiến** (nhẹ, xông lên đầu), **Thuyền Buồm Chiến** (bắn xa), **Chiến Hạm Lâu Thuyền** (đánh cả hàng).
 - Lắp vũ khí: **Nỏ Lớn** (+30% công), **Máy Bắn Đá** (ném trúng cả hàng), **Mũi Đâm Bọc Đồng** (+25% công, húc lên đầu).
 - Thuyền chiến theo thuyền chính ra trận, giữ bến khi ở nhà, mòn sau mỗi trận (mòn hết thì chìm).
 
@@ -145,9 +158,9 @@ Bấm **Xây dựng** trên đảo, chọn công trình rồi chạm một ô đ
 
 | Nhóm | Công trình (cấp 1 → 3) | Tác dụng |
 | --- | --- | --- |
-| Nhà cửa | Lều Ngư Dân → Nhà Ba Gian → Nhà Ngói Năm Gian | Dân nộp thuế +4 tiền/giờ mỗi cấp |
+| Nhà cửa | Lều Ngư Dân → Nhà Ba Gian → Nhà Ngói Năm Gian | 6 / 9 / 12 gian, mỗi gian một hộ nộp 1 đồng/giờ |
 | Nhà cửa | Miếu Thổ Thần → Đền Sơn Tinh → Đền Hùng | Linh vật đói chậm hơn, đánh Thủy Tinh mạnh hơn |
-| Kinh tế | Vựa Thóc → Kho Lẫm → Kho Đụn | Kho chứa +30% mỗi cấp |
+| Kinh tế | Vựa Thóc → Kho Lẫm → Kho Đụn | 6 / 9 / 12 ô kho, mỗi ô +5% sức chứa |
 | Kinh tế | Sạp Chợ Phiên → Chợ Làng → Chợ Phố Hội | Cửa hàng rẻ hơn, phí chợ thấp hơn |
 | Kinh tế | Cầu Tàu Gỗ → Bến Cảng Đá → Thương Cảng | Nhân thuế thương thuyền ×1 / ×1,6 / ×2,3 |
 | Kinh tế | Lò Rèn → Xưởng Rèn → Lò Đúc Đồng | Rèn trang bị rẻ hơn 10% mỗi cấp |

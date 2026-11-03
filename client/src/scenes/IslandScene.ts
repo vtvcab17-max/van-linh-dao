@@ -23,7 +23,9 @@ const WORLD = GRID * T + PAD * 2;
 const wx = (tx: number) => PAD + tx * T;
 /** Chân người/lính (bộ chibi mới) đứng sát đáy ô; nhà cửa thấp hơn một chút cho có bóng. */
 const FOOT = 18;
-const DINH_FOOT = 19;
+const DINH_FOOT = 17;
+/** Nhà cửa thu nhỏ cho vừa khít đúng một ô (hình vẽ rộng 22 điểm ảnh, ô rộng 16). */
+const DS = 16 / 22;
 
 /** Mức phóng to camera theo kích thước khung game (đã chia cho hệ số vẽ rs). */
 export function zoomFor(w: number, h: number, rs = 1) {
@@ -381,7 +383,7 @@ export class IslandScene extends Phaser.Scene {
       const key = dinhTex(this, d.k, Math.max(1, d.lv || d.to || 1));
       let v = this.dinhImgs.get(d.id);
       if (!v) {
-        const img = this.add.image(wx(d.x) + 8, wx(d.y) + DINH_FOOT, key).setOrigin(0.5, 1).setDepth(wx(d.y) + 15).setScale(Q);
+        const img = this.add.image(wx(d.x) + 8, wx(d.y) + DINH_FOOT, key).setOrigin(0.5, 1).setDepth(wx(d.y) + 15).setScale(Q * DS);
         // vùng chạm khít phần có hình, không lấn sang ô bên cạnh
         img.setInteractive({ hitArea: new Phaser.Geom.Rectangle(0, 0, 1, 1), hitAreaCallback: Phaser.Geom.Rectangle.Contains, useHandCursor: true }).on('pointerup', () => !this.dragged && this.ui.openDinh(d.id));
         this.fitHit(img);
@@ -389,7 +391,7 @@ export class IslandScene extends Phaser.Scene {
         v = { img, scaf, key };
         this.dinhImgs.set(d.id, v);
         if (this.time.now > 2000) {
-          this.tweens.add({ targets: img, scaleY: { from: 0, to: Q }, duration: 300, ease: 'Back.out' });
+          this.tweens.add({ targets: img, scaleY: { from: 0, to: Q * DS }, duration: 300, ease: 'Back.out' });
           sound.play('build');
         }
       }

@@ -1,13 +1,17 @@
 // Giao diện hệ sinh thái: ruộng vườn, chuồng ao, xưởng chế biến, học viện, sửa đồ, thời tiết, kho.
 import type { UI } from './ui';
-import { cropState, cropsFor, homeCell, pending, rationNeed, techLv, type PlayerState } from '../../shared/logic';
-import { CROPS, dayPhase, GAME_DAY_MS, regionOf, seasonOf, TECH_KEYS, TECH_MAX, TECHS, techCost, techMs, WEATHER, weatherAt, WIND_DIRS, WX_MS, type CropKey, type TechKey } from '../../shared/eco';
+import { cropsFor, homeCell, pending, plotsOf, plotState, rationNeed, techLv, unitsOf, type PlayerState } from '../../shared/logic';
+import { CROPS, dayPhase, GAME_DAY_MS, HIRE_COST, PENS, PER_WORKER, PLOT_YIELD, plotSeed, PROCS, regionOf, seasonOf, TECH_KEYS, TECH_MAX, TECHS, techCost, techMs, WEATHER, weatherAt, WIND_DIRS, WX_MS, type CropKey, type TechKey } from '../../shared/eco';
 import { RES, RES_KEYS, type ResKey } from '../../shared/data';
 import { GEAR, GEAR_KEYS } from '../../shared/boss';
-import { bLevel, type Dinh } from '../../shared/economy';
-import { fleetCap, SHIP_KINDS, SHIPS, WEAPON_KEYS, WEAPONS, type ShipKind, type ShipWeapon } from '../../shared/navy';
+import { bLevel, routePeriod, routesNear, SLOT_INFO, slotsOf, type Dinh } from '../../shared/economy';
+import { berthsUsed, fleetCap, SHIP_KINDS, SHIP_SIZE, SHIPS, WEAPON_KEYS, WEAPONS, type ShipKind, type ShipWeapon } from '../../shared/navy';
 import { repairCost } from '../../shared/logic';
-import { iconUrl } from './art/textures';
+import { canvasUrl, iconUrl } from './art/textures';
+import { menuIcon } from './art2/icons';
+import { lookUrl, troopUrl } from './art2/portrait';
+import { drawBoat } from './art2/builds';
+import { C } from './art2/pal';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const fmt = (n: number) => (n >= 10000 ? (n / 1000).toFixed(0) + 'k' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n)));
@@ -22,34 +26,132 @@ const costs = (c: Partial<Record<ResKey, number>>, have?: Record<string, number>
     .join(' ');
 
 /** Phần thêm vào bảng công trình (ruộng, chuồng, xưởng, học viện, bến, lò rèn). Trả '' nếu không có. */
+/** Giống đang chọn để gieo cho từng loại ruộng/vườn. */
+const seedPick: Partial<Record<string, CropKey>> = {};
+const clock = (ms: number) => {
+  const t = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), sec = t % 60;
+  return h ? `${h}:${String(m).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+};
+/** Hình người trong từng ô: thợ, dân, học trò. */
+const WORKER = { hat: 'khan_van', weapon: 'none', cloth: [C.brown, C.brown2] } as const;
+const DAN = { hat: 'nonla', weapon: 'none', cloth: [C.indigo, C.indigo2] } as const;
+const HOCTRO = { hat: 'toc_bui', weapon: 'none', cloth: [C.white, C.white2], belt: C.green2 } as const;
+const shipIcon = (k: string) => canvasUrl(`berth-${k}`, () => drawBoat(k as 'ghe' | 'buom' | 'chien'), 1);
+/** Hình đại diện cho ô của các công trình chỉ để xem (chợ, tháp, tường...). */
+function showIcon(k: string): string {
+  switch (k) {
+    case 'cho': return iconUrl('tien');
+    case 'tramthue': return shipIcon('ghe');
+    case 'thapcanh': return troopUrl('cung');
+    case 'tuong': return troopUrl('no');
+    case 'donbinh': return troopUrl('khien');
+    case 'xuongren': return menuIcon('build');
+    case 'hocvien': return lookUrl('hoctro', { ...HOCTRO, cloth: [...HOCTRO.cloth] } as never);
+    case 'den': return menuIcon('huong');
+  }
+  return iconUrl('tien');
+}
+
+/** Lưới ô làm việc bên trong công trình: tối thiểu 6 ô, lên cấp thêm ô (ô cấp sau hiện mờ). */
+function interior(ui: UI, d: Dinh): string {
+  const s = ui.store.s;
+  const now = ui.store.now();
+  const n = slotsOf(d.lv);
+  const info = SLOT_INFO[d.k];
+  const nextN = d.lv < 3 ? slotsOf(d.lv + 1) : n;
+  const locked = Array.from({ length: nextN - n }, () => `<div class="slot locked"><small>Cấp ${d.lv + 1}</small></div>`).join('');
+  const tile = (inner: string, cls = '', attrs = '') => `<button type="button" class="slot ${cls}" ${attrs}>${inner}</button>`;
+  let tiles = '';
+  let tools = '';
+  let filled = n;
+  switch (info.kind) {
+    case 'plot': {
+      const crops = cropsFor(d.k);
+      const k = seedPick[d.k] && crops.includes(seedPick[d.k]!) ? seedPick[d.k]! : crops[0];
+      const c = CROPS[k];
+      const ps = plotsOf(d);
+      let empty = 0, ripe = 0;
+      tiles = ps
+        .map((p, i) => {
+          if (!p) {
+            empty++;
+            return tile('<b class="plus">+</b><small>Trống</small>', 'empty', `data-plot="${i}" aria-label="Gieo ${c.name} ở ô ${i + 1}"`);
+          }
+          const st = plotState(s, d, i, now)!;
+          if (st.ripe) ripe++;
+          return tile(`<img src="${iconUrl(st.out)}" alt=""><small>${st.ripe ? (st.over ? 'Hỏng nửa' : 'Chín!') : clock(st.left)}</small>${st.ripe ? '' : `<i class="pg"><b style="width:${Math.round(st.p * 100)}%"></b></i>`}`, st.ripe ? (st.over ? 'ripe over' : 'ripe') : 'grow', `data-plot="${i}"`);
+        })
+        .join('');
+      filled = n - empty;
+      const per = Math.max(1, Math.round(c.per * PLOT_YIELD * (1 + 0.2 * techLv(s, 'giongLua'))));
+      tools = `${crops.length > 1 ? `<div class="seg" role="radiogroup">${crops.map((x) => `<button type="button" data-seed="${x}" role="radio" aria-checked="${x === k}">${CROPS[x].name}</button>`).join('')}</div>` : ''}
+        <p class="muted small">${c.name}: lớn trong ${hm(c.ms)} · mỗi ô ~${per} ${RES[c.out].name} · giống ${costs(plotSeed(c))} mỗi ô. Chạm ô trống để gieo, ô chín để gặt.</p>
+        <div class="row"><button type="button" class="primary" id="btnGieo" ${empty ? '' : 'disabled'}>Gieo ${empty} ô trống</button><button type="button" id="btnGat" ${ripe ? '' : 'disabled'}>Gặt ${ripe} ô chín</button></div>
+        <p class="muted small">Mưa cây lớn nhanh, bão dập mất một phần${c.slow ? `, mùa ${c.slow} chậm lại` : ''}. Chín rồi để quá 8 giờ thì hỏng một nửa.</p>`;
+      break;
+    }
+    case 'animal':
+    case 'worker': {
+      const u = unitsOf(d);
+      filled = u;
+      const animal = info.kind === 'animal';
+      const P = animal ? PENS[d.k as keyof typeof PENS] : null;
+      const icon = animal ? (d.k === 'aoca' ? iconUrl('ca') : menuIcon('ga')) : lookUrl('tho', { ...WORKER, cloth: [...WORKER.cloth] } as never);
+      tiles = Array.from({ length: n }, (_, i) =>
+        i < u ? tile(`<img src="${icon}" alt=""><small>${animal ? (d.k === 'aoca' ? 'Lứa cá' : 'Gà') : 'Thợ'}</small>`, 'busy') : tile(`<b class="plus">+</b><small>${animal ? 'Thả' : 'Thuê'}</small>`, 'empty', `${animal ? 'data-buy="1"' : 'data-hire="1"'} aria-label="${animal ? `Thả thêm ${P!.animal}` : 'Thuê thêm thợ'}"`),
+      ).join('');
+      const p = pending(s, d, now);
+      const has = Object.values(p.give).some((v) => (v ?? 0) > 0);
+      const rate = animal ? `Mỗi con: ${costs(P!.out)} mỗi giờ${Object.keys(P!.feed).length ? `, ăn ${costs(P!.feed)}` : ''}` : `Mỗi thợ: ${(PROCS[d.k as keyof typeof PROCS].rate * PER_WORKER).toFixed(1).replace('.', ',')} mẻ mỗi giờ`;
+      tools = `<p class="muted small">${rate}. ${u < n ? `Thêm ${animal ? P!.animal : 'thợ'}: ${costs(animal ? P!.buy : HIRE_COST)}.` : 'Đã đủ ô.'}</p>
+        <div class="card sub"><small>Đang có (${p.h.toFixed(1).replace('.', ',')}/12 giờ)</small>
+        <p>Thu được: ${has ? costs(p.give) : '<span class="muted">chưa có gì</span>'}</p>
+        ${Object.values(p.take).some((v) => (v ?? 0) > 0) ? `<p class="muted small">Sẽ dùng: ${costs(p.take)}</p>` : ''}
+        <button type="button" class="primary wide" id="btnThuNT" ${has ? '' : 'disabled'}>Thu</button></div>`;
+      break;
+    }
+    case 'ho':
+      tiles = Array.from({ length: n }, () => tile(`<img src="${lookUrl('dan', { ...DAN, cloth: [...DAN.cloth] } as never)}" alt=""><small>+1 đồng/giờ</small>`, 'busy')).join('');
+      break;
+    case 'kho':
+      tiles = Array.from({ length: n }, () => tile(`<img src="${iconUrl('thoc')}" alt=""><small>+5% kho</small>`, 'busy')).join('');
+      break;
+    case 'berth': {
+      const cap = fleetCap(d.lv);
+      const out: string[] = [];
+      for (const sh of s.fleet) {
+        const z = SHIP_SIZE[sh.k] ?? 2;
+        const short = sh.k === 'chien' ? 'Hạm' : sh.k === 'buom' ? 'Buồm' : 'Ghe';
+        for (let i = 0; i < z && out.length < cap; i++) out.push(tile(i === 0 ? `<img src="${shipIcon(sh.k)}" alt=""><small>${short}</small>` : '<small class="muted">neo</small>', i === 0 ? 'busy ship' : 'busy ship-tail'));
+      }
+      filled = out.length;
+      while (out.length < cap) out.push(tile('<small>Trống</small>', 'empty'));
+      tiles = out.join('');
+      break;
+    }
+    case 'show': {
+      const icon = showIcon(d.k);
+      // trạm thuế: thương thuyền đang ghé (theo tuyến buôn đi ngang đảo)
+      const on = d.k === 'tramthue' ? Math.min(n, routesNear(homeCell(s), routePeriod(now)).length * 2) : n;
+      filled = on;
+      tiles = Array.from({ length: n }, (_, i) => (i < on ? tile(`<img src="${icon}" alt="">`, 'busy') : tile('<small>Chờ thuyền</small>', 'empty'))).join('');
+      break;
+    }
+  }
+  return `<div class="card inner-card"><div class="inner-h"><b>Bên trong · ${filled}/${n} ${info.unit}</b>${d.lv < 3 ? `<small>Lên cấp ${d.lv + 1}: ${nextN} ô</small>` : '<small>Tối đa 12 ô</small>'}</div>
+    <p class="muted small">${esc(info.desc)}</p>
+    <div class="inner ${nextN > 9 ? 'c4' : ''}">${tiles}${locked}</div>${tools}</div>`;
+}
+
+/** Phần thêm vào bảng công trình: lưới ô bên trong và các việc riêng (học viện, bến, lò rèn). */
 export function dinhExtra(ui: UI, d: Dinh): string {
   const s = ui.store.s;
   if (d.lv < 1) return '';
-  const now = ui.store.now();
-  const crops = cropsFor(d.k);
-  if (crops.length) {
-    const st = cropState(s, d, now);
-    if (!st)
-      return `<div class="card"><small>Gieo trồng</small>${crops
-        .map((k) => {
-          const c = CROPS[k];
-          return `<button type="button" class="wide" data-plant="${k}">${c.name} · ${hm(c.ms)} · ra ~${Math.round(c.per * d.lv * (1 + 0.2 * techLv(s, 'giongLua')))} ${RES[c.out].name} · giống ${costs(c.seed)}</button>`;
-        })
-        .join('')}<p class="muted small">Mưa cây lớn nhanh, bão dập mất một phần, ${CROPS[crops[0]].slow ? `mùa ${CROPS[crops[0]].slow} chậm lại` : ''}. Chín rồi để quá 8 giờ thì hỏng một nửa.</p></div>`;
-    const c = CROPS[d.crop!.k];
-    return `<div class="card"><small>${c.name}</small><div class="hpbar grow"><i style="width:${Math.round(st.p * 100)}%"></i></div>
-      <p>${st.ripe ? `<b class="good">Đã chín</b>${st.over ? ' · <b class="bad">để quá lâu, hỏng một nửa</b>' : ''}` : `Đang lớn ${Math.floor(st.p * 100)}%`} · thu được ${st.n} ${RES[st.out].name}${st.storms ? ` (bị bão ${st.storms} lần)` : ''}</p>
-      <button type="button" class="primary wide" id="btnGat" ${st.ripe ? '' : 'disabled'}>Thu hoạch</button></div>`;
-  }
-  if (['chuong', 'aoca', 'coixay', 'bep', 'nhathuoc', 'khungcui'].includes(d.k)) {
-    const p = pending(s, d, now);
-    const has = Object.values(p.give).some((v) => (v ?? 0) > 0);
-    return `<div class="card"><small>Đang có (${p.h.toFixed(1).replace('.', ',')}/12 giờ)</small>
-      <p>Thu được: ${has ? costs(p.give) : '<span class="muted">chưa có gì</span>'}</p>
-      ${Object.values(p.take).some((v) => (v ?? 0) > 0) ? `<p class="muted small">Sẽ dùng: ${costs(p.take)}</p>` : ''}
-      <button type="button" class="primary wide" id="btnThuNT" ${has ? '' : 'disabled'}>Thu</button>
-      <p class="muted small">Giữ tối đa 12 giờ sản phẩm, ghé thu thường xuyên.</p></div>`;
-  }
+  const inner = interior(ui, d);
+  return inner + dinhMore(ui, d, s);
+}
+function dinhMore(ui: UI, d: Dinh, s: PlayerState): string {
   if (d.k === 'hocvien') {
     const r = s.research;
     const rows = TECH_KEYS.map((k) => {
@@ -65,6 +167,7 @@ export function dinhExtra(ui: UI, d: Dinh): string {
   if (d.k === 'benthuyen') {
     const rc = repairCost(s);
     const cap = fleetCap(d.lv);
+    const used = berthsUsed(s.fleet);
     const ships = s.fleet
       .map((sh) => {
         const slots = sh.k === 'chien' ? 3 : sh.k === 'buom' ? 2 : 1;
@@ -74,10 +177,10 @@ export function dinhExtra(ui: UI, d: Dinh): string {
           <button type="button" class="link" data-phatau="${sh.id}">tháo dỡ</button></div>`;
       })
       .join('');
-    const build = SHIP_KINDS.map((k) => `<button type="button" class="wide" data-ship="${k}" ${d.lv < SHIPS[k].need || s.fleet.length >= cap ? 'disabled' : ''}><b>${SHIPS[k].name}</b> ${d.lv < SHIPS[k].need ? `(cần xưởng cấp ${SHIPS[k].need})` : ''} · ${costs(SHIPS[k].cost, s.res)}<br><small>${SHIPS[k].desc}</small></button>`).join('');
+    const build = SHIP_KINDS.map((k) => `<button type="button" class="wide" data-ship="${k}" ${d.lv < SHIPS[k].need || used + (SHIP_SIZE[k] ?? 2) > cap ? 'disabled' : ''}><b>${SHIPS[k].name}</b> · ${SHIP_SIZE[k]} chỗ neo ${d.lv < SHIPS[k].need ? `(cần xưởng cấp ${SHIPS[k].need})` : ''} · ${costs(SHIPS[k].cost, s.res)}<br><small>${SHIPS[k].desc}</small></button>`).join('');
     return `<div class="card"><small>Thuyền chính</small><div class="hpbar hull"><i style="width:${Math.round(s.vo)}%"></i></div><p>Độ bền <b>${Math.round(s.vo)}%</b>${s.vo < 30 ? ' · <b class="bad">thuyền đi chậm 30%</b>' : ''}${s.vo <= 0 ? ' · <b class="bad">không ra khơi được</b>' : ''}</p>
       ${rc ? `<div class="costs">${costs(rc, s.res)}</div><button type="button" class="primary wide" id="btnSuaThuyen">Sửa thuyền và hạm đội</button>` : '<p class="good">Thuyền còn nguyên.</p>'}</div>
-      <div class="card"><small>Hạm đội (${s.fleet.length}/${cap})</small>${ships || '<p class="muted small">Chưa có thuyền chiến. Thuyền chiến theo thuyền chính ra trận và giữ bến khi ở nhà.</p>'}</div>
+      <div class="card"><small>Hạm đội (${s.fleet.length} thuyền · ${used}/${cap} chỗ neo)</small>${ships || '<p class="muted small">Chưa có thuyền chiến. Thuyền chiến theo thuyền chính ra trận và giữ bến khi ở nhà.</p>'}</div>
       <div class="card"><small>Đóng thuyền mới</small>${build}</div>`;
   }
   if (d.k === 'xuongren') {
@@ -91,8 +194,22 @@ export function dinhExtra(ui: UI, d: Dinh): string {
 /** Xử lý bấm nút trong phần thêm. Trả true nếu đã xử lý. */
 export function dinhClick(ui: UI, d: Dinh, t: HTMLElement): boolean {
   const run = (o: { ok: boolean; msg: string }) => ui.toast(o.msg, o.ok ? 'gold' : 'bad');
-  if (t.dataset.plant) return run(ui.store.do({ t: 'trong', id: d.id, k: t.dataset.plant as CropKey })), true;
+  const crops = cropsFor(d.k);
+  const pickK = seedPick[d.k] && crops.includes(seedPick[d.k]!) ? seedPick[d.k]! : crops[0];
+  if (t.dataset.seed) return (seedPick[d.k] = t.dataset.seed as CropKey), true;
+  if (t.dataset.plot !== undefined) {
+    const i = Number(t.dataset.plot);
+    const p = plotsOf(d)[i];
+    if (!p) return run(ui.store.do({ t: 'trong', id: d.id, k: pickK, slot: i })), true;
+    const st = plotState(ui.store.s, d, i, ui.store.now());
+    if (st?.ripe) return run(ui.store.do({ t: 'gat', id: d.id, slot: i })), true;
+    ui.toast(`${CROPS[p.k].name} còn ${hm(st?.left ?? 0)} nữa thì chín.`, 'muted');
+    return true;
+  }
+  if (t.id === 'btnGieo') return run(ui.store.do({ t: 'trong', id: d.id, k: pickK })), true;
   if (t.id === 'btnGat') return run(ui.store.do({ t: 'gat', id: d.id })), true;
+  if (t.dataset.buy) return run(ui.store.do({ t: 'nuoi', id: d.id })), true;
+  if (t.dataset.hire) return run(ui.store.do({ t: 'thue', id: d.id })), true;
   if (t.id === 'btnThuNT') return run(ui.store.do({ t: 'thuNT', id: d.id })), true;
   if (t.dataset.tech) return run(ui.store.do({ t: 'hoc', k: t.dataset.tech as TechKey })), true;
   if (t.id === 'btnSuaThuyen') return run(ui.store.do({ t: 'suaThuyen' })), true;

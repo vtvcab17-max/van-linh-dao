@@ -38,19 +38,19 @@ import { LV_LABEL, ASCEND_REWARD, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, 
 import { teamFromBoss } from './battle';
 import { islandCell, worldFor } from './map';
 import { hexDist, hexLine, hexRange } from './hex';
-import { cleanShips, fleetCap, SHIP_WEAR, SHIPS, WEAPONS, type Ship, type ShipKind, type ShipWeapon } from './navy';
+import { berthsUsed, cleanShips, fleetCap, SHIP_SIZE, SHIP_WEAR, SHIPS, WEAPONS, type Ship, type ShipKind, type ShipWeapon } from './navy';
 import {
-  CROPS, cropProgress, GEAR_WEAR, HULL_WEAR, OVERRIPE_MS, PENS, PROCS, RATION_PER_HOUR, SICK_PER_HOUR, STORE_H, TECH_MAX, TECHS, WEATHER, regionOf, techCost, techMs, wearMult, weatherAt, windFactor,
+  CROPS, cropProgress, GEAR_WEAR, HIRE_COST, HULL_WEAR, OVERRIPE_MS, PENS, PER_WORKER, PLOT_YIELD, plotSeed, PROCS, RATION_PER_HOUR, SICK_PER_HOUR, STORE_H, TECH_MAX, TECHS, WEATHER, regionOf, techCost, techMs, wearMult, weatherAt, windFactor,
   type CropKey, type TechKey,
 } from './eco';
-import { inWorld, isleById, lairById, WORLD_H, WORLD_W, type Isle } from './world';
+import { inWorld, isleById, lairById, WORLD_H, WORLD_VERSION, WORLD_W, type Isle } from './world';
 import { cleanDef } from './economy';
 import {
   DUP_FRAGS, FRAG_PER_GENERAL, GEN_IDS, GENERALS, LEG_IDS, LEG_WEAPONS, LT_BUY_DAILY, LT_BUY_PRICE, LT_SELL_PRICE, MAX_STAR, PITY, rollWheel, SPIN10_COST, SPIN_COST, starMult, ltDrop,
   type GenId, type LegWeaponId, type Rarity,
 } from './gacha';
 import {
-  B_KEYS, BUILDINGS, bLevel, bSum, dayOf, defSpecOf, fortLevel, FORT_NAMES, ITEMS, MAX_VASSALS, PORT_MULT, routePeriod, SHOP_BASE, shopSpecial, tollPerHour, tributePerHour, VASSAL_MS, VASSAL_TOLL_SHARE,
+  B_KEYS, BUILDINGS, bLevel, bSum, dayOf, defSpecOf, fortLevel, FORT_NAMES, ITEMS, MAX_VASSALS, PORT_MULT, routePeriod, SHOP_BASE, shopSpecial, slotsOf, slotSum, tollPerHour, tributePerHour, VASSAL_MS, VASSAL_TOLL_SHARE,
   type BKey, type DefSpec, type Dinh, type GoodKey, type ItemKey, type Lord, type Vassal,
 } from './economy';
 
@@ -173,6 +173,8 @@ export interface PlayerState {
   home: { x: number; y: number } | null;
   /** Vùng biển đã khám phá (bitset base64, mỗi ô một bit). */
   seen: string;
+  /** phiên bản hải đồ của toạ độ đang lưu */
+  wv?: number;
   /** Đảo tự nhiên đã cắm cờ chủ quyền. */
   isles: OwnedIsle[];
   /** Kết quả đánh đảo chờ server ghi sổ chủ quyền (server lấy ra rồi xóa). */
@@ -330,6 +332,7 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     vo: 100,
     home: null,
     seen: '',
+    wv: WORLD_VERSION,
     isles: [],
     claims: [],
     thienMon: { week: weekOf(now), done: false },
@@ -372,6 +375,8 @@ const RESERVED = new Set(['11,11', '11,10', '12,12', '10,13']);
  * Hình dạng đảo lúc khởi đầu: 16 ô đất mọc ngẫu nhiên quanh lõi theo mã đảo
  * (có đảo dài, đảo cong, đảo có mỏm...), cộng 8 chỗ đặt tài nguyên và hòm.
  */
+/** Đảo khởi đầu không nhỏ hơn 48 ô vuông. */
+export const START_LAND = 48;
 export function startShape(seed: number): { land: [number, number][]; spots: [number, number][] } {
   const r = mulberry32(hashStr(`shape:${seed}`));
   const has = new Set(CORE.map(([x, y]) => `${x},${y}`));
@@ -380,12 +385,12 @@ export function startShape(seed: number): { land: [number, number][]; spots: [nu
   const ang = r() * Math.PI * 2;
   const stretch = 0.35 + r() * 0.9;
   const lumpy = r();
-  while (land.length < 16) {
+  while (land.length < START_LAND) {
     const front: { x: number; y: number; w: number }[] = [];
     for (const [x, y] of land)
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx, ny = y + dy;
-        if (nx < 7 || ny < 7 || nx > 16 || ny > 16 || has.has(`${nx},${ny}`)) continue;
+        if (nx < 4 || ny < 4 || nx > 19 || ny > 19 || has.has(`${nx},${ny}`)) continue;
         const ox = nx - 11.5, oy = ny - 11.8;
         const along = ox * Math.cos(ang) + oy * Math.sin(ang);
         const across = -ox * Math.sin(ang) + oy * Math.cos(ang);
@@ -414,7 +419,8 @@ export function startShape(seed: number): { land: [number, number][]; spots: [nu
 
 // ---------- tính toán phụ ----------
 export const tierIdx = (s: PlayerState, k: LvKey) => Math.max(0, Math.min(4, s.lv[k].tier - 1));
-export const storageCap = (s: PlayerState) => Math.round(EFFECTS.storageCap[tierIdx(s, 'leu')] * (1 + 0.3 * bSum(s.dinh, 'khothoc')));
+// mỗi ô kho của Vựa thóc thêm 5% sức chứa
+export const storageCap = (s: PlayerState) => Math.round(EFFECTS.storageCap[tierIdx(s, 'leu')] * (1 + 0.05 * slotSum(s.dinh, 'khothoc')));
 export const landCap = (s: PlayerState) => EFFECTS.landCap[tierIdx(s, 'leu')];
 export const protectAmt = (s: PlayerState) => EFFECTS.protect[tierIdx(s, 'leu')];
 export const chestSlots = (s: PlayerState) => EFFECTS.chestSlots[tierIdx(s, 'leu')];
@@ -434,7 +440,7 @@ export function gatherMult(s: PlayerState) {
  * và cần thêm loại tài nguyên mới: gỗ từ ô thứ 23, sắt vụn từ ô thứ 37. Cuốc tiến hóa giảm giá.
  */
 export function expandCost(s: PlayerState): Partial<Record<ResKey, number>> {
-  const k = Math.max(0, landCount(s) - 16); // số ô đã khai hoang
+  const k = Math.max(0, landCount(s) - START_LAND); // số ô đã khai hoang
   const disc = 1 - EFFECTS.expandDiscount[tierIdx(s, 'cuoc')];
   const v = (x: number) => Math.ceil(x * disc);
   const cost: Partial<Record<ResKey, number>> = { da: v(6 + 2.5 * k + 0.12 * k * k), tre: v(6 + 2.5 * k + 0.12 * k * k) };
@@ -464,7 +470,8 @@ export function addRes(s: PlayerState, gain: Partial<Record<ResKey, number>>): P
 
 /** Công thức sức mạnh dùng chung — server tự tính lại bằng đúng hàm này. */
 export function powerFrom(tiers: Partial<Record<LvKey, number>>, team: { lv: number }[], land: number, gear?: Partial<GearSet>, asc = 0): number {
-  return Math.round(land + (tiers.leu ?? 1) * 30 + (tiers.cuoc ?? 1) * 25 + (tiers.rao ?? 1) * 25 + (tiers.thuyen ?? 1) * 15 + team.reduce((t, c) => t + c.lv * 12, 0) + gearPower(gear) + asc * 150);
+  // đảo khởi đầu đã có 48 ô: 32 ô được cho không tính vào sức mạnh (giữ cân bằng như trước)
+  return Math.round(Math.max(0, land - 32) + (tiers.leu ?? 1) * 30 + (tiers.cuoc ?? 1) * 25 + (tiers.rao ?? 1) * 25 + (tiers.thuyen ?? 1) * 15 + team.reduce((t, c) => t + c.lv * 12, 0) + gearPower(gear) + asc * 150);
 }
 export function power(s: PlayerState): number {
   const team = COMP_KEYS.filter((k) => s.comps[k].unlocked).map((k) => s.comps[k]);
@@ -542,7 +549,7 @@ export function occupied(s: PlayerState, x: number, y: number): boolean {
 export function incomePerHour(s: PlayerState, now = s.lastReal) {
   const period = routePeriod(now);
   const bonus = (s.bag.trongdong ? 0.25 : 0) + (s.guild ? 0.05 * s.guild.lv : 0);
-  const dan = bSum(s.dinh, 'nhadan') * 4;
+  const dan = slotSum(s.dinh, 'nhadan'); // mỗi gian nhà một hộ, mỗi hộ 1 đồng/giờ
   const toll = tollPerHour(homeCell(s), period, bLevel(s.dinh, 'tramthue'), bonus);
   let cong = 0;
   for (const v of s.chuHau) if (v.until > now) cong += tributePerHour(v.power) + tollPerHour(v.cell, period, v.port) * VASSAL_TOLL_SHARE;
@@ -837,8 +844,10 @@ export type Action =
   | { t: 'thuDao'; id: string }
   | { t: 'xayDao'; id: string; k: IsleBuild }
   | { t: 'boDao'; id: string }
-  | { t: 'trong'; id: string; k: CropKey }
-  | { t: 'gat'; id: string }
+  | { t: 'trong'; id: string; k: CropKey; slot?: number }
+  | { t: 'gat'; id: string; slot?: number }
+  | { t: 'nuoi'; id: string }
+  | { t: 'thue'; id: string }
   | { t: 'thuNT'; id: string }
   | { t: 'hoc'; k: TechKey }
   | { t: 'suaDo' }
@@ -1105,7 +1114,8 @@ export function apply(s: PlayerState, a: Action): Outcome {
       if (busySlots(s) >= buildSlots(s)) return fail('Thợ đang bận hết. Chờ xây xong hoặc dùng Lệnh Bài Thủy Sư.');
       if (!canPay(s, b.cost[0])) return fail('Chưa đủ vật liệu.');
       pay(s, b.cost[0]);
-      s.dinh.push({ id: nid(s, 'd'), k: a.k, x: a.x, y: a.y, lv: 0, to: 1, doneAt: s.gt + b.ms[0] });
+      // chuồng/ao có sẵn 2 con giống, xưởng chế biến có sẵn 2 thợ
+      s.dinh.push({ id: nid(s, 'd'), k: a.k, x: a.x, y: a.y, lv: 0, to: 1, doneAt: s.gt + b.ms[0], ...(a.k in PENS || a.k in PROCS ? { n: 2 } : {}) });
       return { ok: true, msg: `Bắt đầu xây ${b.names[0]}.` };
     }
     case 'nang': {
@@ -1292,21 +1302,71 @@ export function apply(s: PlayerState, a: Action): Outcome {
       const d = s.dinh.find((x) => x.id === a.id);
       if (!d || d.lv < 1 || d.doneAt !== undefined) return fail('Ruộng chưa xây xong.');
       if (!cropsFor(d.k).includes(a.k)) return fail('Không trồng được cây này ở đây.');
-      if (d.crop) return fail('Đang có cây trồng.');
+      const plots = plotsOf(d);
       const c = CROPS[a.k];
-      if (!canPay(s, c.seed)) return fail('Không đủ tiền mua giống.');
-      pay(s, c.seed);
-      d.crop = { k: a.k, at: s.lastReal };
-      return { ok: true, msg: `Đã trồng ${c.name}.` };
+      const seed = plotSeed(c);
+      // trồng một ô (chạm ô trống) hoặc gieo hết các ô trống
+      const want = a.slot !== undefined ? [a.slot] : plots.map((p, i) => (p ? -1 : i)).filter((i) => i >= 0);
+      if (!want.length) return fail('Không còn ô trống.');
+      let n = 0;
+      for (const i of want) {
+        if (i < 0 || i >= plots.length || plots[i]) continue;
+        if (!canPay(s, seed)) break;
+        pay(s, seed);
+        plots[i] = { k: a.k, at: s.lastReal };
+        n++;
+      }
+      d.plots = plots;
+      if (!n) return fail(a.slot !== undefined && plots[a.slot] ? 'Ô này đang có cây.' : 'Không đủ tiền mua giống.');
+      return { ok: true, msg: `Đã trồng ${c.name} ở ${n} ô.` };
     }
     case 'gat': {
       const d = s.dinh.find((x) => x.id === a.id);
-      const st = d && cropState(s, d);
-      if (!d || !st) return fail('Chưa trồng gì.');
-      if (!st.ripe) return fail(`Chưa chín (${Math.floor(st.p * 100)}%).`);
-      const got = addRes(s, { [st.out]: st.n });
+      if (!d) return fail('Chưa trồng gì.');
+      const plots = plotsOf(d);
+      const idx = a.slot !== undefined ? [a.slot] : plots.map((_, i) => i);
+      const got: Partial<Record<ResKey, number>> = {};
+      let n = 0, over = 0, storms = 0, unripe = 0;
+      for (const i of idx) {
+        const st = plotState(s, d, i);
+        if (!st) continue;
+        if (!st.ripe) {
+          unripe++;
+          continue;
+        }
+        got[st.out] = (got[st.out] ?? 0) + st.n;
+        plots[i] = null;
+        n++;
+        if (st.over) over++;
+        if (st.storms) storms++;
+      }
+      d.plots = plots;
       d.crop = undefined;
-      return { ok: true, msg: `Thu hoạch ${st.n} ${RES[st.out].name}${st.over ? ' (để quá lâu, hỏng một nửa)' : st.storms ? ' (bão làm dập mất một phần)' : ''}.`, gained: got };
+      if (!n) return fail(unripe ? 'Chưa có ô nào chín.' : 'Chưa trồng gì.');
+      const gained = addRes(s, got);
+      return { ok: true, msg: `Gặt ${n} ô: ${Object.entries(got).map(([k, v]) => `${v} ${RES[k as ResKey].name}`).join(', ')}${over ? ' (có ô để quá lâu, hỏng một nửa)' : storms ? ' (bão làm dập mất một phần)' : ''}.`, gained };
+    }
+    case 'nuoi': {
+      const d = s.dinh.find((x) => x.id === a.id);
+      if (!d || d.lv < 1 || !(d.k in PENS)) return fail('Chỉ thả giống ở chuồng hoặc ao.');
+      const P = PENS[d.k as keyof typeof PENS];
+      if (unitsOf(d) >= slotsOf(d.lv)) return fail(`Đã đủ ${slotsOf(d.lv)} ô. Nâng cấp để có thêm ô.`);
+      if (!canPay(s, P.buy)) return fail(`Chưa đủ tiền mua ${P.animal}.`);
+      // thu sản phẩm đang có trước khi đổi số con (để tính đúng)
+      settleProd(s, d);
+      pay(s, P.buy);
+      d.n = unitsOf(d) + 1;
+      return { ok: true, msg: `Thả thêm 1 ${P.animal} (${d.n}/${slotsOf(d.lv)}).` };
+    }
+    case 'thue': {
+      const d = s.dinh.find((x) => x.id === a.id);
+      if (!d || d.lv < 1 || !(d.k in PROCS)) return fail('Chỉ thuê thợ ở xưởng chế biến.');
+      if (unitsOf(d) >= slotsOf(d.lv)) return fail(`Đã đủ ${slotsOf(d.lv)} thợ. Nâng cấp để có thêm chỗ.`);
+      if (!canPay(s, HIRE_COST)) return fail('Chưa đủ tiền thuê thợ.');
+      settleProd(s, d);
+      pay(s, HIRE_COST);
+      d.n = unitsOf(d) + 1;
+      return { ok: true, msg: `Thuê thêm 1 thợ (${d.n}/${slotsOf(d.lv)}).` };
     }
     case 'thuNT': {
       const d = s.dinh.find((x) => x.id === a.id);
@@ -1365,7 +1425,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
       const bt = bLevel(s.dinh, 'benthuyen');
       if (!d) return fail('Không có loại thuyền này.');
       if (bt < d.need) return fail(`Cần Xưởng Đóng Tàu cấp ${d.need}.`);
-      if (s.fleet.length >= fleetCap(bt)) return fail(`Xưởng cấp ${bt} chỉ giữ được ${fleetCap(bt)} thuyền chiến.`);
+      if (berthsUsed(s.fleet) + (SHIP_SIZE[a.k] ?? 2) > fleetCap(bt)) return fail(`Bến chỉ còn ${fleetCap(bt) - berthsUsed(s.fleet)}/${fleetCap(bt)} chỗ neo, ${d.name} cần ${SHIP_SIZE[a.k]} chỗ. Nâng Xưởng Đóng Tàu để thêm chỗ.`);
       if (!canPay(s, d.cost)) return fail('Chưa đủ vật liệu đóng thuyền.');
       pay(s, d.cost);
       s.fleet.push({ id: nid(s, 't'), k: a.k, w: {}, vo: 100 });
@@ -1685,7 +1745,44 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   merged.tech = { ...s.tech };
   if (typeof merged.vo !== 'number') merged.vo = 100;
   merged.ltDay = { ...fresh.ltDay, ...s.ltDay };
+  // hải đồ mở rộng (hơn 1 triệu ô): toạ độ cũ không còn đúng → dời đảo tới vành ngoài mới, khám phá lại
+  if (merged.wv !== WORLD_VERSION) {
+    merged.wv = WORLD_VERSION;
+    merged.home = null;
+    merged.seen = '';
+    merged.isles = [];
+    merged.claims = [];
+  }
+  // công trình cũ: chuồng/ao/xưởng đã có thì cho đủ ô; ruộng một cây cả ruộng → ô đầu
+  for (const d of merged.dinh ?? []) {
+    if ((d.k in PENS || d.k in PROCS) && d.n === undefined) d.n = slotsOf(Math.max(1, d.lv));
+    if (d.crop && !d.plots) {
+      d.plots = plotsOf(d);
+      d.crop = undefined;
+    }
+  }
+  // đảo cũ nhỏ hơn 48 ô: nới thêm đất theo đúng dáng đảo (không mất gì)
+  if (landCount(merged) < START_LAND) growLand(merged, START_LAND);
   return merged;
+}
+
+/** Mở thêm ô đất sát bờ cho tới khi đủ n ô (theo mã đảo, client và server ra giống nhau). */
+function growLand(s: PlayerState, n: number) {
+  const r = mulberry32(hashStr(`grow:${s.id}`));
+  let guard = 0;
+  while (landCount(s) < n && guard++ < 400) {
+    const front: [number, number][] = [];
+    for (let y = 2; y < GRID - 2; y++)
+      for (let x = 2; x < GRID - 2; x++) {
+        if (isLand(s, x, y)) continue;
+        let nb = 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (isLand(s, x + dx, y + dy)) nb++;
+        if (nb) for (let k = 0; k < nb * nb; k++) front.push([x, y]);
+      }
+    if (!front.length) break;
+    const [x, y] = front[Math.floor(r() * front.length)];
+    setLand(s, x, y);
+  }
 }
 
 
@@ -1859,45 +1956,78 @@ export const lordLevel = (s: PlayerState) => Math.max(1, Math.min(30, 1 + Math.f
 /** Số đảo tự nhiên giữ được. */
 export const isleCap = (s: PlayerState) => 1 + Math.floor(lordLevel(s) / 3);
 
-// --- sương mù: bitset base64 ---
-const BITS = WORLD_W * WORLD_H;
-function seenBytes(s: PlayerState): Uint8Array {
-  const out = new Uint8Array(Math.ceil(BITS / 8));
-  if (!s.seen) return out;
-  try {
-    const bin = atob(s.seen);
-    for (let i = 0; i < Math.min(bin.length, out.length); i++) out[i] = bin.charCodeAt(i);
-  } catch {
-    /* dữ liệu hỏng: coi như chưa khám phá */
+// --- sương mù: hải đồ hơn 1 triệu ô nên chỉ lưu những khoang 32x32 ô đã khám phá ---
+// Dạng chuỗi: "khoang:base64;khoang:base64" (khoang = hàng * số khoang mỗi hàng + cột).
+const FC = 32;
+const NFC = Math.ceil(WORLD_W / FC);
+export type SeenMap = Map<number, Uint8Array>;
+function seenParse(str: string): SeenMap {
+  const m: SeenMap = new Map();
+  if (!str || !str.includes(':')) return m; // rỗng hoặc dạng cũ (hải đồ nhỏ): coi như chưa khám phá
+  for (const part of str.split(';')) {
+    const k = part.indexOf(':');
+    if (k < 1) continue;
+    const id = Number(part.slice(0, k));
+    try {
+      const bin = atob(part.slice(k + 1));
+      const b = new Uint8Array((FC * FC) / 8);
+      for (let i = 0; i < Math.min(bin.length, b.length); i++) b[i] = bin.charCodeAt(i);
+      m.set(id, b);
+    } catch {
+      /* khoang hỏng: bỏ qua */
+    }
   }
-  return out;
+  return m;
 }
-function seenSave(s: PlayerState, b: Uint8Array) {
-  let bin = '';
-  for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
-  s.seen = btoa(bin);
+let seenMemoKey = '';
+let seenMemo: SeenMap = new Map();
+/** Sương mù của người chơi (đọc chung, không được sửa trực tiếp). */
+export function seenOf(s: PlayerState): SeenMap {
+  if (s.seen !== seenMemoKey) {
+    seenMemo = seenParse(s.seen);
+    seenMemoKey = s.seen;
+  }
+  return seenMemo;
 }
-export function isSeen(s: PlayerState, c: number, r: number, bytes?: Uint8Array): boolean {
+function seenSave(s: PlayerState, m: SeenMap) {
+  const parts: string[] = [];
+  for (const id of [...m.keys()].sort((a, b) => a - b)) {
+    const b = m.get(id)!;
+    let bin = '';
+    for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+    parts.push(`${id}:${btoa(bin)}`);
+  }
+  s.seen = parts.join(';');
+}
+export function isSeen(s: PlayerState, c: number, r: number, m?: SeenMap): boolean {
   if (!inWorld(c, r)) return false;
-  const b = bytes ?? seenBytes(s);
-  const i = r * WORLD_W + c;
+  const b = (m ?? seenOf(s)).get(Math.floor(r / FC) * NFC + Math.floor(c / FC));
+  if (!b) return false;
+  const i = (r % FC) * FC + (c % FC);
   return (b[i >> 3] & (1 << (i & 7))) !== 0;
 }
-export const seenOf = seenBytes;
+/** Khoang 32x32 nào đã có ít nhất một ô khám phá (để vẽ bản đồ thu nhỏ). */
+export const seenChunks = (s: PlayerState) => [...seenOf(s).keys()].map((id) => ({ cx: id % NFC, cy: Math.floor(id / NFC), size: FC }));
 /** Mở sương mù quanh các ô (bán kính k). */
 export function reveal(s: PlayerState, cells: { x: number; y: number }[], k: number): number {
-  const b = seenBytes(s);
+  const m = seenParse(s.seen); // bản riêng để sửa
   let n = 0;
   for (const cell of cells)
     for (const h of hexRange({ c: cell.x, r: cell.y }, k)) {
       if (!inWorld(h.c, h.r)) continue;
-      const i = h.r * WORLD_W + h.c;
+      const id = Math.floor(h.r / FC) * NFC + Math.floor(h.c / FC);
+      let b = m.get(id);
+      if (!b) {
+        b = new Uint8Array((FC * FC) / 8);
+        m.set(id, b);
+      }
+      const i = (h.r % FC) * FC + (h.c % FC);
       if (!(b[i >> 3] & (1 << (i & 7)))) {
         b[i >> 3] |= 1 << (i & 7);
         n++;
       }
     }
-  if (n) seenSave(s, b);
+  if (n) seenSave(s, m);
   return n;
 }
 /** Tầm nhìn của đảo nhà theo tháp canh. */
@@ -2099,17 +2229,42 @@ export function sailWind(s: PlayerState, from: { x: number; y: number }, to: { x
 // --- nông trại ---
 const PLOT_OF: Record<string, CropKey[]> = { ruong: ['lua'], vuon: ['rau', 'thaoduoc'], nuongdau: ['dau'] };
 export const cropsFor = (k: BKey) => PLOT_OF[k] ?? [];
+/** Các ô trồng của ruộng/vườn/nương (đủ số ô theo cấp; dữ liệu cũ một cây cả ruộng thì thành ô đầu). */
+export function plotsOf(d: Dinh): ({ k: CropKey; at: number } | null)[] {
+  const n = slotsOf(d.lv);
+  const out = (d.plots ?? []).slice(0, n);
+  if (!d.plots && d.crop) out[0] = d.crop;
+  while (out.length < n) out.push(null);
+  return out;
+}
+/** Tình trạng một ô trồng. */
+export function plotState(s: PlayerState, d: Dinh, i: number, now = s.lastReal) {
+  const p = plotsOf(d)[i];
+  if (!p) return null;
+  const c = CROPS[p.k];
+  const speedK = 1 + 0.15 * (s.tech.thuyLoi ?? 0);
+  const { p: prog, storms } = cropProgressCached(p.k, p.at, now, regionOf(homeCell(s)), speedK);
+  const ripe = prog >= 1;
+  const over = ripe && now - p.at > c.ms * 1.6 + OVERRIPE_MS;
+  const n = Math.max(1, Math.round(c.per * PLOT_YIELD * (1 + 0.2 * (s.tech.giongLua ?? 0)) * Math.max(0.4, Math.pow(0.85, storms)) * (over ? 0.5 : 1)));
+  return { k: p.k, p: Math.min(1, prog), ripe, over, storms, out: c.out, n, left: ripe ? 0 : Math.max(0, (1 - prog) * c.ms / Math.max(0.2, speedK)) };
+}
+/** Tóm tắt cả ruộng: ô đầu tiên đang có cây (giữ cho chỗ cũ dùng). */
 export function cropState(s: PlayerState, d: Dinh, now = s.lastReal) {
-  if (!d.crop) return null;
-  const c = CROPS[d.crop.k];
-  const { p, storms } = (() => {
-    const speedK = 1 + 0.15 * (s.tech.thuyLoi ?? 0);
-    return cropProgressCached(d.crop.k, d.crop.at, now, regionOf(homeCell(s)), speedK);
-  })();
-  const ripe = p >= 1;
-  const over = ripe && (now - d.crop.at) > c.ms * 1.6 + OVERRIPE_MS;
-  const yieldN = Math.round(c.per * Math.max(1, d.lv) * (1 + 0.2 * (s.tech.giongLua ?? 0)) * Math.max(0.4, Math.pow(0.85, storms)) * (over ? 0.5 : 1));
-  return { p: Math.min(1, p), ripe, over, storms, out: c.out, n: yieldN };
+  const ps = plotsOf(d);
+  const i = ps.findIndex(Boolean);
+  return i < 0 ? null : plotState(s, d, i, now);
+}
+/** Số con giống (chuồng/ao) hoặc số thợ (xưởng) đang có. */
+export const unitsOf = (d: Dinh) => Math.min(slotsOf(d.lv), d.n ?? 2);
+/** Thu trước sản phẩm đang chờ (khi đổi số con/thợ thì tính lại từ đầu). */
+function settleProd(s: PlayerState, d: Dinh) {
+  const p = pending(s, d);
+  if (Object.values(p.give).some((v) => (v ?? 0) > 0)) {
+    for (const [k, v] of Object.entries(p.take)) s.res[k as ResKey] = Math.max(0, s.res[k as ResKey] - (v ?? 0));
+    addRes(s, p.give);
+  }
+  d.last = s.lastReal;
 }
 const cpCache = new Map<string, { p: number; storms: number }>();
 function cropProgressCached(k: CropKey, at: number, now: number, region: string, speedK: number) {
@@ -2125,7 +2280,8 @@ function cropProgressCached(k: CropKey, at: number, now: number, region: string,
 /** Sản phẩm đang chờ ở chuồng, ao, xưởng chế biến. */
 export function pending(s: PlayerState, d: Dinh, now = s.lastReal): { give: Partial<Record<ResKey, number>>; take: Partial<Record<ResKey, number>>; h: number } {
   const h = Math.min(STORE_H, Math.max(0, now - (d.last ?? now)) / 3600_000);
-  const lv = Math.max(1, d.lv);
+  // mỗi con giống / mỗi thợ là một ô bên trong công trình
+  const lv = unitsOf(d);
   const give: Partial<Record<ResKey, number>> = {};
   const take: Partial<Record<ResKey, number>> = {};
   if (d.k === 'chuong' || d.k === 'aoca') {
@@ -2141,7 +2297,7 @@ export function pending(s: PlayerState, d: Dinh, now = s.lastReal): { give: Part
     for (const [k, v] of Object.entries(P.out)) give[k as ResKey] = Math.floor((v ?? 0) * lv * h * ratio * bonus);
   } else if (d.k in PROCS) {
     const P = PROCS[d.k as keyof typeof PROCS];
-    let batches = Math.floor(P.rate * lv * h);
+    let batches = Math.floor(P.rate * PER_WORKER * lv * h);
     for (const [k, v] of Object.entries(P.take)) batches = Math.min(batches, Math.floor(s.res[k as ResKey] / (v ?? 1)));
     let one: ResKey | null = null;
     if (P.takeOne) {

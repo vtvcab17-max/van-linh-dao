@@ -118,8 +118,8 @@ export interface BDef {
 
 const M = 60_000;
 export const BUILDINGS: Record<BKey, BDef> = {
-  nhadan: { names: ['Lều Ngư Dân', 'Nhà Ba Gian', 'Nhà Ngói Năm Gian'], desc: 'Dân nộp thuế: +4 tiền mỗi giờ mỗi cấp.', group: 'nhà cửa', max: 6, needLeu: 1, cost: [{ go: 30, co: 20 }, { go: 80, da: 40, tre: 40 }, { go: 200, da: 120, sat: 40 }], ms: [2 * M, 15 * M, 90 * M] },
-  khothoc: { names: ['Vựa Thóc', 'Kho Lẫm', 'Kho Đụn'], desc: 'Kho chứa tài nguyên +30% mỗi cấp.', group: 'kinh tế', max: 2, needLeu: 1, cost: [{ go: 50, tre: 30 }, { go: 120, da: 80 }, { go: 260, da: 200, sat: 60 }], ms: [3 * M, 20 * M, 2 * 60 * M] },
+  nhadan: { names: ['Lều Ngư Dân', 'Nhà Ba Gian', 'Nhà Ngói Năm Gian'], desc: 'Mỗi gian một hộ dân nộp 1 đồng mỗi giờ: 6 gian, lên cấp 9 rồi 12 gian.', group: 'nhà cửa', max: 6, needLeu: 1, cost: [{ go: 30, co: 20 }, { go: 80, da: 40, tre: 40 }, { go: 200, da: 120, sat: 40 }], ms: [2 * M, 15 * M, 90 * M] },
+  khothoc: { names: ['Vựa Thóc', 'Kho Lẫm', 'Kho Đụn'], desc: 'Mỗi ô kho thêm 5% sức chứa: 6 ô, lên cấp 9 rồi 12 ô.', group: 'kinh tế', max: 2, needLeu: 1, cost: [{ go: 50, tre: 30 }, { go: 120, da: 80 }, { go: 260, da: 200, sat: 60 }], ms: [3 * M, 20 * M, 2 * 60 * M] },
   cho: { names: ['Sạp Chợ Phiên', 'Chợ Làng', 'Chợ Phố Hội'], desc: 'Cửa hàng rẻ hơn 5% mỗi cấp, phí chợ thế giới giảm 1% mỗi cấp.', group: 'kinh tế', max: 1, needLeu: 2, cost: [{ go: 80, tre: 60, so: 40 }, { go: 160, da: 100, so: 120 }, { go: 320, da: 220, so: 300 }], ms: [10 * M, 45 * M, 3 * 60 * M] },
   tramthue: { names: ['Cầu Tàu Gỗ', 'Bến Cảng Đá', 'Thương Cảng'], desc: 'Thu thuế thương thuyền đi ngang đảo: ×1, ×1,6, ×2,3 (không có chỉ thu ×0,25).', group: 'kinh tế', max: 1, needLeu: 2, cost: [{ go: 100, tre: 80 }, { go: 220, da: 160, sat: 40 }, { go: 400, da: 300, sat: 120, ngoc: 2 }], ms: [10 * M, 60 * M, 4 * 60 * M] },
   thapcanh: { names: ['Chòi Canh', 'Tháp Canh Gạch', 'Vọng Lâu Nỏ Thần'], desc: 'Giữ đảo: thêm một xạ thủ bắn từ trên tháp.', group: 'thành trì', max: 4, needLeu: 2, cost: [{ go: 60, tre: 60 }, { go: 120, da: 120 }, { go: 240, da: 260, sat: 80 }], ms: [5 * M, 30 * M, 2 * 60 * M] },
@@ -136,7 +136,7 @@ export const BUILDINGS: Record<BKey, BDef> = {
   nhathuoc: { names: ['Trạm Thuốc', 'Nhà Thuốc Nam', 'Y Viện'], desc: 'Bào chế thuốc men (3 thảo dược → 1 thuốc) chữa bệnh trên biển.', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, la: 60 }, { go: 140, la: 120, da: 60 }, { go: 300, da: 200, ngoc: 2 }], ms: [8 * M, 30 * M, 2 * 60 * M] },
   khungcui: { names: ['Khung Cửi', 'Xưởng Dệt', 'Phường Tơ Lụa'], desc: 'Dệt tơ thành vải buồm (2 tơ → 1 vải) để vá buồm, sửa thuyền.', group: 'chế biến', max: 1, needLeu: 2, cost: [{ go: 60, tre: 60 }, { go: 140, tre: 140 }, { go: 300, tre: 300, sat: 40 }], ms: [8 * M, 30 * M, 2 * 60 * M] },
   hocvien: { names: ['Trường Làng', 'Học Viện', 'Quốc Tử Giám'], desc: 'Nghiên cứu nông nghiệp, hàng hải, quân sự, y học. Cấp học viện là cấp nghiên cứu cao nhất.', group: 'học thuật', max: 1, needLeu: 2, cost: [{ go: 100, da: 80, tien: 200 }, { go: 240, da: 200, tien: 800 }, { go: 500, da: 400, ngoc: 3, tien: 2500 }], ms: [15 * M, 90 * M, 5 * 60 * M] },
-  benthuyen: { names: ['Bến Thuyền', 'Xưởng Đóng Tàu', 'Thủy Xưởng'], desc: 'Sửa thân thuyền, vá buồm. Cấp càng cao thuyền càng bền.', group: 'học thuật', max: 1, needLeu: 2, cost: [{ go: 120, tre: 80 }, { go: 260, tre: 160, sat: 40 }, { go: 520, da: 200, sat: 120, vai: 20 }], ms: [10 * M, 60 * M, 3 * 60 * M] },
+  benthuyen: { names: ['Bến Thuyền', 'Xưởng Đóng Tàu', 'Thủy Xưởng'], desc: 'Đóng, sửa thuyền chiến. Có 6 chỗ neo, lên cấp 9 rồi 12 chỗ.', group: 'học thuật', max: 1, needLeu: 2, cost: [{ go: 120, tre: 80 }, { go: 260, tre: 160, sat: 40 }, { go: 520, da: 200, sat: 120, vai: 20 }], ms: [10 * M, 60 * M, 3 * 60 * M] },
   den: { names: ['Miếu Thổ Thần', 'Đền Sơn Tinh', 'Đền Hùng Thu Nhỏ'], desc: 'Linh vật đói chậm hơn 15% mỗi cấp; đánh Thủy Tinh +5% công mỗi cấp.', group: 'nhà cửa', max: 1, needLeu: 3, cost: [{ go: 100, da: 100, so: 60 }, { go: 200, da: 200, so: 200 }, { go: 400, da: 400, so: 500, ngoc: 4 }], ms: [20 * M, 2 * 60 * M, 6 * 60 * M] },
 };
 
@@ -147,14 +147,51 @@ export interface Dinh {
   y: number;
   /** cấp đã xong (0 = đang xây lần đầu) */
   lv: number;
-  /** cây đang trồng (ruộng, vườn, nương dâu) */
+  /** (dữ liệu cũ) cây đang trồng cả ruộng — nay chia thành từng ô trong `plots` */
   crop?: { k: CropKey; at: number };
+  /** ruộng, vườn, nương: cây trồng ở từng ô bên trong (null = ô trống) */
+  plots?: ({ k: CropKey; at: number } | null)[];
+  /** chuồng, ao: số con giống đang nuôi · xưởng chế biến: số thợ đang làm */
+  n?: number;
   /** lần thu gần nhất (chuồng, ao, xưởng chế biến) — giờ thật */
   last?: number;
   /** đang xây lên cấp này, xong lúc doneAt (giờ trong game) */
   to?: number;
   doneAt?: number;
 }
+
+// ======================= Ô BÊN TRONG CÔNG TRÌNH =======================
+/** Mỗi công trình bên trong có ít nhất 6 ô làm việc; lên cấp thì thêm ô. */
+export const SLOTS = [0, 6, 9, 12];
+export const slotsOf = (lv: number) => SLOTS[Math.max(0, Math.min(3, lv))];
+export type SlotKind = 'plot' | 'animal' | 'worker' | 'ho' | 'berth' | 'kho' | 'show';
+/** Ô bên trong mỗi loại công trình là gì. */
+export const SLOT_INFO: Record<BKey, { kind: SlotKind; unit: string; desc: string }> = {
+  ruong: { kind: 'plot', unit: 'thửa ruộng', desc: 'Mỗi thửa cấy lúa riêng, chín thì gặt riêng.' },
+  vuon: { kind: 'plot', unit: 'luống', desc: 'Mỗi luống trồng rau muống hoặc thảo dược.' },
+  nuongdau: { kind: 'plot', unit: 'gốc dâu', desc: 'Mỗi gốc dâu nuôi một nong tằm ra tơ.' },
+  chuong: { kind: 'animal', unit: 'ô chuồng', desc: 'Mỗi ô nuôi một con, con nào cũng đẻ trứng, cho thịt và ăn thóc, rau.' },
+  aoca: { kind: 'animal', unit: 'ô ao', desc: 'Mỗi ô thả một lứa cá giống, không cần cho ăn.' },
+  coixay: { kind: 'worker', unit: 'cối', desc: 'Mỗi cối một thợ xay, càng nhiều thợ xay càng nhanh.' },
+  bep: { kind: 'worker', unit: 'bếp lò', desc: 'Mỗi bếp một đầu bếp nấu lương khô.' },
+  nhathuoc: { kind: 'worker', unit: 'bàn thuốc', desc: 'Mỗi bàn một thầy thuốc bào chế.' },
+  khungcui: { kind: 'worker', unit: 'khung dệt', desc: 'Mỗi khung một thợ dệt vải buồm.' },
+  nhadan: { kind: 'ho', unit: 'gian nhà', desc: 'Mỗi gian một hộ dân, mỗi hộ nộp 1 đồng mỗi giờ.' },
+  khothoc: { kind: 'kho', unit: 'ô kho', desc: 'Mỗi ô kho thêm 5% sức chứa cho kho đảo.' },
+  benthuyen: { kind: 'berth', unit: 'chỗ neo', desc: 'Ghe chiến chiếm 2 chỗ, thuyền buồm 3, chiến hạm 4.' },
+  cho: { kind: 'show', unit: 'sạp hàng', desc: 'Mỗi sạp một nhà buôn bày hàng.' },
+  tramthue: { kind: 'show', unit: 'chỗ neo thương thuyền', desc: 'Thương thuyền đi ngang thì ghé neo nộp thuế.' },
+  thapcanh: { kind: 'show', unit: 'chỗ xạ thủ', desc: 'Xạ thủ đứng canh trên tháp.' },
+  tuong: { kind: 'show', unit: 'lỗ châu mai', desc: 'Lỗ châu mai cho lính bắn ra khi bị đánh.' },
+  donbinh: { kind: 'show', unit: 'giường lính', desc: 'Lính đồn ăn ngủ tại trại, sẵn sàng giữ đảo.' },
+  xuongren: { kind: 'show', unit: 'lò rèn', desc: 'Mỗi lò một thợ rèn sửa trang bị.' },
+  hocvien: { kind: 'show', unit: 'chỗ ngồi', desc: 'Học trò ngồi học, nghiên cứu các môn.' },
+  den: { kind: 'show', unit: 'bát hương', desc: 'Bát hương thờ thần, giữ linh vật no lâu.' },
+};
+/** Thuyền chiếm bao nhiêu chỗ neo ở bến. */
+export const SHIP_BERTH: Record<string, number> = { ghe: 2, buom: 3, chien: 4 };
+/** Tổng số ô (hộ dân, ô kho...) của mọi công trình loại k. */
+export const slotSum = (d: Dinh[], k: BKey) => d.filter((x) => x.k === k).reduce((t, x) => t + slotsOf(x.lv), 0);
 
 /** Cấp thành trì theo tổng cấp tường, tháp, đồn. */
 export const FORT_NAMES = ['Đảo Trống', 'Xóm Đảo', 'Làng Lũy', 'Đồn Lũy', 'Thành Trì', 'Kinh Thành'];
@@ -213,29 +250,49 @@ export interface Route {
   value: number;
 }
 
-/** Tuyến buôn của một khung 6 giờ: mỗi thương hội NPC chạy 3 tuyến, mỗi tuyến ghé 3–5 điểm khác nhau. */
-export const ROUTES_PER_MERCHANT = 3;
-export function routesAt(period: number): Route[] {
+/**
+ * Tuyến buôn đổi mỗi khung 6 giờ. Hải đồ rất rộng nên chia thành các vùng buôn 96x96 ô,
+ * mỗi vùng có vài tuyến của các thương hội NPC chạy qua 3–5 điểm trong vùng (tránh Mắt Bão).
+ */
+export const TRADE_REGION = 96;
+export const ROUTES_PER_REGION = 8;
+const NTR = Math.ceil(SEA_COLS / TRADE_REGION);
+/** Giữ tên cũ: số tuyến mỗi thương hội trong một vùng (gần đúng). */
+export const ROUTES_PER_MERCHANT = Math.ceil(ROUTES_PER_REGION / 5);
+export function routesIn(rx: number, ry: number, period: number): Route[] {
+  if (rx < 0 || ry < 0 || rx >= NTR || ry >= NTR) return [];
   const out: Route[] = [];
-  MERCHANTS.forEach((m, i) => {
-    for (let k = 0; k < ROUTES_PER_MERCHANT; k++) {
-      const r = mulberry32(hashStr(`route:${m.id}:${k}:${period}`));
-      const n = 3 + Math.floor(r() * 3);
-      const pts: { x: number; y: number }[] = [];
-      // vào từ một mép hải đồ, đi ngang qua giữa, ra mép khác (tránh vùng bão ở tâm)
-      const side = (i + k + period) % 4;
-      const edge = (sd: number) =>
-        sd === 0 ? { x: 1, y: 2 + Math.floor(r() * (SEA_ROWS - 4)) } : sd === 1 ? { x: SEA_COLS - 2, y: 2 + Math.floor(r() * (SEA_ROWS - 4)) } : sd === 2 ? { x: 2 + Math.floor(r() * (SEA_COLS - 4)), y: 1 } : { x: 2 + Math.floor(r() * (SEA_COLS - 4)), y: SEA_ROWS - 2 };
-      pts.push(edge(side));
-      for (let q = 0; q < n - 2; q++) {
-        let p = { x: 4 + Math.floor(r() * (SEA_COLS - 8)), y: 3 + Math.floor(r() * (SEA_ROWS - 6)) };
-        if (Math.abs(p.x - SEA_COLS / 2) < 10 && Math.abs(p.y - SEA_ROWS / 2) < 8) p = { x: p.x < SEA_COLS / 2 ? p.x - 12 : p.x + 12, y: p.y };
-        pts.push(p);
-      }
-      pts.push(edge((side + 1 + Math.floor(r() * 2)) % 4));
-      out.push({ m, pts, value: 18 + Math.floor(r() * 22), k });
+  const x0 = rx * TRADE_REGION, y0 = ry * TRADE_REGION;
+  const W = Math.min(TRADE_REGION, SEA_COLS - x0), H = Math.min(TRADE_REGION, SEA_ROWS - y0);
+  const cx = SEA_COLS / 2, cy = SEA_ROWS / 2;
+  for (let k = 0; k < ROUTES_PER_REGION; k++) {
+    const r = mulberry32(hashStr(`route:${rx}:${ry}:${k}:${period}`));
+    const m = MERCHANTS[Math.floor(r() * MERCHANTS.length)];
+    const n = 3 + Math.floor(r() * 3);
+    const pts: { x: number; y: number }[] = [];
+    for (let q = 0; q < n; q++) {
+      let p = { x: x0 + 2 + Math.floor(r() * (W - 4)), y: y0 + 2 + Math.floor(r() * (H - 4)) };
+      // không đi vào vùng bão sát Mắt Bão
+      if (Math.abs(p.x - cx) < 16 && Math.abs(p.y - cy) < 16) p = { x: p.x < cx ? p.x - 18 : p.x + 18, y: p.y };
+      pts.push(p);
     }
-  });
+    out.push({ m, pts, value: 18 + Math.floor(r() * 22), k });
+  }
+  return out;
+}
+/** Tuyến buôn trong một khung ô (để vẽ trên hải đồ). */
+export function routesView(c0: number, r0: number, c1: number, r1: number, period: number): Route[] {
+  const out: Route[] = [];
+  for (let ry = Math.floor(r0 / TRADE_REGION); ry <= Math.floor(r1 / TRADE_REGION); ry++)
+    for (let rx = Math.floor(c0 / TRADE_REGION); rx <= Math.floor(c1 / TRADE_REGION); rx++) out.push(...routesIn(rx, ry, period));
+  return out;
+}
+/** Tuyến buôn quanh một ô (vùng của ô và 8 vùng kề). */
+export function routesAt(period: number, cell?: { x: number; y: number }): Route[] {
+  const c = cell ?? { x: SEA_COLS / 2, y: SEA_ROWS / 2 };
+  const rx = Math.floor(c.x / TRADE_REGION), ry = Math.floor(c.y / TRADE_REGION);
+  const out: Route[] = [];
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) out.push(...routesIn(rx + dx, ry + dy, period));
   return out;
 }
 
@@ -249,7 +306,7 @@ function distSeg(p: { x: number; y: number }, a: { x: number; y: number }, b: { 
 /** Đảo cách tuyến tối đa 2,5 ô thì thương thuyền ghé nộp thuế. */
 export const TOLL_RANGE = 2.5;
 export function routesNear(cell: { x: number; y: number }, period: number): Route[] {
-  return routesAt(period).filter((rt) => rt.pts.some((p, i) => i > 0 && distSeg(cell, rt.pts[i - 1], p) <= TOLL_RANGE));
+  return routesAt(period, cell).filter((rt) => rt.pts.some((p, i) => i > 0 && distSeg(cell, rt.pts[i - 1], p) <= TOLL_RANGE));
 }
 
 export const PORT_MULT = [0.25, 1, 1.6, 2.3];

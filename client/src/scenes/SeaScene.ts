@@ -2,12 +2,12 @@
 // Địa hình vẽ theo khối 16x16 ô (chỉ vẽ khối đang nhìn thấy), đảo và thuyền là hình riêng.
 import Phaser from 'phaser';
 import { WILDS } from '../../../shared/data';
-import { homeCell, isSeen, seenOf, wildCell, type IslandPub } from '../../../shared/logic';
-import { merchantPos, routePeriod, routesAt, type Route } from '../../../shared/economy';
+import { homeCell, isSeen, seenOf, wildCell, type IslandPub, type SeenMap } from '../../../shared/logic';
+import { merchantPos, routePeriod, routesView, type Route } from '../../../shared/economy';
 import { islandCell, worldFor } from '../../../shared/map';
 import { BOSS_CELL } from '../../../shared/boss';
 import { hexCenterPx, hexNeighbors, pxToHex } from '../../../shared/hex';
-import { CENTER, fleetPos, terrainAt, WORLD_H, WORLD_W, ZONE_NAMES, zoneLevel, type FleetView, type Terrain } from '../../../shared/world';
+import { CENTER, fleetPos, isleById, terrainAt, WORLD_H, WORLD_W, ZONE_NAMES, zoneLevel, type FleetView, type Terrain } from '../../../shared/world';
 import type { Store } from '../store';
 import type { UI } from '../ui';
 import { HD, hallTex, merchantTex, seaBoatTex, seaIslandTex, waterTex } from '../art/textures';
@@ -121,6 +121,7 @@ export class SeaScene extends Phaser.Scene {
   private ships: { rt: Route; img: Phaser.GameObjects.Image }[] = [];
   private fleets: { f: FleetView; img: Phaser.GameObjects.Image; label: Label }[] = [];
   private period = -1;
+  private tradeKey = '';
   private sig = '';
   private seenSig = '';
   private labels: Label[] = [];
@@ -139,8 +140,9 @@ export class SeaScene extends Phaser.Scene {
     this.ui = this.registry.get('ui');
     this.cameras.main.setRoundPixels(true);
     // nước nền ngoài mép hải đồ
+    // hải đồ rất rộng: nước nền chỉ phủ quanh khung nhìn, dời theo camera
     const wt = waterTex(this, 64, 64, 0);
-    this.water = this.add.tileSprite(-400, -400, W_PX + 800, H_PX + 800, wt).setOrigin(0).setDepth(-20).setTileScale(1 / HD);
+    this.water = this.add.tileSprite(0, 0, 64, 64, wt).setOrigin(0).setDepth(-20).setTileScale(1 / HD);
     this.objs = this.add.container(0, 0).setDepth(10);
     this.terr = this.add.graphics().setDepth(5);
     this.trade = this.add.graphics().setDepth(6);
@@ -267,16 +269,32 @@ export class SeaScene extends Phaser.Scene {
   }
 
   // ---------- khối địa hình ----------
-  private chunkSig(seen: Uint8Array, cx: number, cy: number) {
+  private chunkSig(seen: SeenMap, cx: number, cy: number) {
+    const s = this.store.s;
     let h = 2166136261;
+    let any = false;
     for (let r = cy * CH; r < Math.min(WORLD_H, (cy + 1) * CH); r++)
       for (let c = cx * CH; c < Math.min(WORLD_W, (cx + 1) * CH); c++) {
-        const i = r * WORLD_W + c;
-        h = Math.imul(h ^ (seen[i >> 3] & (1 << (i & 7)) ? 1 : 0), 16777619);
+        const k = isSeen(s, c, r, seen);
+        any ||= k;
+        h = Math.imul(h ^ (k ? 1 : 0), 16777619);
       }
-    return String(h >>> 0);
+    return any ? String(h >>> 0) : 'fog';
   }
-  private renderChunk(cx: number, cy: number, seen: Uint8Array): HTMLCanvasElement {
+  /** Khối toàn sương mù dùng chung một hình (đỡ tốn bộ nhớ trên hải đồ lớn). */
+  private fogChunkKey() {
+    const key = 'seachunk-fog';
+    if (!this.textures.exists(key)) {
+      const cv = document.createElement('canvas');
+      cv.width = CW_PX;
+      cv.height = CH_PX;
+      const x = cv.getContext('2d')!;
+      for (let r = 0; r < CH; r++) for (let c = 0; c < CH; c++) x.drawImage(hexTile('fog', Math.floor(nz(c, r, 9) * 6)), c * 32 + (r & 1) * 16, r * 24);
+      this.textures.addCanvas(key, cv);
+    }
+    return key;
+  }
+  private renderChunk(cx: number, cy: number, seen: SeenMap): HTMLCanvasElement {
     const cv = document.createElement('canvas');
     cv.width = CW_PX;
     cv.height = CH_PX;
@@ -284,10 +302,9 @@ export class SeaScene extends Phaser.Scene {
     const khu = this.store.s.khu || '01';
     for (let r = cy * CH; r < Math.min(WORLD_H, (cy + 1) * CH); r++)
       for (let c = cx * CH; c < Math.min(WORLD_W, (cx + 1) * CH); c++) {
-        const i = r * WORLD_W + c;
         const ox = (c - cx * CH) * 32 + (r & 1) * 16, oy = (r - cy * CH) * 24;
         const v = Math.floor(nz(c, r, 9) * 6);
-        const known = (seen[i >> 3] & (1 << (i & 7))) !== 0;
+        const known = isSeen(this.store.s, c, r, seen);
         x.drawImage(hexTile(known ? terrainAt(khu, c, r) : 'fog', v), ox, oy);
       }
     return cv;
@@ -304,11 +321,12 @@ export class SeaScene extends Phaser.Scene {
         const sig = this.chunkSig(seen, cx, cy);
         const cur = this.chunks.get(id);
         if (cur && cur.sig === sig && !force) continue;
-        const key = `seachunk-${id}-${++this.ver}`;
-        this.textures.addCanvas(key, this.renderChunk(cx, cy, seen));
+        const fog = sig === 'fog';
+        const key = fog ? this.fogChunkKey() : `seachunk-${id}-${++this.ver}`;
+        if (!fog) this.textures.addCanvas(key, this.renderChunk(cx, cy, seen));
         if (cur) {
           cur.img.setTexture(key);
-          this.textures.remove(cur.key);
+          if (cur.key !== 'seachunk-fog') this.textures.remove(cur.key);
           cur.key = key;
           cur.sig = sig;
         } else {
@@ -316,7 +334,32 @@ export class SeaScene extends Phaser.Scene {
           this.chunks.set(id, { img, sig, key });
         }
       }
+    // bỏ khối đã ra xa khung nhìn (hải đồ hơn 1 triệu ô, không giữ hết được)
+    for (const [id, ch] of this.chunks) {
+      const [cx, cy] = id.split(',').map(Number);
+      if (cx >= x0 - 2 && cx <= x1 + 2 && cy >= y0 - 2 && cy <= y1 + 2) continue;
+      ch.img.destroy();
+      if (ch.key !== 'seachunk-fog') this.textures.remove(ch.key);
+      this.chunks.delete(id);
+    }
+    // nước nền theo camera
+    this.water.setPosition(v.x - 64, v.y - 64).setSize(v.width + 128, v.height + 128);
+    this.water.setTilePosition((v.x - 64) * HD, (v.y - 64) * HD);
   }
+  /** Khung ô quanh camera để vẽ đảo, hang, nhãn (hải đồ quá lớn để vẽ hết). */
+  private viewRect() {
+    const v = this.cameras.main.worldView;
+    const m = 18;
+    return {
+      c0: Math.max(0, Math.floor(v.x / 32) - m), c1: Math.min(WORLD_W - 1, Math.ceil(v.right / 32) + m),
+      r0: Math.max(0, Math.floor(v.y / 24) - m), r1: Math.min(WORLD_H - 1, Math.ceil(v.bottom / 24) + m),
+    };
+  }
+  private viewKey() {
+    const v = this.cameras.main.worldView;
+    return `${Math.floor(v.centerX / 32 / 12)},${Math.floor(v.centerY / 24 / 12)},${Math.round(this.cameras.main.zoom)}`;
+  }
+  private lastView = '';
 
   // ---------- nhãn chữ (DOM) ----------
   private label(x: number, y: number, text: string, color: string, sub?: string): Label {
@@ -358,7 +401,9 @@ export class SeaScene extends Phaser.Scene {
     const net = this.store.net;
     const list = net.islands();
     const owners = net.owners();
-    const sig = JSON.stringify([s.seen.length, s.seen.slice(0, 64), list.map((p) => [p.id, p.power, p.land, p.tiers?.leu, p.home?.x]), s.isles.map((o) => o.id), Object.values(s.wilds).map((w) => w.readyAt > s.gt), Object.keys(owners).length, s.home, s.voyage?.id]);
+    const view = this.viewKey();
+    this.lastView = view;
+    const sig = JSON.stringify([view, s.seen.length, s.seen.slice(-64), list.map((p) => [p.id, p.power, p.land, p.tiers?.leu, p.home?.x]), s.isles.map((o) => o.id), Object.values(s.wilds).map((w) => w.readyAt > s.gt), Object.keys(owners).length, s.home, s.voyage?.id]);
     if (sig === this.sig && !force) {
       this.syncChunks();
       return;
@@ -371,6 +416,8 @@ export class SeaScene extends Phaser.Scene {
     this.objs.removeAll(true);
     this.labels = [];
     const w = worldFor(s.khu);
+    const vr = this.viewRect();
+    const inView = (c: number, r: number) => c >= vr.c0 && c <= vr.c1 && r >= vr.r0 && r <= vr.r1;
     const online = new Set(net.online().map((o) => o.id));
     const myGuild = s.guild?.tag ?? '';
     const allyT = new Set([myGuild, ...(s.guild?.allyTags ?? [])].filter(Boolean));
@@ -381,13 +428,13 @@ export class SeaScene extends Phaser.Scene {
       if (k) for (const n of hexNeighbors({ c, r })) if (!terr.has(`${n.c},${n.r}`)) terr.set(`${n.c},${n.r}`, col);
     };
     const MINE = 0x4fd06a, ALLY = 0x5aa8ff, OTHER = 0xf0554a, BOT = 0xffc36a;
-    for (const p of list) if (p.home && seenAt(p.home.x, p.home.y)) mark(p.home.x, p.home.y, p.bot ? BOT : allyT.has(p.guild ?? '') ? ALLY : OTHER);
+    for (const p of list) if (p.home && inView(p.home.x, p.home.y) && seenAt(p.home.x, p.home.y)) mark(p.home.x, p.home.y, p.bot ? BOT : allyT.has(p.guild ?? '') ? ALLY : OTHER);
     for (const [isle, o] of Object.entries(owners)) {
-      const i = w.isles.find((x) => x.id === isle);
-      if (i && seenAt(i.c, i.r)) mark(i.c, i.r, o.p === s.id ? MINE : allyT.has(o.g) ? ALLY : OTHER);
+      const i = isleById(w, isle);
+      if (i && inView(i.c, i.r) && seenAt(i.c, i.r)) mark(i.c, i.r, o.p === s.id ? MINE : allyT.has(o.g) ? ALLY : OTHER);
     }
     for (const o of s.isles) {
-      const i = w.isles.find((x) => x.id === o.id);
+      const i = isleById(w, o.id);
       if (i) mark(i.c, i.r, MINE);
     }
     const me = this.home();
@@ -401,13 +448,13 @@ export class SeaScene extends Phaser.Scene {
     // đảo người chơi khác, đảo máy
     for (const p of list) {
       const c = p.home ?? islandCell(p.id, s.khu);
-      if (!seenAt(c.x, c.y)) continue;
+      if (!inView(c.x, c.y) || !seenAt(c.x, c.y)) continue;
       const q = hexCenterPx({ c: c.x, r: c.y });
       this.island(p.id, q.x, q.y, p.bot ? 'bot' : 'player', p.land, p.tiers?.leu ?? 1, online.has(p.id));
       this.label(q.x, q.y + 14, p.name, p.bot ? '#ffd29a' : allyT.has(p.guild ?? '') ? '#bfe0ff' : '#ffb3a8', `${p.power} sức mạnh${p.guild ? ` · [${p.guild}]` : ''}`);
     }
     // đảo tự nhiên
-    for (const i of w.isles) {
+    for (const i of w.islesIn(vr.c0, vr.r0, vr.c1, vr.r1)) {
       if (!seenAt(i.c, i.r)) continue;
       const q = hexCenterPx({ c: i.c, r: i.r });
       const img = this.add.image(q.x, q.y + 2, seaIslandTex(this, i.id, 14 + i.lv * 5, 'wild', 1)).setScale(0.7 / HD);
@@ -424,9 +471,9 @@ export class SeaScene extends Phaser.Scene {
       this.label(q.x, q.y + 12, name, i.kind === 'bian' ? '#d8b4ff' : '#e8f4ff', `cấp ${i.lv}${own ? ` · ${mine ? 'của bạn' : own.n}` : ''}`);
     }
     // hang quái trên hải đồ + bãi luyện quân riêng quanh nhà
-    const lairs = [...w.lairs.map((l) => ({ w: l, c: { x: l.sx, y: l.sy } })), ...WILDS.map((l) => ({ w: l, c: wildCell(s, l.id) }))];
+    const lairs = [...w.lairsIn(vr.c0, vr.r0, vr.c1, vr.r1).map((l) => ({ w: l, c: { x: l.sx!, y: l.sy! } })), ...WILDS.map((l) => ({ w: l, c: wildCell(s, l.id) }))];
     for (const { w: l, c } of lairs) {
-      if (!seenAt(c.x, c.y)) continue;
+      if (!inView(c.x, c.y) || !seenAt(c.x, c.y)) continue;
       const q = hexCenterPx({ c: c.x, r: c.y });
       const st = s.wilds[l.id];
       const ready = !st || s.gt >= st.readyAt;
@@ -440,7 +487,7 @@ export class SeaScene extends Phaser.Scene {
       this.label(q.x, q.y + 8, l.name, ready ? '#ff9b8a' : '#9aa0a8', ready ? `cấp ${l.level}` : 'đã dọn');
     }
     // Mắt Bão
-    {
+    if (inView(CENTER.c, CENTER.r)) {
       const q = hexCenterPx({ c: CENTER.c, r: CENTER.r });
       const img = this.add.image(q.x, q.y + 8, 'ch-thuytinh').setOrigin(0.5, 1).setScale(1.2 / HD);
       const ring = this.add.circle(q.x, q.y, 30).setStrokeStyle(2, 0x8fb8ff, 0.5);
@@ -538,13 +585,16 @@ export class SeaScene extends Phaser.Scene {
   /** Tuyến buôn của thương hội NPC (đổi mỗi 6 giờ) và thương thuyền đang chạy. */
   private drawTrade(force = false) {
     const period = routePeriod(this.store.now());
-    if (period === this.period && !force) return;
+    const vk = `${period}|${this.viewKey()}`;
+    if (vk === this.tradeKey && !force) return;
+    this.tradeKey = vk;
     this.period = period;
+    const vr = this.viewRect();
     const g = this.trade;
     g.clear();
     for (const sh of this.ships) sh.img.destroy();
     this.ships = [];
-    for (const rt of routesAt(period)) {
+    for (const rt of routesView(vr.c0, vr.r0, vr.c1, vr.r1, period)) {
       const col = Phaser.Display.Color.HexStringToColor(rt.m.color).color;
       for (let i = 1; i < rt.pts.length; i++) {
         const a = this.P(rt.pts[i - 1].x, rt.pts[i - 1].y);
@@ -594,6 +644,8 @@ export class SeaScene extends Phaser.Scene {
     if (time - this.lastLabelBuild > 400) {
       this.lastLabelBuild = time;
       this.syncChunks();
+      // camera đi sang vùng khác: vẽ lại đảo, hang, nhãn quanh chỗ mới
+      if (this.viewKey() !== this.lastView) this.draw(true);
     }
     this.drawTrade();
     this.shipTick();

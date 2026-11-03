@@ -16,6 +16,6 @@ export function islandCell(id: string, khu = '01'): Cell {
   const w = worldFor(khu);
   const b = w.bots.get(id);
   if (b) return { x: b.c, y: b.r };
-  const h = w.spawns[hashStr(id) % w.spawns.length];
+  const h = w.spawn(hashStr(id));
   return { x: h.c, y: h.r };
 }

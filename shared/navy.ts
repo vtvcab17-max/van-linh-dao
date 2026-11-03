@@ -30,7 +30,10 @@ export const WEAPONS: Record<ShipWeapon, { name: string; desc: string; cost: Par
 export const SHIP_KINDS = Object.keys(SHIPS) as ShipKind[];
 export const WEAPON_KEYS = Object.keys(WEAPONS) as ShipWeapon[];
 /** Số thuyền chiến tối đa theo cấp Xưởng Đóng Tàu. */
-export const fleetCap = (benthuyen: number) => benthuyen;
+/** Số chỗ neo ở bến theo cấp Xưởng Đóng Tàu (6 / 9 / 12); mỗi loại thuyền chiếm vài chỗ. */
+export const fleetCap = (benthuyen: number) => [0, 6, 9, 12][Math.max(0, Math.min(3, benthuyen))];
+export const SHIP_SIZE: Record<string, number> = { ghe: 2, buom: 3, chien: 4 };
+export const berthsUsed = (fleet: { k: string }[]) => fleet.reduce((t, x) => t + (SHIP_SIZE[x.k] ?? 2), 0);
 /** Mỗi trận thuyền chiến mòn 5%. */
 export const SHIP_WEAR = 5;
 

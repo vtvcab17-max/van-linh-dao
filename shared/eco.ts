@@ -152,10 +152,18 @@ export interface PenDef {
   out: Partial<Record<ResKey, number>>;
   feed: Partial<Record<ResKey, number>>;
 }
-export const PENS: Record<'chuong' | 'aoca', PenDef> = {
-  chuong: { name: 'Chuồng gà lợn', out: { trung: 6, thit: 3 }, feed: { thoc: 4, rau: 2 } },
-  aoca: { name: 'Ao cá', out: { ca: 7 }, feed: {} },
+/** Sản lượng và thức ăn mỗi giờ cho MỘT con giống (một ô trong chuồng/ao). */
+export const PENS: Record<'chuong' | 'aoca', PenDef & { buy: Partial<Record<ResKey, number>>; animal: string }> = {
+  chuong: { name: 'Chuồng gà lợn', out: { trung: 1.5, thit: 0.75 }, feed: { thoc: 1, rau: 0.5 }, buy: { tien: 12, thoc: 4 }, animal: 'gà giống' },
+  aoca: { name: 'Ao cá', out: { ca: 1.75 }, feed: {}, buy: { tien: 10 }, animal: 'lứa cá giống' },
 };
+/** Mỗi thửa ruộng/luống/gốc dâu cho 40% sản lượng cũ của cả ruộng, giống rẻ bằng một phần tư. */
+export const PLOT_YIELD = 0.4;
+export const plotSeed = (c: CropDef) => Object.fromEntries(Object.entries(c.seed).map(([k, v]) => [k, Math.ceil((v ?? 0) / 4)])) as Partial<Record<ResKey, number>>;
+/** Thuê một thợ cho xưởng chế biến. */
+export const HIRE_COST: Partial<Record<ResKey, number>> = { tien: 15 };
+/** Mỗi thợ làm được rate/3 mẻ mỗi giờ. */
+export const PER_WORKER = 1 / 3;
 /** Chuồng, ao, xưởng giữ tối đa 12 giờ sản phẩm. */
 export const STORE_H = 12;
 

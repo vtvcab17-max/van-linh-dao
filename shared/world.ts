@@ -8,15 +8,17 @@ import type { MonsterKey, ResKey, WildDef } from './data';
 export const WORLD_W = SEA_COLS;
 export const WORLD_H = SEA_ROWS;
 export const CENTER: Hex = { c: Math.floor(WORLD_W / 2), r: Math.floor(WORLD_H / 2) };
-/** Khoảng cách xa nhất từ tâm tới vành ngoài (dùng chia vùng). */
-const RMAX = 60;
+/** Khoảng cách từ Mắt Bão tới vành ngoài có người ở (chia 10 vùng). */
+export const RMAX = 470;
+/** Đổi phiên bản khi hải đồ đổi kích thước/cách sinh: dữ liệu toạ độ cũ phải dời chỗ. */
+export const WORLD_VERSION = 2;
 
 export const inWorld = (c: number, r: number) => c >= 0 && r >= 0 && c < WORLD_W && r < WORLD_H;
 
 /** Cấp vùng biển 1..10: vành ngoài cấp 1, sát Mắt Bão cấp 10. */
 export function zoneLevel(c: number, r: number): number {
   const d = hexDist({ c, r }, CENTER);
-  return Math.max(1, Math.min(10, 10 - Math.floor((d - 4) / ((RMAX - 4) / 9))));
+  return Math.max(1, Math.min(10, 10 - Math.floor((d - 8) / ((RMAX - 8) / 9))));
 }
 export const ZONE_NAMES = ['', 'Biển Lặng', 'Biển Lặng', 'Vịnh Gió', 'Vịnh Gió', 'Biển Sóng Bạc', 'Biển Sóng Bạc', 'Biển Sâu', 'Biển Sâu', 'Vùng Xoáy', 'Mắt Bão'];
 
@@ -75,154 +77,202 @@ const PRE = ['Hòn', 'Cù Lao', 'Đảo', 'Bãi', 'Gành', 'Cồn', 'Hòn'];
 const MID = ['Mây', 'Sấu', 'Rùa', 'Tre', 'Đá Đen', 'Trầm', 'Yến', 'Ngọc', 'Gió', 'Sóng', 'Cò', 'Vích', 'Ráng', 'Sao', 'Nghêu', 'Trúc', 'Khói', 'Ốc', 'Lửa', 'Mun', 'Sẻ', 'Chàm', 'Dừa', 'Bạc', 'Đồi Mồi', 'Hạc', 'Cá Voi', 'Mắt Rồng', 'Sư Tử', 'Trống', 'Chuông', 'Hương', 'Lau', 'Sậy', 'Mù U', 'Bàng', 'Phi Lao', 'Sò Huyết', 'Rạng Đông', 'Tịch Dương'];
 const BIAN = ['Hòn Ma', 'Đảo Không Tên', 'Hòn Câm', 'Đảo Sương', 'Hòn Mắt Quỷ', 'Đảo Trôi', 'Hòn Xương Cá', 'Đảo Bóng Đêm', 'Hòn Gương', 'Đảo Thần Ngủ'];
 
+export type WorldObj = { kind: 'isle'; v: Isle } | { kind: 'lair'; v: WildDef };
 export interface World {
   seed: string;
-  isles: Isle[];
-  lairs: WildDef[];
-  /** ô khởi đầu cho người chơi mới (vành ngoài, xa đảo tự nhiên) */
-  spawns: Hex[];
   /** đảo máy (bot): ô cố định */
   bots: Map<string, Hex>;
   boss: Hex;
-  /** ô có đảo/hang → đối tượng */
-  at: Map<string, { kind: 'isle'; v: Isle } | { kind: 'lair'; v: WildDef }>;
+  /** đảo hoặc hang quái ở đúng ô này */
+  at(c: number, r: number): WorldObj | undefined;
+  /** đảo tự nhiên trong một khung (cột c0..c1, hàng r0..r1) */
+  islesIn(c0: number, r0: number, c1: number, r1: number): Isle[];
+  /** hang quái trong một khung */
+  lairsIn(c0: number, r0: number, c1: number, r1: number): WildDef[];
+  /** chỗ khởi đầu thứ i (vành ngoài, biển thường, xa đảo/hang) */
+  spawn(i: number): Hex;
 }
-
-const cache = new Map<string, World>();
 
 /** Địa hình của một ô (tính trực tiếp, không cần lưu). */
 export function terrainAt(seed: string, c: number, r: number): Terrain {
   const s = hashStr(`terrain:${seed}`) % 100000;
   const d = hexDist({ c, r }, CENTER);
-  if (d <= 5 && d > 0) return 'storm';
+  if (d <= 8 && d > 0) return 'storm';
   const reef = smooth(c, r, s + 11, 3.2);
-  if (reef > 0.86 && d > 7) return 'reef';
+  if (reef > 0.86 && d > 10) return 'reef';
   const deep = smooth(c, r, s + 3, 9);
   if (deep > 0.68) return 'deep';
   if (smooth(c, r, s + 7, 5) > 0.78) return 'shoal';
   return 'sea';
 }
 
-/** Sinh cả thế giới của một Hải Khu (có bộ nhớ đệm). */
+// ---------------- sinh từng khối 5x5 khi cần (hải đồ hơn 1 triệu ô, không sinh trước cả) ----------------
+const BLK = 5;
+interface Block {
+  isle?: Isle;
+  lair?: WildDef;
+}
+const blkCache = new Map<string, Block>();
+function block(seed: string, gx: number, gy: number): Block {
+  const key = `${seed}|${gx}|${gy}`;
+  const hit = blkCache.get(key);
+  if (hit) return hit;
+  const b: Block = {};
+  const r: Rng = mulberry32(hashStr(`blk:${seed}:${gx}:${gy}`));
+  // rút đủ số ngẫu nhiên theo thứ tự cố định để khối nào cũng ra giống nhau ở client và server
+  const want = { isle: r() < 0.6, lair: r() < 0.5 };
+  const pos = { isle: [r(), r()], lair: [r(), r()] };
+  const pick = [r(), r(), r(), r(), r(), r()];
+  for (const what of ['isle', 'lair'] as const) {
+    if (!want[what]) continue;
+    const c = gx * BLK + 1 + Math.floor(pos[what][0] * (BLK - 2));
+    const rr = gy * BLK + 1 + Math.floor(pos[what][1] * (BLK - 2));
+    if (!inWorld(c, rr)) continue;
+    const t = terrainAt(seed, c, rr);
+    if (t === 'storm' || t === 'reef') continue;
+    if (hexDist({ c, r: rr }, CENTER) <= 10) continue;
+    if (what === 'lair' && b.isle && hexDist({ c, r: rr }, b.isle) <= 1) continue;
+    const lv = zoneLevel(c, rr);
+    if (what === 'isle') {
+      const bianP = 0.06 + lv * 0.03;
+      const kinds: IsleKind[] = ['go', 'da', 'sat', 'ngoc', 'ruong'];
+      const kind: IsleKind = pick[0] < bianP ? 'bian' : kinds[Math.floor(pick[1] * kinds.length)];
+      const K = ISLE_KIND[kind];
+      const glv = Math.min(30, lv * 2 + (kind === 'bian' ? 3 : 0));
+      const guard: [MonsterKey, number][] = K.guard.map((m) => [m, glv]);
+      if (lv >= 5) guard.push([K.guard[0], glv]);
+      if (kind === 'bian') guard.push(['baytheo', glv + 2]);
+      const name = kind === 'bian' ? BIAN[Math.floor(pick[2] * BIAN.length)] : `${PRE[Math.floor(pick[2] * PRE.length)]} ${MID[Math.floor(pick[3] * MID.length)]}`;
+      const mult = lv * (kind === 'bian' ? 2 : 1);
+      const yields: Partial<Record<ResKey, number>> = {};
+      for (const [k, v] of Object.entries(K.yields)) yields[k as ResKey] = Math.round((v ?? 0) * mult * 100) / 100;
+      b.isle = { id: `i${c}_${rr}`, c, r: rr, kind, lv, name, needLvl: Math.max(1, (lv - 1) * 3 + (kind === 'bian' ? 2 : 0)), guard, yields };
+    } else {
+      const kinds = Object.keys(LAIR_KIND) as LairKind[];
+      const kind = kinds[Math.floor(pick[4] * kinds.length)];
+      const L = LAIR_KIND[kind];
+      const elv = Math.min(30, lv * 2);
+      const loot: Partial<Record<ResKey, number>> = {};
+      for (const [k, v] of Object.entries(L.loot)) loot[k as ResKey] = Math.round((v ?? 0) * (1 + lv * 0.8));
+      if (lv >= 6) loot.ngoc = 1;
+      b.lair = {
+        id: `l${c}_${rr}`,
+        name: `${L.name} cấp ${lv}`,
+        level: lv,
+        enemies: L.enemies.map((m) => [m, elv] as [MonsterKey, number]),
+        loot,
+        chest: Math.min(5, Math.floor(lv / 2)),
+        chestChance: 0.25 + lv * 0.02,
+        respawnMs: (8 + lv * 3) * 60_000,
+        sx: c,
+        sy: rr,
+      };
+    }
+  }
+  if (blkCache.size > 80_000) blkCache.clear();
+  blkCache.set(key, b);
+  return b;
+}
+
+export function objAt(seed: string, c: number, r: number): WorldObj | undefined {
+  if (!inWorld(c, r)) return undefined;
+  const b = block(seed, Math.floor(c / BLK), Math.floor(r / BLK));
+  if (b.isle && b.isle.c === c && b.isle.r === r) return { kind: 'isle', v: b.isle };
+  if (b.lair && b.lair.sx === c && b.lair.sy === r) return { kind: 'lair', v: b.lair };
+  return undefined;
+}
+function eachBlock(c0: number, r0: number, c1: number, r1: number, f: (gx: number, gy: number) => void) {
+  const gx0 = Math.max(0, Math.floor(Math.min(c0, c1) / BLK)), gx1 = Math.min(Math.ceil(WORLD_W / BLK) - 1, Math.floor(Math.max(c0, c1) / BLK));
+  const gy0 = Math.max(0, Math.floor(Math.min(r0, r1) / BLK)), gy1 = Math.min(Math.ceil(WORLD_H / BLK) - 1, Math.floor(Math.max(r0, r1) / BLK));
+  for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) f(gx, gy);
+}
+/** Có đảo/hang nào trong bán kính k quanh ô không. */
+function nearObj(seed: string, c: number, r: number, k: number) {
+  let hit = false;
+  eachBlock(c - k, r - k, c + k, r + k, (gx, gy) => {
+    const b = block(seed, gx, gy);
+    if (b.isle && hexDist(b.isle, { c, r }) <= k) hit = true;
+    if (b.lair && hexDist({ c: b.lair.sx!, r: b.lair.sy! }, { c, r }) <= k) hit = true;
+  });
+  return hit;
+}
+
+/** Chỗ khởi đầu thứ i: rải ngẫu nhiên trên vành ngoài (vùng cấp 1–2), biển thường, cách đảo/hang ít nhất 2 ô. */
+function spawnCand(seed: string, i: number): Hex {
+  const r = mulberry32(hashStr(`spawn:${seed}:${i}`));
+  for (let t = 0; t < 16; t++) {
+    const a = r() * Math.PI * 2;
+    const rad = RMAX + 30 - r() * 80;
+    const c = Math.round(CENTER.c + Math.cos(a) * rad), rr = Math.round(CENTER.r + Math.sin(a) * rad);
+    if (c < 4 || rr < 4 || c > WORLD_W - 5 || rr > WORLD_H - 5 || zoneLevel(c, rr) > 2) continue;
+    if (terrainAt(seed, c, rr) !== 'sea' || nearObj(seed, c, rr, 2)) continue;
+    return { c, r: rr };
+  }
+  return { c: CENTER.c + RMAX - 40, r: CENTER.r + (i % 50) };
+}
+
+const cache = new Map<string, World>();
+/** Thế giới của một Hải Khu: sinh dần theo khối khi cần (có bộ nhớ đệm). */
 export function worldOf(seed: string, botIds: string[] = []): World {
   const key = `${seed}|${botIds.join(',')}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const r: Rng = mulberry32(hashStr(`world:${seed}`));
-  const at: World['at'] = new Map();
-  const isles: Isle[] = [];
-  const lairs: WildDef[] = [];
-  const used = new Set<string>();
-  const near = (c: number, rr: number, k: number) => hexRange({ c, r: rr }, k).some((h) => used.has(hexKey(h.c, h.r)));
-  // lưới ô to 5x5, mỗi ô to có thể có một đảo và một hang quái ở chỗ ngẫu nhiên
-  const CELL = 5;
-  let n = 0;
-  for (let gy = 0; gy < Math.ceil(WORLD_H / CELL); gy++)
-    for (let gx = 0; gx < Math.ceil(WORLD_W / CELL); gx++) {
-      for (const what of ['isle', 'lair'] as const) {
-        const chance = what === 'isle' ? 0.62 : 0.55;
-        if (r() > chance) continue;
-        const c = gx * CELL + 1 + Math.floor(r() * (CELL - 2));
-        const rr = gy * CELL + 1 + Math.floor(r() * (CELL - 2));
-        if (!inWorld(c, rr) || near(c, rr, 1)) continue;
-        const t = terrainAt(seed, c, rr);
-        if (t === 'storm' || t === 'reef') continue;
-        const d = hexDist({ c, r: rr }, CENTER);
-        if (d <= 6) continue;
-        const lv = zoneLevel(c, rr);
-        used.add(hexKey(c, rr));
-        n++;
-        if (what === 'isle') {
-          const bianP = 0.06 + lv * 0.03;
-          const kinds: IsleKind[] = ['go', 'da', 'sat', 'ngoc', 'ruong'];
-          const kind: IsleKind = r() < bianP ? 'bian' : kinds[Math.floor(r() * kinds.length)];
-          const K = ISLE_KIND[kind];
-          const glv = Math.min(30, lv * 2 + (kind === 'bian' ? 3 : 0));
-          const guard: [MonsterKey, number][] = K.guard.map((m) => [m, glv]);
-          if (lv >= 5) guard.push([K.guard[0], glv]);
-          if (kind === 'bian') guard.push(['baytheo', glv + 2]);
-          const name = kind === 'bian' ? BIAN[Math.floor(r() * BIAN.length)] : `${PRE[Math.floor(r() * PRE.length)]} ${MID[Math.floor(r() * MID.length)]}`;
-          const mult = lv * (kind === 'bian' ? 2 : 1);
-          const yields: Partial<Record<ResKey, number>> = {};
-          for (const [k, v] of Object.entries(K.yields)) yields[k as ResKey] = Math.round((v ?? 0) * mult * 100) / 100;
-          const isle: Isle = { id: `i${c}_${rr}`, c, r: rr, kind, lv, name, needLvl: Math.max(1, (lv - 1) * 3 + (kind === 'bian' ? 2 : 0)), guard, yields };
-          isles.push(isle);
-          at.set(hexKey(c, rr), { kind: 'isle', v: isle });
-        } else {
-          const kinds = Object.keys(LAIR_KIND) as LairKind[];
-          const kind = kinds[Math.floor(r() * kinds.length)];
-          const L = LAIR_KIND[kind];
-          const elv = Math.min(30, lv * 2);
-          const loot: Partial<Record<ResKey, number>> = {};
-          for (const [k, v] of Object.entries(L.loot)) loot[k as ResKey] = Math.round((v ?? 0) * (1 + lv * 0.8));
-          if (lv >= 6) loot.ngoc = 1;
-          const w: WildDef = {
-            id: `l${c}_${rr}`,
-            name: `${L.name} cấp ${lv}`,
-            level: lv,
-            enemies: L.enemies.map((m) => [m, elv] as [MonsterKey, number]),
-            loot,
-            chest: Math.min(5, Math.floor(lv / 2)),
-            chestChance: 0.25 + lv * 0.02,
-            respawnMs: (8 + lv * 3) * 60_000,
-            sx: c,
-            sy: rr,
-          };
-          lairs.push(w);
-          at.set(hexKey(c, rr), { kind: 'lair', v: w });
-        }
-      }
-    }
-  void n;
-  // ô khởi đầu: vành ngoài (cấp 1–2), biển thường, cách đảo/hang ít nhất 2 ô
-  // vành ngoài (cấp 1–2) trước, đông người thì lấn vào vùng cấp 3–4
-  const rs = mulberry32(hashStr(`spawns:${seed}`));
-  const shuffle = (a: Hex[]) => {
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(rs() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
+  const w: World = {
+    seed,
+    bots: new Map(),
+    boss: { ...CENTER },
+    at: (c, r) => objAt(seed, c, r),
+    islesIn: (c0, r0, c1, r1) => {
+      const out: Isle[] = [];
+      eachBlock(c0, r0, c1, r1, (gx, gy) => {
+        const i = block(seed, gx, gy).isle;
+        if (i && i.c >= c0 && i.c <= c1 && i.r >= r0 && i.r <= r1) out.push(i);
+      });
+      return out;
+    },
+    lairsIn: (c0, r0, c1, r1) => {
+      const out: WildDef[] = [];
+      eachBlock(c0, r0, c1, r1, (gx, gy) => {
+        const l = block(seed, gx, gy).lair;
+        if (l && l.sx! >= c0 && l.sx! <= c1 && l.sy! >= r0 && l.sy! <= r1) out.push(l);
+      });
+      return out;
+    },
+    spawn: (i) => spawnCand(seed, Math.abs(Math.floor(i)) % 1_000_000),
   };
-  const ring = (lo: number, hi: number) => {
-    const out: Hex[] = [];
-    for (let rr = 2; rr < WORLD_H - 2; rr++)
-      for (let c = 2; c < WORLD_W - 2; c++) {
-        const z = zoneLevel(c, rr);
-        if (z < lo || z > hi || terrainAt(seed, c, rr) !== 'sea' || near(c, rr, 2)) continue;
-        out.push({ c, r: rr });
-      }
-    return shuffle(out);
-  };
-  const spawns: Hex[] = [...ring(1, 2), ...ring(3, 4)];
-  const bots = new Map<string, Hex>();
+  // đảo máy rải đều trên vành ngoài như người chơi
   const taken: Hex[] = [];
-  for (const id of botIds) {
-    const h = pickSpawn(spawns, taken, 9) ?? spawns[taken.length % spawns.length];
+  botIds.forEach((id, k) => {
+    const h = pickSpawn(w, taken, 12, hashStr(`bot:${id}`) + k * 7919) ?? w.spawn(k);
     taken.push(h);
-    bots.set(id, h);
-  }
-  const w: World = { seed, isles, lairs, spawns, bots, boss: { ...CENTER }, at };
+    w.bots.set(id, h);
+  });
   cache.set(key, w);
   return w;
 }
 
-/** Chọn ô khởi đầu cách mọi người đã có ít nhất `gap` ô (nới dần nếu chật). */
-export function pickSpawn(spawns: Hex[], taken: Hex[], gap = 8, start = 0): Hex | null {
-  for (let g = gap; g >= 3; g--)
-    for (let i = 0; i < spawns.length; i++) {
-      const h = spawns[(i + start) % spawns.length];
+/** Chọn chỗ khởi đầu cách mọi người đã có ít nhất `gap` ô (nới dần nếu chật). */
+export function pickSpawn(w: World, taken: Hex[], gap = 12, start = 0): Hex | null {
+  for (let g = gap; g >= 3; g -= 3)
+    for (let i = 0; i < 240; i++) {
+      const h = w.spawn(start + i);
       if (taken.every((t) => hexDist(t, h) >= g)) return h;
     }
   return null;
 }
 
+const parseId = (id: string) => {
+  const m = id.match(/^[il](\d+)_(\d+)$/);
+  return m ? { c: Number(m[1]), r: Number(m[2]) } : null;
+};
 export const isleById = (w: World, id: string) => {
-  const o = w.at.get(`${id.slice(1).replace('_', ',')}`);
+  const p = parseId(id);
+  const o = p && w.at(p.c, p.r);
   return o?.kind === 'isle' ? o.v : undefined;
 };
 export const lairById = (w: World, id: string) => {
-  const o = w.at.get(`${id.slice(1).replace('_', ',')}`);
+  const p = parseId(id);
+  const o = p && w.at(p.c, p.r);
   return o?.kind === 'lair' ? o.v : undefined;
 };
 

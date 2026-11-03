@@ -7,7 +7,7 @@ import { GAME } from '../../shared/data';
 import { apply, applyRaidAgainstMe, ascend, digest, migrate, newPlayer, publicOf, tick, type Action, type IslandPub, type PlayerState } from '../../shared/logic';
 import { ascendSlots, bossPoolMax, weekOf, type BossWorld } from '../../shared/boss';
 import { islandCell, worldFor } from '../../shared/map';
-import { pickSpawn } from '../../shared/world';
+import { isleById, pickSpawn, WORLD_VERSION } from '../../shared/world';
 import { scoutReport, SCOUT_COST, setHome, type IsleDef } from '../../shared/logic';
 import { giveGood, haveGood, takeGood, goodLabel } from '../../shared/logic';
 import { bLevel, GUILD_COST, isGood, marketFee } from '../../shared/economy';
@@ -84,7 +84,26 @@ export class HaiKhu extends DurableObject<Env> {
       CREATE TABLE IF NOT EXISTS fleets (player TEXT PRIMARY KEY, body TEXT, ends INTEGER);
       CREATE TABLE IF NOT EXISTS boss (week INTEGER PRIMARY KEY, hp INTEGER, max INTEGER, slots INTEGER, done INTEGER, winners TEXT);
       CREATE TABLE IF NOT EXISTS boss_dmg (week INTEGER, player TEXT, name TEXT, dmg INTEGER, PRIMARY KEY (week, player));
+      CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
     `);
+    // hải đồ mở rộng (hơn 1 triệu ô): chủ quyền đảo và đoàn thuyền theo toạ độ cũ không còn đúng
+    const wv = this.sql.exec<{ v: string }>("SELECT v FROM meta WHERE k = 'wv'").toArray()[0]?.v;
+    if (wv !== String(WORLD_VERSION)) {
+      this.sql.exec('DELETE FROM isle_owner');
+      this.sql.exec('DELETE FROM fleets');
+      // chỗ đảo của người chưa vào lại: bỏ toạ độ cũ trên thẻ công khai (vào game sẽ được chọn chỗ mới)
+      for (const r of this.sql.exec<{ id: string; pub: string | null }>('SELECT id, pub FROM players').toArray()) {
+        if (!r.pub) continue;
+        try {
+          const p = JSON.parse(r.pub) as IslandPub & { home?: unknown };
+          delete p.home;
+          this.sql.exec('UPDATE players SET pub = ? WHERE id = ?', JSON.stringify(p), r.id);
+        } catch {
+          /* thẻ hỏng: bỏ qua */
+        }
+      }
+      this.sql.exec("INSERT OR REPLACE INTO meta (k, v) VALUES ('wv', ?)", String(WORLD_VERSION));
+    }
   }
 
   // ---------- tiện ích ----------
@@ -254,7 +273,7 @@ export class HaiKhu extends DurableObject<Env> {
       if (h) taken.push({ c: h.x, r: h.y });
     }
     const start = Number.parseInt(s.id.replace(/[^0-9a-z]/gi, '').slice(-6), 36) || 0;
-    const h = pickSpawn(w.spawns, taken, 8, start % w.spawns.length) ?? w.spawns[start % w.spawns.length];
+    const h = pickSpawn(w, taken, 12, start) ?? w.spawn(start);
     s.seen = ''; // bỏ vùng tạm mở trước khi có chỗ thật
     setHome(s, s.khu, { x: h.c, y: h.r });
     this.touch(s);
@@ -291,7 +310,7 @@ export class HaiKhu extends DurableObject<Env> {
           tick(prev, Date.now());
           prev.isles = prev.isles.filter((o) => o.id !== c.isle);
           this.touch(prev);
-          const isle = worldFor(this.khu).isles.find((i) => i.id === c.isle);
+          const isle = isleById(worldFor(this.khu), c.isle);
           this.sendTo(prev.id, { t: 'sync', state: prev, serverNow: Date.now(), msg: `${s.name} đã đánh chiếm ${isle?.name ?? 'một đảo'} của bạn!` });
         }
       }
