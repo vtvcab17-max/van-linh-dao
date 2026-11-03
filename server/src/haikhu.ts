@@ -5,6 +5,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { troopCount } from '../../shared/troops';
 import { allBots } from '../../shared/bots';
 import { GAME } from '../../shared/data';
+import { actionCost, makeLimiter } from '../../shared/ratelimit';
 import { apply, applyRaidAgainstMe, ascend, digest, SERVER_RNG_ACTIONS, stripSecret, migrate, newPlayer, publicOf, tick, type Action, type IslandPub, type PlayerState } from '../../shared/logic';
 import { ascendSlots, bossPoolMax, weekOf, type BossWorld } from '../../shared/boss';
 import { islandCell, worldFor } from '../../shared/map';
@@ -721,10 +722,18 @@ export class HaiKhu extends DurableObject<Env> {
     }
   }
 
+  /** Giới hạn tốc độ theo người chơi (không theo kết nối): lệnh nặng tốn 4 điểm. */
+  private limits = makeLimiter({ cap: 40, perSec: 4 });
+
   private onAction(ws: WebSocket, a: Att, act: Action, at: number, clientHash: string, rid = 0) {
     const s = this.load(a.id);
     if (!s || !act || typeof act !== 'object') return;
     const now = Date.now();
+    if (!this.limits.allow(a.id, actionCost(String((act as { t?: unknown }).t)), now)) {
+      this.limits.prune(now);
+      if (rid) return this.send(ws, { t: 'res', rid, o: { ok: false, msg: 'Thao tác nhanh quá, chậm lại một chút.' }, state: s, serverNow: now });
+      return this.send(ws, { t: 'sync', state: s, serverNow: now, msg: 'Thao tác nhanh quá, chậm lại một chút.' });
+    }
     // giờ của hành động: tin máy người chơi nhưng không cho đi trước giờ server quá 3 giây, cũng không lùi về quá khứ
     const t = Math.max(s.lastReal, Math.min(Number.isFinite(at) ? at : now, now + 3000));
     if (act.t === 'speed' && this.env.ALLOW_SPEED !== '1') return this.send(ws, { t: 'sync', state: s, serverNow: now, msg: 'Bản chính thức không có tốc độ test.' });
