@@ -82,3 +82,25 @@ export function cleanTroops(raw: unknown): Troops {
   }
   return out;
 }
+
+/** Khắc chế: nhân sát thương theo khoá đơn vị (kẻ đánh → bị đánh). Cặp khác = ×1. */
+const COUNTER: Record<string, Record<string, number>> = {
+  'tq-giao': { 'tq-voi': 1.35, 'tq-xenu': 1.2, 'tq-xeda': 1.2 },
+  'tq-cung': { 'tq-giao': 1.2, 'tq-khien': 0.85 },
+  'tq-khien': { 'tq-cung': 1.2 },
+  'tq-xenu': { 'tq-voi': 1.25 },
+  'tq-xeda': { 'tq-khien': 1.3, don: 1.25, thap: 1.25 },
+};
+export const counterMult = (att: string, def: string): number => COUNTER[att]?.[def] ?? 1;
+
+export type Row = 'front' | 'back';
+export type TroopRows = Partial<Record<TroopKey, Row>>;
+export function cleanRows(raw: unknown): TroopRows {
+  const out: TroopRows = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const k of TROOP_KEYS) {
+    const v = (raw as Record<string, unknown>)[k];
+    if (v === 'front' || v === 'back') out[k] = v;
+  }
+  return out;
+}

@@ -1,4 +1,6 @@
 // Giao diện DOM: thanh tài nguyên, bảng linh vật, đội, chat, góp ý, hải đồ, credit Beta Holding.
+import { squadReport, troopsOf } from '../../shared/battle';
+import { TROOPS } from '../../shared/troops';
 import { armySummary, openArmy } from './ui-army';
 import { AI_GROUP_OF_TAB, aiArt, aiGroupArt } from './art2/aiart';
 import type Phaser from 'phaser';
@@ -1011,10 +1013,17 @@ export class UI {
       .join(' ');
     const ups = (o.levelUps ?? []).map((k) => COMPANIONS[k].name);
     const v = this.store.s.voyage;
+    const rep = o.battle ? squadReport(troopsOf(o.battle), o.battle) : [];
+    const squadHtml = rep.length
+      ? `<div class="card"><small>Quân ra trận</small>${rep
+          .map((r) => `<div class="garr"><div><b>${TROOPS[r.k].name}</b> <span class="lvl">${r.n} → ${r.left}</span><small>${r.lost ? `mất ${r.lost}` : 'không ai ngã'}${r.left === 0 ? ' · cả đội bị diệt' : ''}</small></div></div>`)
+          .join('')}</div>`
+      : '';
     const html = `
       <div class="result ${win ? 'win' : 'lose'}"><b>${win ? 'Thắng trận' : 'Thua trận'}</b><span>${o.battle?.rounds ?? 0} lượt</span></div>
       <p>${esc(o.msg)}</p>
       ${gained ? `<div class="card"><small>${fromVoyage ? (v ? 'Đang chở về bến' : 'Đã chở về bến') : 'Nhận được'}</small><div class="costs">${gained}</div></div>` : ''}
+      ${squadHtml}
       ${ups.length ? `<p class="good">Lên cấp: ${[...new Set(ups)].join(', ')}</p>` : ''}
       ${win ? '' : '<p class="hint">Mẹo: cho Cuốc ăn sắt để chủ đảo đánh mạnh hơn, nâng Nhà chính để có Thu Hà hồi máu.</p>'}
       ${o.battle ? '<button class="wide" id="btnReplay">Xem lại trận</button>' : ''}

@@ -14,12 +14,16 @@ import type { UI } from '../ui';
 import { drawUnit, GENERALS as GEN_LOOKS, TROOP_OF, TROOPS } from '../art2/units';
 import { drawBoat } from '../art2/builds';
 import { sound } from '../audio';
+import { survivors } from '../../../shared/troops';
 
 interface Squad {
   u: BUnit;
   img: Phaser.GameObjects.Image;
   men: Phaser.GameObjects.Image[];
   bar: Phaser.GameObjects.Graphics;
+  /** đội quân: số quân ghi dưới thanh máu */
+  tag?: Phaser.GameObjects.Text;
+  n?: number;
   hp: number;
   x: number;
   y: number;
@@ -202,6 +206,11 @@ export class BattleScene extends Phaser.Scene {
         }
         const bar = this.add.graphics().setDepth(2000);
         const v: Squad = { u, img, men, bar, hp: u.hp, x, y, col, row };
+        const nq = u.key.startsWith('tq-') ? Number(/×(\d+)/.exec(u.name)?.[1] ?? 0) : 0;
+        if (nq > 0) {
+          v.n = nq;
+          v.tag = this.add.text(x, y - img.displayHeight - 9, `×${nq}`, { fontFamily: 'monospace', fontSize: '9px', color: side === 0 ? '#c9f5d2' : '#ffd0cb', stroke: '#1a0f0a', strokeThickness: 3 }).setOrigin(0.5, 1).setDepth(2001);
+        }
         this.views.set(u.id, v);
         this.drawBar(v);
         this.tweens.add({ targets: img, y: y - 1, duration: 500 + i * 70, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
@@ -232,6 +241,7 @@ export class BattleScene extends Phaser.Scene {
     v.bar.fillStyle(0x3d2b2b, 1).fillRect(x - 1, y - 1, w + 2, 4);
     const pct = Math.max(0, v.hp / v.u.maxHp);
     v.bar.fillStyle(v.u.side === 0 ? 0x4fd06a : 0xf0554a, 1).fillRect(x, y, Math.round(w * pct), 2);
+    if (v.tag && v.n) v.tag.setText(`×${survivors(v.n, v.hp, v.u.maxHp)}`);
     // lính ngã dần theo máu của toán
     const alive = Math.ceil(pct * v.men.length);
     v.men.forEach((m, i) => {

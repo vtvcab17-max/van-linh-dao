@@ -188,6 +188,12 @@ const armyText = await p.evaluate(() => document.querySelector('#sheet')?.textCo
 check('Bảng Quân đội có danh sách lính + cơ giới', /Giáo|Cung|Khiên/i.test(armyText) && /Xe|Voi/i.test(armyText));
 check('Bảng Quân đội ghi quân từng đảo', /Đảo nhà/.test(armyText));
 await shot('04-bang-quan-doi');
+// chọn hàng: đưa Lính Giáo ra hàng sau bằng nút
+await p.click('#sheet [data-row="giao:back"]');
+await wait(300);
+check('Chọn hàng sau cho Lính Giáo', (await p.evaluate(() => window.__vld.store.s.hang.giao)) === 'back');
+await p.click('#sheet [data-row="giao:front"]');
+await wait(200);
 
 // 5. xếp quân lên thuyền
 await p.click('#sheet [data-mang="giao:5"]');
@@ -221,9 +227,13 @@ await wait(1500);
 await shot('06-tran-danh');
 const sq = await p.evaluate(() => (window.__vld.store.s.lastBattle?.o?.battle?.log ?? JSON.stringify(window.__vld.store.s.lastBattle ?? {})).toString().includes('tq-'));
 check('Trận có đội quân (tq-*) tham chiến', sq);
+await wait(800);
+await shot('06b-so-quan-tren-sprite');
 await p.click('#btnSkip').catch(() => {});
 await p.waitForSelector('#sheet .result', { timeout: 20000 });
 await shot('07-ket-qua');
+const resTxt = await p.evaluate(() => document.querySelector('#sheet')?.textContent ?? '');
+check('Kết quả liệt kê từng đội quân (ra trận → còn)', /Quân ra trận/.test(resTxt) && /→/.test(resTxt));
 await p.click('#btnOk');
 await p.waitForFunction(() => !window.__vld.store.s.voyage, null, { timeout: 30000 });
 st = await S();

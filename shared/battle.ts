@@ -1,5 +1,5 @@
 // Mô phỏng trận đánh tự động theo lượt. Thuần logic, có hạt giống → server tính lại được y hệt.
-import { squadUnit, TROOP_KEYS, type Troops } from './troops';
+import { counterMult, squadUnit, survivors, TROOP_KEYS, type TroopRows, type Troops } from './troops';
 import { COMPANIONS, EFFECTS, enemyBase, LINH_VAT, type CompKey, type EnemyKey, type SkillKey, type UnitBase } from './data';
 import { shipUnit, type ShipKind, type ShipWeapon } from './navy';
 import { GENERALS, generalUnit, type GenId, type LegWeaponId } from './gacha';
@@ -119,6 +119,8 @@ export interface TeamSpec {
   gen?: { id: GenId; star: number; w: LegWeaponId | null };
   /** quân (lính và cơ giới) đi cùng: mỗi loại gộp thành một đội */
   troops?: Troops;
+  /** hàng trước/sau người chơi chọn cho từng loại quân (mặc định theo loại) */
+  rows?: TroopRows;
   /** thuyền chiến theo đội */
   ships?: { k: ShipKind; w: Partial<Record<ShipWeapon, boolean>>; vo: number }[];
   /** điều kiện trận: lương, bệnh, thời tiết (nhân vào công/máu theo hàng) */
@@ -155,7 +157,11 @@ function teamFromSpec0(spec: TeamSpec, side: 0 | 1): BUnit[] {
   });
   for (const k of TROOP_KEYS) {
     const n = spec.troops?.[k] ?? 0;
-    if (n > 0) out.push(applyGear(makeUnit(squadUnit(k, n), `tq-${k}`, 1, side, out.length), spec.gear));
+    if (n > 0) {
+      const u = makeUnit(squadUnit(k, n), `tq-${k}`, 1, side, out.length);
+      if (spec.rows?.[k]) u.row = spec.rows[k]!;
+      out.push(applyGear(u, spec.gear));
+    }
   }
   for (const sh of spec.ships ?? []) out.push(applyGear(makeUnit(shipUnit({ id: '', ...sh }), `tau-${sh.k}${sh.w.no ? 'n' : ''}${sh.w.da ? 'd' : ''}${sh.w.dam ? 'm' : ''}`, 1, side, out.length), spec.gear));
   if (spec.gen && GENERALS[spec.gen.id]) {
@@ -198,7 +204,7 @@ function damage(att: BUnit, def: BUnit, mult: number, rng: Rng, ab = 1, db = 1):
   const atk = att.atk * mult * ab * (att.atkUp > 0 ? 1.25 : 1);
   const d = def.def * db * (def.defUp > 0 ? 1.6 : 1);
   const crit = rng() < 0.1;
-  let dmg = atk * (100 / (100 + d * 5)) * (0.9 + rng() * 0.2);
+  let dmg = atk * counterMult(att.key, def.key) * (100 / (100 + d * 5)) * (0.9 + rng() * 0.2);
   if (crit) dmg *= 1.5;
   return { dmg: Math.max(1, Math.round(dmg)), crit };
 }
@@ -358,4 +364,31 @@ export function sideHp(units: BUnit[]): { hp: number; max: number } {
     max += u.maxHp;
   }
   return { hp, max };
+}
+
+/** Báo cáo thương vong từng đội quân của bên 0: ra trận, còn sống, mất. */
+export function squadReport(troops: Troops | undefined, res: BattleResult): { k: (typeof TROOP_KEYS)[number]; n: number; left: number; lost: number }[] {
+  const mine = res.a.filter((u) => !u.wall);
+  const out: { k: (typeof TROOP_KEYS)[number]; n: number; left: number; lost: number }[] = [];
+  for (const k of TROOP_KEYS) {
+    const n = troops?.[k] ?? 0;
+    if (n <= 0) continue;
+    const i = mine.findIndex((u) => u.key === `tq-${k}`);
+    const hp = i >= 0 ? (res.hpA?.[i] ?? 0) : 0;
+    const left = i >= 0 ? survivors(n, hp, mine[i].maxHp) : 0;
+    out.push({ k, n, left, lost: n - left });
+  }
+  return out;
+}
+
+/** Số quân từng loại bên 0 mang ra trận, đọc lại từ kết quả (đội tên "… ×n"). */
+export function troopsOf(res: BattleResult): Troops {
+  const t: Troops = {};
+  for (const u of res.a) {
+    if (!u.key.startsWith('tq-')) continue;
+    const k = u.key.slice(3) as (typeof TROOP_KEYS)[number];
+    const n = Number(/×(\d+)/.exec(u.name)?.[1] ?? 0);
+    if (TROOP_KEYS.includes(k) && n > 0) t[k] = n;
+  }
+  return t;
 }

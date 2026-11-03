@@ -44,6 +44,14 @@ export function armySummary(s: PlayerState): string {
     <button type="button" class="primary wide" id="btnArmy">Mở bảng quân đội</button></div>`;
 }
 
+const COUNTER_HINT: Record<TroopKey, string> = {
+  giao: 'khắc voi và xe, yếu trước cung',
+  cung: 'khắc lính giáo, yếu trước khiên',
+  khien: 'khắc cung, yếu trước xe bắn đá',
+  xenu: 'khắc voi',
+  xeda: 'khắc khiên, tháp, đồn',
+  voi: 'húc mạnh, sợ lính giáo',
+};
 export function openArmy(ui: UI) {
   const draw = () => {
     const s = ui.store.s;
@@ -63,7 +71,8 @@ export function openArmy(ui: UI) {
       const n = s.troops[k] ?? 0;
       return `<div class="unit${n ? '' : ' locked'}"><img src="${troopIcon(k)}" alt=""><div>
         <h3>${d.name} <span class="lvl">${n} ở đảo nhà</span></h3>
-        <p class="muted">${isMech(k) ? 'Cơ giới' : 'Lính'} · ${d.row === 'front' ? 'hàng trước' : 'hàng sau'} · 1 đơn vị</p>
+        <p class="muted">${isMech(k) ? 'Cơ giới' : 'Lính'} · 1 đơn vị · ${COUNTER_HINT[k]}</p>
+        <div class="seg" role="radiogroup" aria-label="Hàng đứng">${(['front', 'back'] as const).map((r) => `<button type="button" data-row="${k}:${r}" role="radio" aria-checked="${(s.hang[k] ?? d.row) === r}">${r === 'front' ? 'Hàng trước' : 'Hàng sau'}</button>`).join('')}</div>
         <div class="stats"><span>Máu ${d.hp}</span><span>Công ${d.atk}</span><span>Thủ ${d.def}</span><span>Tốc ${d.spd}</span></div></div></div>`;
     }).join('');
 
@@ -125,6 +134,10 @@ export function openArmy(ui: UI) {
         const next: Troops = { ...s.mang };
         next[k as TroopKey] = Math.max(0, Math.min(99, (next[k as TroopKey] ?? 0) + Number(d)));
         ui.store.do({ t: 'mangQuan', troops: next });
+      } else if (t.dataset.row) {
+        const [k, row] = t.dataset.row.split(':');
+        const o = ui.store.do({ t: 'doiHang', k: k as TroopKey, row: row as 'front' | 'back' });
+        ui.toast(o.msg, o.ok ? 'gold' : 'bad');
       } else if (t.dataset.rut) {
         const o = ui.store.do({ t: 'rutQuan', isle: t.dataset.rut });
         ui.toast(o.msg, o.ok ? 'gold' : 'bad');

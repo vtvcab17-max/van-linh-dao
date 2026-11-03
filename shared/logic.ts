@@ -39,7 +39,7 @@ import { LV_LABEL, ASCEND_REWARD, BOSS_CELL, BOSS_REQ, BOSS_TRAVEL_MUL, bossOf, 
 import { teamFromBoss } from './battle';
 import { islandCell, worldFor } from './map';
 import { hexDist, hexLine, hexRange } from './hex';
-import { TROOPS, TROOP_KEYS, carryCap, cleanTroops, fitCargo, bedCap, parkCap, batchMax, isMech, squadUnit as _sq, survivors, troopCount, mechCount, troopPower, type TroopKey, type Troops } from './troops';
+import { TROOPS, TROOP_KEYS, carryCap, cleanTroops, cleanRows, type TroopRows, fitCargo, bedCap, parkCap, batchMax, isMech, squadUnit as _sq, survivors, troopCount, mechCount, troopPower, type TroopKey, type Troops } from './troops';
 import { berthsUsed, cleanShips, fleetCap, SHIP_SIZE, SHIP_WEAR, SHIPS, WEAPONS, type Ship, type ShipKind, type ShipWeapon } from './navy';
 import {
   CROPS, cropProgress, mealBuff, GEAR_WEAR, HIRE_COST, HULL_WEAR, OVERRIPE_MS, PENS, PER_WORKER, PLOT_YIELD, plotSeed, PROCS, RATION_PER_HOUR, SICK_PER_HOUR, STORE_H, TECH_MAX, TECHS, WEATHER, regionOf, techCost, techMs, wearMult, weatherAt, windFactor,
@@ -168,6 +168,8 @@ export interface PlayerState {
   troops: Troops;
   isleTroops: Record<string, Troops>;
   mang: Troops;
+  /** hàng trước/sau của từng loại quân */
+  hang: TroopRows;
   /** Khiên bảo hộ tới lúc này (giờ thật): không ai đột kích, đánh chiếm, thám thính được. */
   shield: number;
   /** Nghiên cứu đã xong ở học viện. */
@@ -360,6 +362,7 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     troops: {},
     isleTroops: {},
     mang: {},
+    hang: {},
     tech: {},
     research: null,
     ben: { giao: 100, khien: 100, thuoc: 100, bua: 100 },
@@ -541,6 +544,7 @@ export function teamSpec(s: PlayerState, defending: boolean): TeamSpec {
     fort: defending ? defSpecOf(s.dinh) : undefined,
     ships: s.fleet.filter((x) => x.vo > 0).map((x) => ({ k: x.k, w: { ...x.w }, vo: x.vo })),
     troops: defending ? cleanTroops(s.troops) : cleanTroops(s.voyage?.troops),
+    rows: cleanRows(s.hang),
     gen: s.chuTuong && s.tuong[s.chuTuong] ? { id: s.chuTuong, star: s.tuong[s.chuTuong]!, w: s.deo && (s.vuKhi[s.deo] ?? 0) > 0 ? s.deo : null } : undefined,
   };
 }
@@ -954,6 +958,7 @@ export type Action =
   | { t: 'doiLT'; dir: 'mua' | 'ban'; n: number }
   | { t: 'luyen'; k: TroopKey; n: number }
   | { t: 'mangQuan'; troops: Troops }
+  | { t: 'doiHang'; k: TroopKey; row: 'front' | 'back' }
   | { t: 'rutQuan'; isle: string };
 
 export interface Outcome {
@@ -1334,6 +1339,12 @@ export function apply(s: PlayerState, a: Action): Outcome {
     case 'mangQuan': {
       s.mang = cleanTroops(a.troops);
       return { ok: true, msg: `Mang theo ${troopCount(s.mang)} quân mỗi chuyến.` };
+    }
+    case 'doiHang': {
+      if (!(TROOP_KEYS as readonly string[]).includes(a.k)) return fail('Không có loại quân này.');
+      if (a.row !== 'front' && a.row !== 'back') return fail('Chỉ có hàng trước hoặc hàng sau.');
+      s.hang[a.k] = a.row;
+      return { ok: true, msg: `${TROOPS[a.k].name} đứng ${a.row === 'front' ? 'hàng trước' : 'hàng sau'}.` };
     }
     case 'rutQuan': {
       const g = s.isleTroops[a.isle];
@@ -1947,6 +1958,7 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   if (!Array.isArray(merged.fleet)) merged.fleet = [];
   merged.troops = cleanTroops(s.troops);
   merged.mang = cleanTroops(s.mang);
+  merged.hang = cleanRows(s.hang);
   merged.isleTroops = Object.fromEntries(Object.entries(s.isleTroops ?? {}).map(([k, v]) => [k, cleanTroops(v)]));
   merged.tech = { ...s.tech };
   if (typeof merged.vo !== 'number') merged.vo = 100;
