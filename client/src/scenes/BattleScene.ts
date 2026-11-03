@@ -46,6 +46,7 @@ export class BattleScene extends Phaser.Scene {
   private idx = 0;
   private speed = 1;
   private paused = false;
+  private flags = new Map<string, { pole: Phaser.GameObjects.Rectangle; flag: Phaser.GameObjects.Triangle; img: Phaser.GameObjects.Image }>();
   private done = false;
   private W = 240;
   private H = 135;
@@ -68,6 +69,7 @@ export class BattleScene extends Phaser.Scene {
     this.done = false;
     this.round = 0;
     this.views.clear();
+    this.flags.clear();
   }
 
   create() {
@@ -174,6 +176,12 @@ export class BattleScene extends Phaser.Scene {
         if (!u.wall) this.add.ellipse(x, y - 1, this.cell * 0.9, this.cell * 0.3, side === 0 ? 0x4fd06a : 0xf0554a, 0.35).setStrokeStyle(1, side === 0 ? 0x2f9a4a : 0xb23a30, 0.9).setDepth(y + 1);
         const img = this.add.image(x, y, this.texFor(u, side)).setOrigin(0.5, 1).setDepth(y + 2).setScale(this.fit(this.texFor(u, side), 1.25));
         if (side === 1 && !u.wall) img.setFlipX(true);
+        if (u.lead) {
+          // cờ vàng trên đầu tướng dẫn đầu, đi theo tướng
+          const pole = this.add.rectangle(x, y, 2, 14, 0x6c4229).setScale(0.7).setDepth(2100);
+          const flag = this.add.triangle(x, y, 0, 0, 0, 8, 10, 4, 0xffd955).setStrokeStyle(1, 0x6c4229).setScale(0.7).setDepth(2100);
+          this.flags.set(u.id, { pole, flag, img });
+        }
         const men: Phaser.GameObjects.Image[] = [];
         const mt = this.menTex(u);
         if (mt) {
@@ -231,6 +239,15 @@ export class BattleScene extends Phaser.Scene {
     const cam = this.cameras.main;
     const k = this.z * this.rs;
     this.ui.floatAt((x - cam.worldView.x) * k, (y - cam.worldView.y) * k, text, '', undefined, color, Math.round(size * 2.1));
+  }
+
+  update() {
+    for (const [id, f] of this.flags) {
+      const v = this.views.get(id);
+      const dead = !v || v.hp <= 0;
+      f.pole.setVisible(!dead).setPosition(f.img.x, f.img.y - f.img.displayHeight - 5);
+      f.flag.setVisible(!dead).setPosition(f.img.x + 6, f.img.y - f.img.displayHeight - 8);
+    }
   }
 
   /** Tạm dừng/tiếp tục (chỉ trận không phải người chơi). */
@@ -355,6 +372,7 @@ export class BattleScene extends Phaser.Scene {
       }
       case 'buff': {
         if (ev.s) this.pop(a.x, a.y - a.img.displayHeight - 6, SKILLS[ev.s].name, '#f6d34d', 10);
+        else this.pop(a.x, a.y - a.img.displayHeight - 6, 'DẪN ĐẦU', '#ffd955', 10);
         for (const id of ev.t ?? []) {
           const t = this.views.get(id);
           if (!t) continue;

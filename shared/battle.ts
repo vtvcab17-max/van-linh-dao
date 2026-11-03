@@ -19,6 +19,8 @@ export interface BUnit {
   row: 'front' | 'back';
   thorns: number;
   wall?: boolean;
+  /** tướng dẫn đầu: đồng đội +10% công và thủ khi tướng còn sống */
+  lead?: boolean;
   acted: number;
   atkUp: number;
   defUp: number;
@@ -149,7 +151,11 @@ function teamFromSpec0(spec: TeamSpec, side: 0 | 1): BUnit[] {
     out.push(applyGear(makeUnit(base, c.k, c.lv, side, i, bonus), spec.gear));
   });
   for (const sh of spec.ships ?? []) out.push(applyGear(makeUnit(shipUnit({ id: '', ...sh }), `tau-${sh.k}${sh.w.no ? 'n' : ''}${sh.w.da ? 'd' : ''}${sh.w.dam ? 'm' : ''}`, 1, side, out.length), spec.gear));
-  if (spec.gen && GENERALS[spec.gen.id]) out.push(applyGear(makeUnit(generalUnit(spec.gen.id, spec.gen.star, spec.gen.w), spec.gen.id, 1, side, out.length), spec.gear));
+  if (spec.gen && GENERALS[spec.gen.id]) {
+    const g = applyGear(makeUnit(generalUnit(spec.gen.id, spec.gen.star, spec.gen.w), spec.gen.id, 1, side, out.length), spec.gear);
+    g.lead = true;
+    out.push(g);
+  }
   if (spec.fort) {
     for (const lv of spec.fort.don.slice(0, 2)) out.push(makeUnit(DON, 'don', 1 + (lv - 1) * 6, side, out.length));
     for (const lv of spec.fort.thap.slice(0, 4)) out.push(makeUnit(THAP, 'thap', 1 + (lv - 1) * 6, side, out.length));
@@ -173,9 +179,17 @@ export function teamFromMonsters(list: [EnemyKey, number][], side: 0 | 1): BUnit
   return list.map(([k, lv], i) => makeUnit(enemyBase(k), k, lv, side, i));
 }
 
-function damage(att: BUnit, def: BUnit, mult: number, rng: Rng): { dmg: number; crit: boolean } {
-  const atk = att.atk * mult * (att.atkUp > 0 ? 1.25 : 1);
-  const d = def.def * (def.defUp > 0 ? 1.6 : 1);
+export const LEAD_BONUS = 1.1;
+/** Hào quang dẫn đầu của đội mình lên một đơn vị: có tướng còn sống (không phải chính nó) thì +10%. */
+export function leaderBonus(team: BUnit[], u: BUnit): { atk: number; def: number } {
+  if (u.wall || u.lead) return { atk: 1, def: 1 };
+  const on = team.some((x) => x.side === u.side && x.lead && x.hp > 0);
+  return on ? { atk: LEAD_BONUS, def: LEAD_BONUS } : { atk: 1, def: 1 };
+}
+
+function damage(att: BUnit, def: BUnit, mult: number, rng: Rng, ab = 1, db = 1): { dmg: number; crit: boolean } {
+  const atk = att.atk * mult * ab * (att.atkUp > 0 ? 1.25 : 1);
+  const d = def.def * db * (def.defUp > 0 ? 1.6 : 1);
   const crit = rng() < 0.1;
   let dmg = atk * (100 / (100 + d * 5)) * (0.9 + rng() * 0.2);
   if (crit) dmg *= 1.5;
@@ -201,7 +215,7 @@ export function simulate(a: BUnit[], b: BUnit[], rng: Rng, maxRounds = 20): Batt
   };
 
   const hit = (r: number, att: BUnit, tgt: BUnit, mult: number, skill?: SkillKey) => {
-    const { dmg, crit } = damage(att, tgt, mult, rng);
+    const { dmg, crit } = damage(att, tgt, mult, rng, leaderBonus(all, att).atk, leaderBonus(all, tgt).def);
     tgt.hp = Math.max(0, tgt.hp - dmg);
     events.push({ r, a: att.id, k: skill ? 'skill' : 'hit', s: skill, t: [tgt.id], v: [dmg], crit });
     if (tgt.thorns > 0 && att.hp > 0) {
@@ -212,6 +226,12 @@ export function simulate(a: BUnit[], b: BUnit[], rng: Rng, maxRounds = 20): Batt
     }
     if (tgt.hp === 0) events.push({ r, a: tgt.id, k: 'die' });
   };
+
+  // tướng dẫn đầu ra hiệu lệnh đầu trận (không tốn lượt)
+  for (const side of [0, 1] as const) {
+    const lead = all.find((u) => u.side === side && u.lead && u.hp > 0);
+    if (lead) events.push({ r: 1, a: lead.id, k: 'buff', t: all.filter((u) => u.side === side && !u.wall && u !== lead).map((u) => u.id) });
+  }
 
   let round = 0;
   while (!over() && round < maxRounds) {
