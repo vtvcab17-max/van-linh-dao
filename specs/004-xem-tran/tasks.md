@@ -4,4 +4,4 @@
 - [x] T003 [US2] ui.showResult: nút Xem lại → runBattle cùng kết quả
 - [x] T004 [US1] tests: tổng máu từ BattleResult khớp (shared/battle helper `sideHp`)
 - [x] T005 Typecheck, test, build, chụp, push
-- [ ] (hoãn) US3 bản ghi trận phía máy chủ
+- [~] US3 bản ghi trận phía máy chủ: đã bỏ theo quyết định người dùng

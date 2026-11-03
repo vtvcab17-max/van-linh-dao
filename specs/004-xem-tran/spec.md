@@ -15,8 +15,8 @@ Trong trận có bảng trực tiếp: nhãn "TRỰC TIẾP" nếu PvP, tên hai
 Màn kết quả có nút "Xem lại trận" phát lại đúng diễn biến cũ (tất định); phát lại trận PvP vẫn không tua.
 1. **Given** vừa xong trận, **When** bấm Xem lại, **Then** trận chạy lại từ đầu và cho cùng kết quả.
 
-### User Story 3 - Chủ đảo xem trận mình bị đánh (P2, hoãn)
-Khi bị tấn công lúc ngoại tuyến, vào lại thấy "Bản ghi trận" để xem. [Cần máy chủ lưu bản ghi: hoãn tới spec riêng.]
+### User Story 3 - Bản ghi trận bị đánh lúc ngoại tuyến (ĐÃ BỎ)
+Người dùng quyết định (2026-11-03): không cần ghi lại trận bị đánh lúc ngoại tuyến. Không làm.
 
 ### Edge Cases
 - Trận không có sự kiện nào: hiện kết quả ngay, không lỗi.
@@ -33,4 +33,4 @@ Khi bị tấn công lúc ngoại tuyến, vào lại thấy "Bản ghi trận" 
 - **SC-002**: Xem lại cho cùng kết quả (cùng thắng/thua, cùng số lượt).
 
 ## Assumptions
-- Bản ghi trận phía máy chủ (US3) cần thay đổi `server/` và nằm ngoài lát cắt này.
+- Không lưu bản ghi trận phía máy chủ.
