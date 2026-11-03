@@ -3,7 +3,8 @@
 import { SEA_COLS, SEA_ROWS } from './mapsize';
 import { hexDist, hexKey, hexRange, type Hex } from './hex';
 import { hashStr, mulberry32, type Rng } from './rng';
-import type { MonsterKey, ResKey, WildDef } from './data';
+import type { EnemyKey, MonsterKey, ResKey, WildDef } from './data';
+import { randKey } from './monstergen';
 
 export const WORLD_W = SEA_COLS;
 export const WORLD_H = SEA_ROWS;
@@ -59,17 +60,18 @@ export interface Isle {
   name: string;
   /** cấp chúa đảo tối thiểu để cắm cờ chủ quyền và xây trên đảo này */
   needLvl: number;
-  guard: [MonsterKey, number][];
+  guard: [EnemyKey, number][];
   /** sản lượng mỗi giờ khi đã cắm cờ */
   yields: Partial<Record<ResKey, number>>;
 }
 
-export type LairKind = 'haitac' | 'thuyquai' | 'cua' | 'sua' | 'khi';
-export const LAIR_KIND: Record<LairKind, { name: string; enemies: MonsterKey[]; loot: Partial<Record<ResKey, number>> }> = {
+export type LairKind = 'haitac' | 'thuyquai' | 'cua' | 'sua' | 'khi' | 'quala';
+export const LAIR_KIND: Record<LairKind, { name: string; enemies: MonsterKey[]; random?: boolean; loot: Partial<Record<ResKey, number>> }> = {
   haitac: { name: 'Sào Huyệt Hải Tặc', enemies: ['haitac', 'haitac', 'baytheo'], loot: { so: 10, go: 6, sat: 3 } },
   thuyquai: { name: 'Hang Thủy Quái', enemies: ['cuada', 'canoc', 'sualua'], loot: { sat: 5, so: 8, ngoc: 0 } },
   cua: { name: 'Bãi Cua Gai', enemies: ['cuagai', 'cuagai', 'cuada'], loot: { sat: 4, da: 6, so: 5 } },
   sua: { name: 'Rạn Sứa Lửa', enemies: ['sualua', 'sualua', 'canoc'], loot: { la: 6, so: 6, sat: 2 } },
+  quala: { name: 'Hang Quái Lạ', enemies: [], random: true, loot: { so: 9, la: 4, sat: 3 } },
   khi: { name: 'Đảo Khỉ Đá', enemies: ['khida', 'khida', 'canoc'], loot: { go: 8, tre: 6, so: 6 } },
 };
 
@@ -139,7 +141,7 @@ function block(seed: string, gx: number, gy: number): Block {
       const kind: IsleKind = pick[0] < bianP ? 'bian' : kinds[Math.floor(pick[1] * kinds.length)];
       const K = ISLE_KIND[kind];
       const glv = Math.min(30, lv * 2 + (kind === 'bian' ? 3 : 0));
-      const guard: [MonsterKey, number][] = K.guard.map((m) => [m, glv]);
+      const guard: [EnemyKey, number][] = K.guard.map((m) => [m, glv]);
       if (lv >= 5) guard.push([K.guard[0], glv]);
       if (kind === 'bian') guard.push(['baytheo', glv + 2]);
       const name = kind === 'bian' ? BIAN[Math.floor(pick[2] * BIAN.length)] : `${PRE[Math.floor(pick[2] * PRE.length)]} ${MID[Math.floor(pick[3] * MID.length)]}`;
@@ -159,7 +161,9 @@ function block(seed: string, gx: number, gy: number): Block {
         id: `l${c}_${rr}`,
         name: `${L.name} cấp ${lv}`,
         level: lv,
-        enemies: L.enemies.map((m) => [m, elv] as [MonsterKey, number]),
+        enemies: L.random
+          ? [0, 1, 2].map((i) => [randKey(((c * 73856093) ^ (rr * 19349663) ^ ((i + 1) * 83492791)) >>> 0), elv] as [EnemyKey, number])
+          : L.enemies.map((m) => [m, elv] as [EnemyKey, number]),
         loot,
         chest: Math.min(5, Math.floor(lv / 2)),
         chestChance: 0.25 + lv * 0.02,

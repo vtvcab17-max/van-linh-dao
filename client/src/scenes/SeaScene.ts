@@ -8,6 +8,8 @@ import { islandCell, worldFor } from '../../../shared/map';
 import { BOSS_CELL } from '../../../shared/boss';
 import { hexCenterPx, hexNeighbors, pxToHex } from '../../../shared/hex';
 import { CENTER, fleetPos, isleById, terrainAt, WORLD_H, WORLD_W, ZONE_NAMES, zoneLevel, type FleetView, type Terrain } from '../../../shared/world';
+import { charCanvas } from '../art/sprites';
+import { ensureTex } from '../art/textures';
 import type { Store } from '../store';
 import type { UI } from '../ui';
 import { HD, hallTex, merchantTex, seaBoatTex, seaIslandTex, waterTex } from '../art/textures';
@@ -478,7 +480,8 @@ export class SeaScene extends Phaser.Scene {
       const st = s.wilds[l.id];
       const ready = !st || s.gt >= st.readyAt;
       const sh = this.add.ellipse(q.x, q.y + 6, 18, 6, 0x1d1b2a, 0.35);
-      const key = `ch-${l.enemies[l.enemies.length - 1][0]}`;
+      const ek = l.enemies[l.enemies.length - 1][0];
+      const key = ensureTex(this, `ch-${ek}`, () => charCanvas(ek));
       const th = this.textures.get(key).getSourceImage().height || 32;
       const img = this.add.image(q.x, q.y + 6, key).setOrigin(0.5, 1).setScale(Math.min(0.8 / HD, 22 / th));
       if (!ready) img.setTint(0x777777);

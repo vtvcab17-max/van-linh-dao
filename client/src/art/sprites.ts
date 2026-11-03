@@ -1,3 +1,5 @@
+import { drawMonster } from '../art2/monsters';
+import { isRandKey, randBase, randSeed } from '../../../shared/monstergen';
 // Mọi sprite của Vạn Linh Đảo. Nhân vật/quái vẽ bằng bản đồ ký tự; nhà cửa, linh vật, địa hình vẽ bằng thuật toán.
 import { canvas, fromMap, noise, Pen, PAL, recolor, type Canvas } from './pixel';
 import { CHESTS } from '../../../shared/data';
@@ -393,6 +395,7 @@ export function drawBattleBg(w: number, h: number): Canvas {
 }
 
 export function charCanvas(key: string): Canvas {
+  if (isRandKey(key)) return drawMonster(randSeed(key), randBase(key).family);
   if (key === 'thuytinh') return drawThuyTinh();
   if (key === 'thuybinh') return drawThuyBinh();
   if (key === 'cuada') return fromMap(recolor(CUA_GAI, { e: 'n', E: 'N', O: 'M' }), PAL, 2);

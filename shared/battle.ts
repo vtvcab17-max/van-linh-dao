@@ -1,5 +1,5 @@
 // Mô phỏng trận đánh tự động theo lượt. Thuần logic, có hạt giống → server tính lại được y hệt.
-import { COMPANIONS, EFFECTS, LINH_VAT, MONSTERS, type CompKey, type MonsterKey, type SkillKey, type UnitBase } from './data';
+import { COMPANIONS, EFFECTS, enemyBase, LINH_VAT, type CompKey, type EnemyKey, type SkillKey, type UnitBase } from './data';
 import { shipUnit, type ShipKind, type ShipWeapon } from './navy';
 import { GENERALS, generalUnit, type GenId, type LegWeaponId } from './gacha';
 import type { Rng } from './rng';
@@ -169,8 +169,8 @@ export function teamFromBoss(form: UnitBase & { minion: UnitBase; minions: numbe
   return out;
 }
 
-export function teamFromMonsters(list: [MonsterKey, number][], side: 0 | 1): BUnit[] {
-  return list.map(([k, lv], i) => makeUnit(MONSTERS[k], k, lv, side, i));
+export function teamFromMonsters(list: [EnemyKey, number][], side: 0 | 1): BUnit[] {
+  return list.map(([k, lv], i) => makeUnit(enemyBase(k), k, lv, side, i));
 }
 
 function damage(att: BUnit, def: BUnit, mult: number, rng: Rng): { dmg: number; crit: boolean } {

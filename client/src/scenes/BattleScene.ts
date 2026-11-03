@@ -3,7 +3,8 @@
 import Phaser from 'phaser';
 import { SKILLS } from '../../../shared/data';
 import type { BattleResult, BEvent, BUnit } from '../../../shared/battle';
-import { drawBattleBg } from '../art/sprites';
+import { charCanvas, drawBattleBg } from '../art/sprites';
+import { isRandKey } from '../../../shared/monstergen';
 import { avatarTex, ensureTex, HD } from '../art/textures';
 import { avatarFrom } from '../../../shared/avatar';
 import { pubAvatar } from '../ui';
@@ -142,6 +143,7 @@ export class BattleScene extends Phaser.Scene {
     }
     const gl = GEN_LOOKS.find((x) => x.id === u.key);
     if (gl) return ensureTex(this, `gen-${gl.id}`, () => drawUnit(gl.look));
+    if (isRandKey(u.key)) return ensureTex(this, `ch-${u.key}`, () => charCanvas(u.key));
     return `ch-${u.key}`;
   }
   private menTex(u: BUnit): string | null {

@@ -2,7 +2,7 @@
 // bản đồ thu nhỏ và tìm theo toạ độ / tên / ID.
 import type { UI } from './ui';
 import { claimCheck, homeCell, isleCap, isleReady, isleYield, ISLE_BUILD, ISLE_STORE_H, isSeen, lordLevel, seenChunks, seenOf, wildCell, type IsleBuild } from '../../shared/logic';
-import { MONSTERS, SKILLS, WILDS, type ResKey } from '../../shared/data';
+import { enemyBase, SKILLS, WILDS, type ResKey } from '../../shared/data';
 import { islandCell, worldFor } from '../../shared/map';
 import { CENTER, isleById, ISLE_KIND, TERRAIN_NAME, WORLD_H, WORLD_W, ZONE_NAMES, zoneLevel, type Isle } from '../../shared/world';
 import { hexDist } from '../../shared/hex';
@@ -68,7 +68,7 @@ export function openIsle(ui: UI, isle: Isle) {
     const K = ISLE_KIND[isle.kind];
     const lvl = lordLevel(s);
     const name = isle.kind === 'bian' && !mine ? 'Đảo Bí Ẩn ???' : isle.name;
-    const guard = isle.guard.map(([k, lv]) => `<div class="enemy"><img src="${portraitUrl(k)}" alt=""><span>${MONSTERS[k].name}</span><small>cấp ${lv} · ${SKILLS[MONSTERS[k].skill].name}</small></div>`).join('');
+    const guard = isle.guard.map(([k, lv]) => `<div class="enemy"><img src="${portraitUrl(k)}" alt=""><span>${enemyBase(k).name}</span><small>cấp ${lv} · ${SKILLS[enemyBase(k).skill].name}</small></div>`).join('');
     const head = `<div class="lv-head"><img class="lv-img" src="${canvasUrl(`isle-${isle.id}`, () => drawSeaIsland(isle.id, 14 + isle.lv * 5, 'wild', 1), 3)}" alt="">
       <div><h3>${esc(name)}</h3><p class="muted">${K.name} · cấp ${isle.lv} · (${isle.c}, ${isle.r})</p><p class="small">${esc(K.desc)}</p>
       <p>${own ? `Chủ quyền: <b>${own.p === s.id ? 'của bạn' : esc(own.n)}</b>${own.g ? ` [${esc(own.g)}]` : ''}` : '<b class="good">Chưa ai cắm cờ</b>'}</p></div></div>`;

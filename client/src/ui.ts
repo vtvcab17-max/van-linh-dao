@@ -10,6 +10,7 @@ import {
   GAME,
   INTRO,
   LINH_VAT,
+  enemyBase,
   MONSTERS,
   RES,
   RES_KEYS,
@@ -888,7 +889,7 @@ export class UI {
       const bonus = Math.min(5, st?.wins ?? 0);
       return `
         <p class="muted">Cấp ${w.level + bonus}${bonus ? ` (mạnh lên sau ${st!.wins} lần bị dọn)` : ''}</p>
-        <div class="enemies">${w.enemies.map(([k, lv]) => `<div class="enemy"><img src="${portraitUrl(k)}" alt=""><span>${MONSTERS[k].name}</span><small>cấp ${lv + bonus} · ${SKILLS[MONSTERS[k].skill].name}</small></div>`).join('')}</div>
+        <div class="enemies">${w.enemies.map(([k, lv]) => `<div class="enemy"><img src="${portraitUrl(k)}" alt=""><span>${enemyBase(k).name}</span><small>cấp ${lv + bonus} · ${SKILLS[enemyBase(k).skill].name}</small></div>`).join('')}</div>
         <div class="card"><small>Phần thưởng</small><div class="costs">${costHtml(w.loot, { ...s.res, ...Object.fromEntries(RES_KEYS.map((k) => [k, 1e9])) })}${w.chest !== undefined ? ` <span class="cost" style="color:${CHESTS[w.chest].color}">+ có thể rơi ${CHESTS[w.chest].name}</span>` : ''}</div></div>
         ${this.sailLine(wildCell(this.store.s, w.id))}
         ${this.sailButton(wait <= 0, `Quái kéo về sau ${secs(wait / s.speed)}`, 'Lên thuyền ra trận')}`;

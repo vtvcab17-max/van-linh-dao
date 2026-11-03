@@ -233,6 +233,7 @@ export const SKILLS: Record<SkillKey, { name: string; desc: string }> = {
   cuoploi: { name: 'Cướp Lời', desc: 'Đòn hiểm, 140% công' },
 };
 
+import { isRandKey, randBase, type RandKey } from './monstergen';
 export type MonsterKey = 'cuagai' | 'sualua' | 'khida' | 'canoc' | 'cuada' | 'haitac' | 'baytheo';
 export const MONSTERS: Record<MonsterKey, UnitBase> = {
   cuagai: { name: 'Cua Gai', hp: 70, atk: 8, def: 10, spd: 5, skill: 'phandon', row: 'front' },
@@ -244,11 +245,21 @@ export const MONSTERS: Record<MonsterKey, UnitBase> = {
   baytheo: { name: 'Bảy Thẹo', hp: 260, atk: 20, def: 12, spd: 12, skill: 'cuoploi', row: 'front' },
 };
 
+export type EnemyKey = MonsterKey | RandKey;
+/** Chỉ số của quái thường hoặc quái ngẫu nhiên. */
+export function enemyBase(k: EnemyKey): UnitBase {
+  if (isRandKey(k)) {
+    const b = randBase(k);
+    return { name: b.name, hp: b.hp, atk: b.atk, def: b.def, spd: b.spd, skill: b.skill, row: b.row };
+  }
+  return MONSTERS[k];
+}
+
 export interface WildDef {
   id: string;
   name: string;
   level: number;
-  enemies: [MonsterKey, number][];
+  enemies: [EnemyKey, number][];
   loot: Partial<Record<ResKey, number>>;
   chest?: number; // chỉ số phẩm hòm thưởng thêm
   chestChance?: number; // xác suất rơi hòm khi thắng
