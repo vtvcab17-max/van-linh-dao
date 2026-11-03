@@ -17,9 +17,9 @@ export const TROOPS: Record<TroopKey, TroopDef> = {
   giao: { name: 'Lính Giáo', hp: 90, atk: 10, def: 8, spd: 9, skill: 'phandon', row: 'front', mech: false, need: 1, cost: { luong: 2, go: 15, sat: 5 }, desc: 'Cầm giáo xông trước, đâm đau.' },
   cung: { name: 'Cung Thủ', hp: 60, atk: 13, def: 3, spd: 10, skill: 'danhkep', row: 'back', mech: false, need: 1, cost: { luong: 2, go: 20, tre: 10 }, desc: 'Đứng sau bắn hai phát liền.' },
   khien: { name: 'Giáp Binh', hp: 150, atk: 9, def: 14, spd: 7, skill: 'thietcot', row: 'front', mech: false, need: 2, cost: { luong: 3, sat: 25, go: 10 }, desc: 'Khiên sắt, kéo đòn về mình.' },
-  xenu: { name: 'Xe Nỏ Liên Châu', hp: 160, atk: 22, def: 8, spd: 8, skill: 'samset', row: 'back', mech: true, need: 1, cost: { go: 120, sat: 40, tre: 40 }, desc: 'Nỏ thần bắn liên hoàn trên xe bánh gỗ.' },
-  xeda: { name: 'Xe Bắn Đá', hp: 190, atk: 26, def: 10, spd: 6, skill: 'dapcang', row: 'back', mech: true, need: 2, cost: { go: 150, da: 120, sat: 60 }, desc: 'Ném đá trúng cả hàng địch.' },
-  voi: { name: 'Voi Chiến', hp: 420, atk: 24, def: 16, spd: 7, skill: 'cuoploi', row: 'front', mech: true, need: 3, cost: { luong: 20, go: 100, sat: 80, ngoc: 1 }, desc: 'Húc tung hàng trước. Cần thuyền buồm chiến trở lên.', heavy: true },
+  xenu: { name: 'Xe Nỏ Liên Châu', hp: 105, atk: 14, def: 6, spd: 8, skill: 'samset', row: 'back', mech: true, need: 1, cost: { go: 120, sat: 40, tre: 40 }, desc: 'Nỏ thần bắn liên hoàn trên xe bánh gỗ.' },
+  xeda: { name: 'Xe Bắn Đá', hp: 125, atk: 15, def: 8, spd: 6, skill: 'dapcang', row: 'back', mech: true, need: 2, cost: { go: 150, da: 120, sat: 60 }, desc: 'Ném đá trúng cả hàng địch.' },
+  voi: { name: 'Voi Chiến', hp: 240, atk: 16, def: 12, spd: 7, skill: 'cuoploi', row: 'front', mech: true, need: 3, cost: { luong: 20, go: 100, sat: 80, ngoc: 1 }, desc: 'Húc tung hàng trước. Cần thuyền buồm chiến trở lên.', heavy: true },
 };
 export const TROOP_KEYS = Object.keys(TROOPS) as TroopKey[];
 export const isMech = (k: TroopKey) => TROOPS[k].mech;
@@ -51,10 +51,13 @@ export function fitCargo(want: Troops, have: Troops, cap: number, fleet: { k: st
   return out;
 }
 
-/** Một đội quân trong trận: máu nhân n, công nhân n^0.85. */
+/** Hệ số sức mạnh của đội quân đông: đông thì chen chúc, hiệu quả giảm dần. */
+export const SQUAD_HP_EXP = 0.6;
+export const SQUAD_ATK_EXP = 0.5;
+/** Một đội quân trong trận: máu nhân n^0.6, công nhân n^0.5. */
 export function squadUnit(k: TroopKey, n: number): UnitBase {
   const d = TROOPS[k];
-  return { name: `${d.name} ×${n}`, hp: d.hp * n, atk: Math.round(d.atk * Math.pow(n, 0.85)), def: d.def, spd: d.spd, skill: d.skill, row: d.row };
+  return { name: `${d.name} ×${n}`, hp: Math.round(d.hp * Math.pow(n, SQUAD_HP_EXP)), atk: Math.round(d.atk * Math.pow(n, SQUAD_ATK_EXP)), def: d.def, spd: d.spd, skill: d.skill, row: d.row };
 }
 /** Số còn sống theo máu còn lại của cả đội. */
 export function survivors(n: number, hp: number, maxHp: number): number {

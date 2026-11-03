@@ -19,7 +19,7 @@ Thuyền chở quân (sức chở theo bậc thuyền và hạm đội) → ra t
 - R2 Sức chở: 8 + 4 × bậc thuyền + hạm đội (ghe 6, thuyền buồm 10, chiến hạm 16; thuyền hỏng không tính).
 - R3 Quân tại đảo nhà (`troops`), tại từng đảo đã cắm cờ (`isleTroops`), kế hoạch mang theo (`mang`).
 - R4 Ra khơi (hoang đảo, đảo tự nhiên, đảo người chơi) mang theo quân theo kế hoạch, bị giới hạn bởi quân sẵn có, sức chở, luật lên thuyền; quân mang theo ăn lương.
-- R5 Trong trận mỗi loại quân là một đơn vị: máu × n, công × n^0.85. Sau trận, còn sống theo máu còn lại; thắng đảo tự nhiên thì quân còn lại đóng ở đảo, ngoài ra về đảo nhà.
+- R5 Trong trận mỗi loại quân là một đơn vị: máu × n^0.6, công × n^0.5 (đã cân bằng bằng mô phỏng: 12 quân hỗn hợp nâng tỉ lệ thắng bot từ 56% lên 89% ở cấp 5). Sau trận, còn sống theo máu còn lại; thắng đảo tự nhiên thì quân còn lại đóng ở đảo, ngoài ra về đảo nhà.
 - R6 Quân ở nhà là lực lượng giữ đảo; tính vào sức mạnh (2 mỗi lính, 6 mỗi cơ giới).
 - R7 Quân đóng ở đảo cắm cờ: mỗi 8 quân thêm 1 cấp đồn (tối đa 3) cho đảo đó.
 - Kiểm thử: tests/troops.test.ts.

@@ -26,11 +26,12 @@ describe('quân', () => {
     expect(c.voi).toBeUndefined();
     expect(fitCargo({ giao: 99 }, { giao: 5 }, 12, [])).toEqual({ giao: 5 });
   });
-  it('đội hình: máu nhân n, công nhân n^0.85', () => {
+  it('đội hình: máu nhân n^0.6, công nhân n^0.5, một người thì đúng chỉ số gốc', () => {
     const one = squadUnit('giao', 1);
     const ten = squadUnit('giao', 10);
-    expect(ten.hp).toBe(one.hp * 10);
-    expect(ten.atk).toBe(Math.round(one.atk * Math.pow(10, 0.85)));
+    expect(one.hp).toBe(TROOPS.giao.hp);
+    expect(ten.hp).toBe(Math.round(TROOPS.giao.hp * Math.pow(10, 0.6)));
+    expect(ten.atk).toBe(Math.round(TROOPS.giao.atk * Math.pow(10, 0.5)));
     expect(ten.name).toContain('×10');
   });
   it('còn sống theo máu còn lại', () => {
