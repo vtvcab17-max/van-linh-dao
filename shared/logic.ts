@@ -45,6 +45,7 @@ import {
 } from './eco';
 import { inWorld, isleById, lairById, WORLD_H, WORLD_VERSION, WORLD_W, type Isle } from './world';
 import { cleanDef } from './economy';
+import { FISH, herdCap, HATCH_EGGS, isAdult, newSociety, PRES_PRICE, PRES_YIELD, PRESERVED, prosperity, SELL_MEAT, settleSociety, SPECIES, trauBonus, type FishHow, type PKey, type Society, type Sp } from './society';
 import {
   DUP_FRAGS, FRAG_PER_GENERAL, GEN_IDS, GENERALS, LEG_IDS, LEG_WEAPONS, LT_BUY_DAILY, LT_BUY_PRICE, LT_SELL_PRICE, MAX_STAR, PITY, rollWheel, SPIN10_COST, SPIN_COST, starMult, ltDrop,
   type GenId, type LegWeaponId, type Rarity,
@@ -82,6 +83,7 @@ export interface CompState {
   unlocked: boolean;
 }
 export interface PlayerState {
+  soc: Society;
   v: 1;
   id: string;
   name: string;
@@ -333,6 +335,7 @@ export function newPlayer(id: string, name: string, now: number, seedStr?: strin
     home: null,
     seen: '',
     wv: WORLD_VERSION,
+    soc: newSociety(),
     isles: [],
     claims: [],
     thienMon: { week: weekOf(now), done: false },
@@ -549,12 +552,13 @@ export function occupied(s: PlayerState, x: number, y: number): boolean {
 export function incomePerHour(s: PlayerState, now = s.lastReal) {
   const period = routePeriod(now);
   const bonus = (s.bag.trongdong ? 0.25 : 0) + (s.guild ? 0.05 * s.guild.lv : 0);
-  const dan = slotSum(s.dinh, 'nhadan'); // mỗi gian nhà một hộ, mỗi hộ 1 đồng/giờ
+  const pr = prosperity(s);
+  const dan = Math.round(slotSum(s.dinh, 'nhadan') * pr.eff); // mỗi gian nhà một hộ, 1 đồng/giờ × hiệu suất (phồn vinh, quá tải)
   const toll = tollPerHour(homeCell(s), period, bLevel(s.dinh, 'tramthue'), bonus);
   let cong = 0;
   for (const v of s.chuHau) if (v.until > now) cong += tributePerHour(v.power) + tollPerHour(v.cell, period, v.port) * VASSAL_TOLL_SHARE;
   const nop = s.chuQuan && s.chuQuan.until > now ? tributePerHour(power(s)) : 0;
-  return { dan, toll, cong, nop, total: dan + toll + cong - nop };
+  return { dan, toll, cong, nop, thuong: pr.merchants, total: dan + toll + cong - nop + pr.merchants };
 }
 
 // ---------- vòng thời gian ----------
@@ -595,6 +599,7 @@ export function tick(s: PlayerState, now: number): string[] {
     }
   const dt = dtReal * s.speed;
   s.gt += dt;
+  settleSociety(s, dt);
   const min = dt / 60_000;
   for (const k of LV_KEYS) {
     const l = s.lv[k];
@@ -865,6 +870,12 @@ export type Action =
   | { t: 'craft'; g: GearKey }
   | { t: 'rename'; name: string; island: string }
   | { t: 'avatar'; av: Avatar }
+  | { t: 'herdBuy'; sp: Sp }
+  | { t: 'herdUse'; id: string }
+  | { t: 'egg'; use: 'food' | 'hatch' }
+  | { t: 'bao'; k: PKey }
+  | { t: 'banBQ' }
+  | { t: 'fish'; how: FishHow }
   | { t: 'speed'; speed: number }
   | { t: 'quay'; n: 1 | 10 }
   | { t: 'chuTuong'; id: GenId | null }
@@ -1448,6 +1459,71 @@ export function apply(s: PlayerState, a: Action): Outcome {
       s.fleet.splice(i, 1);
       return { ok: true, msg: 'Đã tháo dỡ thuyền.' };
     }
+    case 'herdBuy': {
+      const D = SPECIES[a.sp];
+      if (!D) return fail('Không có giống này.');
+      if (s.soc.herd.length >= herdCap(s)) return fail(`Chuồng đã đủ ${herdCap(s)} con. Xây thêm chuồng hoặc nâng cấp.`);
+      if (s.res.tien < D.buy) return fail(`Cần ${D.buy} đồng mua ${D.stages[0][0].toLowerCase()}.`);
+      s.res.tien -= D.buy;
+      s.soc.herd.push({ id: 'a' + s.soc.nid++, sp: a.sp, born: s.gt });
+      return { ok: true, msg: `Mua 1 ${D.stages[0][0].toLowerCase()}. Phải nuôi lớn qua ${D.stages.length} giai đoạn.` };
+    }
+    case 'herdUse': {
+      const i = s.soc.herd.findIndex((x) => x.id === a.id);
+      if (i < 0) return fail('Không thấy con vật này.');
+      const an = s.soc.herd[i];
+      if (!isAdult(an, s.gt)) return fail('Còn nhỏ, chưa dùng được. Cần nuôi thêm.');
+      if (an.sp !== 'lon') return fail(`${SPECIES[an.sp].name} nuôi để ${SPECIES[an.sp].use}, không mổ.`);
+      s.soc.herd.splice(i, 1);
+      s.res.thit = Math.min(storageCap(s), s.res.thit + SELL_MEAT);
+      return { ok: true, msg: `Mổ lợn được ${SELL_MEAT} thịt. Thịt tươi chóng hỏng, hãy muối hoặc ăn sớm.` };
+    }
+    case 'egg': {
+      const n = Math.floor(s.soc.eggs);
+      if (n < 1) return fail('Chưa có trứng.');
+      if (a.use === 'food') {
+        s.soc.eggs = 0;
+        s.res.trung = Math.min(storageCap(s), s.res.trung + n);
+        return { ok: true, msg: `Nhặt ${n} trứng làm thức ăn.` };
+      }
+      if (n < HATCH_EGGS) return fail(`Cần ${HATCH_EGGS} trứng để ấp.`);
+      if (s.soc.herd.length >= herdCap(s)) return fail('Chuồng đã đầy, chưa có chỗ cho gà con.');
+      s.soc.eggs -= HATCH_EGGS;
+      s.soc.herd.push({ id: 'a' + s.soc.nid++, sp: 'ga', born: s.gt });
+      return { ok: true, msg: `Ấp ${HATCH_EGGS} trứng nở 1 gà con.` };
+    }
+    case 'bao': {
+      const k = a.k;
+      if (!(k in PRESERVED)) return fail('Không chế biến được.');
+      const have = k === 'sua' ? Math.floor(s.soc.sua) : Math.floor(s.res[k]);
+      if (have < 2) return fail('Cần ít nhất 2 phần để chế biến.');
+      if (k === 'sua') s.soc.sua -= have;
+      else s.res[k] -= have;
+      const out = Math.max(1, Math.floor(have * PRES_YIELD));
+      s.soc.kho[k] = (s.soc.kho[k] ?? 0) + out;
+      return { ok: true, msg: `${PRESERVED[k]}: ${out} phần, không bị hỏng.` };
+    }
+    case 'banBQ': {
+      let n = 0;
+      for (const v of Object.values(s.soc.kho)) n += v ?? 0;
+      if (n < 1) return fail('Chưa có đồ chế biến để bán.');
+      s.soc.kho = {};
+      s.res.tien += n * PRES_PRICE;
+      return { ok: true, msg: `Bán ${n} phần đồ chế biến được ${n * PRES_PRICE} đồng.` };
+    }
+    case 'fish': {
+      const F = FISH[a.how];
+      if (!F) return fail('Cách câu này chưa có.');
+      const last = s.soc.fishAt[a.how];
+      if (last !== undefined && s.gt - last < F.cd) return fail(`${F.name}: chưa tới lượt, còn ${Math.ceil((F.cd - (s.gt - last)) / 60_000)} phút.`);
+      const ben = bLevel(s.dinh, 'benthuyen');
+      if (a.how !== 'can' && ben < 1) return fail('Cần Bến thuyền để giăng lưới hoặc ra khơi.');
+      if (a.how === 'thuyen' && !s.fleet.some((x) => x.k === 'ghe')) return fail('Cần một chiếc ghe đậu ở bến.');
+      s.soc.fishAt[a.how] = s.gt;
+      const n = F.ca * (1 + 0.25 * Math.max(0, ben - 1));
+      s.res.ca = Math.min(storageCap(s), s.res.ca + n);
+      return { ok: true, msg: `${F.name}: được ${n} cá. Cá tươi chóng hỏng, hãy làm cá khô.` };
+    }
     case 'speed': {
       s.speed = Math.max(1, Math.min(20, a.speed));
       return { ok: true, msg: s.speed > 1 ? `Tốc độ test x${s.speed}` : 'Tốc độ thường' };
@@ -1745,6 +1821,7 @@ export function migrate(raw: unknown, id: string, name: string, now: number): Pl
   merged.tech = { ...s.tech };
   if (typeof merged.vo !== 'number') merged.vo = 100;
   merged.ltDay = { ...fresh.ltDay, ...s.ltDay };
+  merged.soc = { ...newSociety(), ...(s.soc ?? {}) } as Society;
   // hải đồ mở rộng (hơn 1 triệu ô): toạ độ cũ không còn đúng → dời đảo tới vành ngoài mới, khám phá lại
   if (merged.wv !== WORLD_VERSION) {
     merged.wv = WORLD_VERSION;
@@ -2246,7 +2323,7 @@ export function plotState(s: PlayerState, d: Dinh, i: number, now = s.lastReal) 
   const { p: prog, storms } = cropProgressCached(p.k, p.at, now, regionOf(homeCell(s)), speedK);
   const ripe = prog >= 1;
   const over = ripe && now - p.at > c.ms * 1.6 + OVERRIPE_MS;
-  const n = Math.max(1, Math.round(c.per * PLOT_YIELD * (1 + 0.2 * (s.tech.giongLua ?? 0)) * Math.max(0.4, Math.pow(0.85, storms)) * (over ? 0.5 : 1)));
+  const n = Math.max(1, Math.round(c.per * PLOT_YIELD * (1 + 0.2 * (s.tech.giongLua ?? 0) + trauBonus(s)) * Math.max(0.4, Math.pow(0.85, storms)) * (over ? 0.5 : 1)));
   return { k: p.k, p: Math.min(1, prog), ripe, over, storms, out: c.out, n, left: ripe ? 0 : Math.max(0, (1 - prog) * c.ms / Math.max(0.2, speedK)) };
 }
 /** Tóm tắt cả ruộng: ô đầu tiên đang có cây (giữ cho chỗ cũ dùng). */

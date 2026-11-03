@@ -95,8 +95,14 @@ export class BattleScene extends Phaser.Scene {
     const b = this.data0.battle;
     this.layout(b.a, 0);
     this.layout(b.b, 1);
-    if (!this.data0.pvp) this.input.on('pointerup', () => (this.speed = this.speed === 1 ? 3 : 1));
     this.time.delayedCall(500, () => this.next());
+  }
+
+  /** Đổi tốc độ x1 ↔ x2 (không áp cho trận người chơi). Trả về tốc độ mới. */
+  toggleSpeed() {
+    if (this.data0?.pvp) return 1;
+    this.speed = this.speed === 1 ? 2 : 1;
+    return this.speed;
   }
 
   skip() {

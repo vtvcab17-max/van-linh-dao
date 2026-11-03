@@ -7,7 +7,6 @@ import { drawIsland, drawScaffold, LV_SIZE } from '../art/sprites';
 import { avatarTex, dinhTex, ensureTex, HD, lvTex, preloadAll, texBox, waterTex } from '../art/textures';
 import { BUILDINGS, type BKey } from '../../../shared/economy';
 import { occupied } from '../../../shared/logic';
-import { drawUnit, GENERALS as GEN_LOOKS, TROOP_OF, TROOPS } from '../art2/units';
 import { drawBoat } from '../art2/builds';
 
 /** Hình vẽ chi tiết gấp HD lần nên thu lại cho đúng kích thước trong thế giới. */
@@ -103,7 +102,6 @@ export class IslandScene extends Phaser.Scene {
     this.tweens.add({ targets: this.lvs.thuyen, angle: { from: -2, to: 2 }, duration: 1300, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     // nhân vật chủ đảo (nam/nữ); chỉ đi theo ô vuông, chạm vào không mở gì cả
     this.an = this.add.image(wx(11) + 8, wx(12) + FOOT, avatarTex(this, this.store.s.avatar)).setOrigin(0.5, 1).setScale(Q);
-    this.time.addEvent({ delay: 1800, loop: true, callback: () => this.wanderTroop() });
     // bóng mờ nhân vật hiện xuyên qua nhà/cây khi đứng khuất phía sau
     this.anGhost = this.add.image(this.an.x, this.an.y, this.an.texture.key).setOrigin(0.5, 1).setScale(Q).setAlpha(0.5).setDepth(4500).setVisible(false);
     this.events.on('wake', () => this.enterFromSea());
@@ -597,7 +595,6 @@ export class IslandScene extends Phaser.Scene {
     for (const [id, img] of this.chests) if (!seenC.has(id)) (img.destroy(), this.chests.delete(id));
     this.syncLv();
     this.syncDinh(s);
-    this.syncTroops(s);
     this.syncFleet(s);
   }
 
@@ -607,53 +604,7 @@ export class IslandScene extends Phaser.Scene {
   }
 
   // ---------------- quân đồn trú: tướng chủ lực và lính chibi đứng quanh nhà ----------------
-  private troops: { img: Phaser.GameObjects.Image; x: number; y: number }[] = [];
-  private troopKey = '';
-  private syncTroops(s: PlayerState) {
-    const keys: string[] = [];
-    const gl = s.chuTuong ? GEN_LOOKS.find((g) => g.id === s.chuTuong) : undefined;
-    if (gl) keys.push(ensureTex(this, `gen-${gl.id}`, () => drawUnit(gl.look)));
-    const types = (Object.keys(s.comps) as (keyof typeof s.comps)[]).filter((k) => s.comps[k].unlocked).map((k) => TROOP_OF[k] ?? 'danbinh');
-    const don = s.dinh.filter((d) => d.k === 'donbinh').reduce((a, d) => a + (d.lv || 0), 0);
-    const n = Math.min(8, Math.max(1, types.length) + don * 2);
-    for (let i = 0; i < n; i++) {
-      const t = types[i % Math.max(1, types.length)] ?? 'danbinh';
-      const def = TROOPS.find((x) => x.id === t) ?? TROOPS[0];
-      keys.push(ensureTex(this, `troop-${def.id}`, () => drawUnit(def.look)));
-    }
-    const key = `${keys.join(',')}|${s.land}|${s.dinh.map((d) => `${d.x},${d.y}`).join(';')}|${s.nodes.length}`;
-    if (key === this.troopKey) return;
-    this.troopKey = key;
-    for (const t of this.troops) t.img.destroy();
-    this.troops = [];
-    // ô trống gần nhà Lều, lan dần ra (cách một ô cho thoáng)
-    const me = this.cellOf();
-    const start = LV_POS.leu;
-    const seen = new Set<number>([start.y * GRID + start.x]);
-    const q = [start];
-    const free: { x: number; y: number }[] = [];
-    for (let i = 0; i < q.length && free.length < keys.length * 2 + 2; i++) {
-      const c = q[i];
-      if (this.standable(c.x, c.y, false) && Math.abs(c.x - me.x) + Math.abs(c.y - me.y) > 1) free.push(c);
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = c.x + dx, ny = c.y + dy;
-        if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID || seen.has(ny * GRID + nx) || !isLand(s, nx, ny)) continue;
-        seen.add(ny * GRID + nx);
-        q.push({ x: nx, y: ny });
-      }
-    }
-    // ưu tiên ô trong đảo; đảo nhỏ quá thì mới cho đứng sát bờ
-    const inner = free.filter((c) => this.standable(c.x, c.y));
-    const edge = free.filter((c) => !inner.includes(c));
-    const spots = [...inner.filter((_, i) => i % 2 === 1), ...inner.filter((_, i) => i % 2 === 0), ...edge];
-    keys.forEach((tk, i) => {
-      const c = spots[i];
-      if (!c) return;
-      const img = this.add.image(wx(c.x) + 8, wx(c.y) + FOOT, tk).setOrigin(0.5, 1).setScale(Q).setDepth(wx(c.y) + FOOT);
-      img.setFlipX(((c.x * 7 + c.y * 3) & 1) === 1);
-      this.troops.push({ img, x: c.x, y: c.y });
-    });
-  }
+  // Đảo chỉ gồm đất và công trình: không còn lính/dân đi lại (spec 002, US1).
   /** Phần có hình của một ảnh (toạ độ thế giới), bỏ phần trong suốt. */
   private solidRect(img: Phaser.GameObjects.Image) {
     const b = texBox(this, img.texture.key);
@@ -683,27 +634,6 @@ export class IslandScene extends Phaser.Scene {
     if (innerOnly && !(isLand(s, tx + 1, ty) && isLand(s, tx - 1, ty) && isLand(s, tx, ty + 1) && isLand(s, tx, ty - 1))) return false;
     const x = wx(tx) + 8, foot = wx(ty) + FOOT;
     return !this.covered(x, foot - 4, foot) && !this.covered(x, foot - 16, foot);
-  }
-
-  /** Thỉnh thoảng một người lính bước sang ô bên cạnh cho đảo có sức sống. */
-  private wanderTroop() {
-    if (!this.troops.length) return;
-    const t = this.troops[Math.floor(Math.random() * this.troops.length)];
-    const me = this.cellOf();
-    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]].sort(() => Math.random() - 0.5);
-    for (const [dx, dy] of dirs) {
-      const nx = t.x + dx, ny = t.y + dy;
-      if (!this.standable(nx, ny) || (nx === me.x && ny === me.y) || this.troops.some((o) => o.x === nx && o.y === ny)) continue;
-      // không đi xa chỗ đóng quân quá 3 ô
-      if (Math.abs(nx - LV_POS.leu.x) + Math.abs(ny - LV_POS.leu.y) > 6) continue;
-      t.x = nx;
-      t.y = ny;
-      if (dx) t.img.setFlipX(dx < 0);
-      this.tweens.add({ targets: t.img, x: wx(nx) + 8, y: wx(ny) + FOOT, duration: 320, ease: 'Linear', onUpdate: () => t.img.setDepth(t.img.y) });
-      return;
-    }
-    // không có chỗ đi thì quay mặt
-    t.img.setFlipX(!t.img.flipX);
   }
 
   // ---------------- chiến thuyền neo quanh bến ----------------

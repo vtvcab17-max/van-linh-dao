@@ -506,6 +506,16 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 .pay .qr { display: block; width: 220px; max-width: 70vw; margin: 8px auto; background: #fff; border-radius: 6px; }
 .pay .code { font-family: monospace; font-size: 16px; color: var(--gold); letter-spacing: 1px; }
 .orders { list-style: none; padding: 0; } .orders li { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.1); font-size: 13px; }
+
+/* Không gian bên trong công trình: toàn màn hình, có nội thất (spec 002 US2) */
+#sheet[data-kind="dinh"] { top: max(8px, env(safe-area-inset-top, 0px)); max-height: none; bottom: calc(max(8px, env(safe-area-inset-bottom, 0px)) + 8px); width: min(560px, calc(100% - 16px)); z-index: 30; }
+#sheet[data-kind="dinh"] .sheet-body { overflow-y: auto; }
+.room { position: relative; width: 100%; aspect-ratio: 96 / 56; background-size: 100% 100%; image-rendering: pixelated; border-radius: 10px; border: 3px solid #3d2b2b; margin-bottom: 8px; box-shadow: inset 0 -30px 40px rgba(0,0,0,.25); flex: none; }
+.room-t { position: absolute; left: 8px; bottom: 8px; right: 8px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(40,26,26,.78); }
+.room-t img { width: 36px; height: 36px; image-rendering: pixelated; object-fit: contain; }
+.room-t h3 { margin: 0; font: 20px/1 var(--font-pixel); color: var(--gold); }
+.room-t .tier { margin: 2px 0 0; font-size: 12px; color: var(--paper-dim); }
+.room-d { margin: 0 0 8px; }
 </style>
 </head>
 <body>
@@ -530,6 +540,7 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
         <button id="btnExpand" type="button" class="mi isl" data-ic="expand"><span class="mi-t">Khai hoang</span></button>
         <button id="btnBuild" type="button" class="mi isl" data-ic="build"><span class="mi-t">Xây dựng</span></button>
         <button id="btnWheel" type="button" class="mi gold" data-ic="wheel"><span class="mi-t">Vòng Quay</span><i class="mi-n" hidden></i></button>
+        <button id="btnXaHoi" type="button" class="mi isl" data-ic="ga"><span class="mi-t">Xã hội</span></button>
         <button id="btnTuong" type="button" class="mi" data-ic="tuong"><span class="mi-t">Tướng</span></button>
         <button id="zMap" type="button" class="mi" data-ic="map"><span class="mi-t">Hải đồ</span></button>
         <button id="btnSpeed" type="button" class="mi isl" data-ic="speed"><span class="mi-t">Tốc độ x1</span></button>
@@ -557,7 +568,7 @@ details.danger { display: flex; flex-direction: column; gap: 6px; }
 <div id="perf" hidden></div>
 <div id="maplabels" hidden></div>
 <div id="buildlabels"></div>
-<div id="battlebar" class="panel" hidden><div><b id="battleTitle"></b><span>Chạm màn hình để tua nhanh</span></div><button id="btnSkip" type="button">Bỏ qua</button></div>
+<div id="battlebar" class="panel" hidden><div><b id="battleTitle"></b><span>Bấm x1/x2 để đổi tốc độ</span></div><button id="btnBSpeed" type="button">x1</button><button id="btnSkip" type="button">Bỏ qua</button></div>
 <div id="intro" hidden><div class="panel"><small>Đêm Trăng Máu</small><p></p><button class="primary" type="button">Tiếp</button></div></div>
 <div id="splash">
   <div class="studio">Beta Holding giới thiệu</div>

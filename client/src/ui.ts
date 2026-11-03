@@ -46,6 +46,8 @@ import { sound } from './audio';
 import { menuIcon } from './art2/icons';
 import { SPIN_COST } from '../../shared/gacha';
 import { drawDinh2 as drawDinh } from './art2/dinh2';
+import { roomUrl } from './art2/room';
+import { openSociety } from './ui-society';
 import { playTrailer } from './trailer';
 import type { IslandScene } from './scenes/IslandScene';
 import type { SeaScene } from './scenes/SeaScene';
@@ -232,6 +234,7 @@ export class UI {
     $('#res').addEventListener('click', (e) => ((e.target as HTMLElement).closest('[data-k="lt"]') ? openWheel(this) : openKho(this)));
     $('#wxChip').addEventListener('click', () => openWeather(this));
     $('#btnTuong').addEventListener('click', () => openGenerals(this));
+    $('#btnXaHoi').addEventListener('click', () => openSociety(this));
     $('#btnBuild').addEventListener('click', () => (this.island.placing ? this.island.setPlacing(null) : this.openBuildMenu()));
     $('#income').addEventListener('click', () => this.openCho('linh'));
     $('#vassal').addEventListener('click', () => this.openCho('linh'));
@@ -272,6 +275,10 @@ export class UI {
     addEventListener('keydown', (e) => e.key === 'Escape' && this.menu(false));
     $('#voyage').addEventListener('click', () => this.onVoyageChip());
     addEventListener('resize', () => setTimeout(() => this.updatePads(), 120));
+    $('#btnBSpeed').addEventListener('click', () => {
+      const v = (this.game.scene.getScene('battle') as BattleScene).toggleSpeed();
+      $('#btnBSpeed').textContent = `x${v}`;
+    });
     $('#btnSkip').addEventListener('click', () => (this.game.scene.getScene('battle') as BattleScene).skip());
     const navIcons: Record<string, string> = {
       island: canvasUrl('nav-leu', () => drawLeu(1, false, 'thuong'), 1),
@@ -953,6 +960,8 @@ export class UI {
     $('#tools').hidden = true;
     sound.setMood('battle');
     $('#btnSkip').hidden = !!o.pvp;
+    $('#btnBSpeed').hidden = !!o.pvp;
+    $('#btnBSpeed').textContent = 'x1';
     $('#battleTitle').textContent = o.pvp ? `${title} · trận người chơi, không tua` : title;
     const data: BattleData = {
       battle: o.battle!,
@@ -1170,7 +1179,8 @@ export class UI {
       const left = busy ? d.doneAt! - (s.gt + (Date.now() - s.lastReal) * s.speed) : 0;
       const next = d.lv < 3 && !busy ? `<div class="card"><small>Nâng lên ${b.names[d.lv]}</small><div class="costs">${costHtml(b.cost[d.lv], s.res)}</div><p class="muted small">Xây mất ${hms(b.ms[d.lv])}</p>
         <button class="primary wide" id="btnUp" ${canPay(s, b.cost[d.lv]) && busySlots(s) < buildSlots(s) ? '' : 'disabled'}>${busySlots(s) >= buildSlots(s) ? 'Thợ đang bận hết' : 'Nâng cấp'}</button></div>` : '';
-      return `<div class="lv-head"><img class="lv-img" src="${canvasUrl(`dinh2-ui-${d.k}-${lv}`, () => drawDinh(d.k, lv), 4)}" alt=""><div><h3>${b.names[lv - 1]}</h3><p class="tier">Cấp ${d.lv || 0}/3${busy ? ` · đang xây lên cấp ${d.to}` : ''}</p><p class="muted">${b.desc}</p></div></div>
+      return `<div class="room" style="background-image:url(${roomUrl(d.k)})"><div class="room-t"><img src="${canvasUrl(`dinh2-ui-${d.k}-${lv}`, () => drawDinh(d.k, lv), 2)}" alt=""><div><h3>${b.names[lv - 1]}</h3><p class="tier">Cấp ${d.lv || 0}/3${busy ? ` · đang xây lên cấp ${d.to}` : ''}</p></div></div></div>
+        <p class="muted room-d">${b.desc}</p>
         ${busy ? `<div class="card"><small>Đang xây</small><p>Còn <b>${hms(left / s.speed)}</b></p></div>` : ''}
         ${dinhExtra(this, d)}
         ${next}
