@@ -1,6 +1,6 @@
 // Bản chính thức: chơi online qua server Cloudflare (Worker + Durable Object "Hải Khu").
 // Server giữ dữ liệu đảo và quyết định kết quả. Máy chỉ gửi hành động; nếu lệch, server gửi lại trạng thái đúng.
-import type { Action, IslandPub, PlayerState, RaidEvent } from '../../../shared/logic';
+import type { Action, IslandPub, Outcome, PlayerState, RaidEvent } from '../../../shared/logic';
 import { logout, forgetSession, type Session } from '../login';
 import { NetBase } from './base';
 import type { BossWorld } from '../../../shared/boss';
@@ -26,6 +26,7 @@ export class CloudflareNet extends NetBase {
   private lastAct = '';
   private everWelcomed = false;
   private rid = 0;
+  private results = new Map<number, (r: { o: Outcome; state: PlayerState } | null) => void>();
   private waits = new Map<number, (r: { ok: boolean; msg: string; data?: any }) => void>();
   private bossW: BossWorld | null = null;
   private own: Record<string, IsleOwner> = {};
@@ -165,6 +166,15 @@ export class CloudflareNet extends NetBase {
         this.emit('chat');
         return;
       }
+      case 'res': {
+        this.clock(m.serverNow);
+        const w = this.results.get(Number(m.rid));
+        if (w) {
+          this.results.delete(Number(m.rid));
+          w({ o: m.o as Outcome, state: m.state as PlayerState });
+        }
+        return;
+      }
       case 'mr': {
         const w = this.waits.get(Number(m.rid));
         if (w) {
@@ -247,6 +257,17 @@ export class CloudflareNet extends NetBase {
   }
   sendAction(a: Action, at: number, h: string) {
     this.send({ t: 'a', a, at, h });
+  }
+  /** Hành động do server quyết định kết quả (quay, hòm): chờ server trả kết quả thật. */
+  sendActionWait(a: Action, at: number) {
+    const rid = ++this.rid;
+    return new Promise<{ o: Outcome; state: PlayerState } | null>((done) => {
+      this.results.set(rid, done);
+      this.send({ t: 'a', a, at, h: '', rid });
+      setTimeout(() => {
+        if (this.results.delete(rid)) done(null);
+      }, 15_000);
+    });
   }
   async sendFeedback(f: Feedback) {
     this.send({ t: 'fb', fb: f });

@@ -4,7 +4,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { allBots } from '../../shared/bots';
 import { GAME } from '../../shared/data';
-import { apply, applyRaidAgainstMe, ascend, digest, migrate, newPlayer, publicOf, tick, type Action, type IslandPub, type PlayerState } from '../../shared/logic';
+import { apply, applyRaidAgainstMe, ascend, digest, SERVER_RNG_ACTIONS, stripSecret, migrate, newPlayer, publicOf, tick, type Action, type IslandPub, type PlayerState } from '../../shared/logic';
 import { ascendSlots, bossPoolMax, weekOf, type BossWorld } from '../../shared/boss';
 import { islandCell, worldFor } from '../../shared/map';
 import { isleById, pickSpawn, WORLD_VERSION } from '../../shared/world';
@@ -115,7 +115,9 @@ export class HaiKhu extends DurableObject<Env> {
   }
   private send(ws: WebSocket, m: unknown) {
     try {
-      ws.send(JSON.stringify(m));
+      // muối ngẫu nhiên là bí mật của server: không bao giờ gửi cho client
+      const o = m as { state?: { salt?: number } };
+      ws.send(JSON.stringify(o && typeof o === 'object' && o.state && o.state.salt !== undefined ? { ...o, state: stripSecret(o.state) } : m));
     } catch {
       /* đã đóng */
     }
@@ -148,6 +150,10 @@ export class HaiKhu extends DurableObject<Env> {
     if (!row?.save) return null;
     const s = migrate(JSON.parse(row.save), id, row.name, Date.now());
     s.speed = this.env.ALLOW_SPEED === '1' ? s.speed : 1;
+    if (!s.salt) {
+      s.salt = (crypto.getRandomValues(new Uint32Array(1))[0] | 1) >>> 0;
+      this.dirty.add(id);
+    }
     this.cache.set(id, s);
     return s;
   }
@@ -464,7 +470,7 @@ export class HaiKhu extends DurableObject<Env> {
       case 'ping':
         return this.send(ws, { t: 'pong', serverNow: Date.now() });
       case 'a':
-        return this.onAction(ws, a, m.a as Action, Number(m.at), String(m.h ?? ''));
+        return this.onAction(ws, a, m.a as Action, Number(m.at), String(m.h ?? ''), m.rid === undefined ? 0 : Number(m.rid));
       case 'chat': {
         const text = clean(m.text, 140);
         if (!text) return;
@@ -714,7 +720,7 @@ export class HaiKhu extends DurableObject<Env> {
     }
   }
 
-  private onAction(ws: WebSocket, a: Att, act: Action, at: number, clientHash: string) {
+  private onAction(ws: WebSocket, a: Att, act: Action, at: number, clientHash: string, rid = 0) {
     const s = this.load(a.id);
     if (!s || !act || typeof act !== 'object') return;
     const now = Date.now();
@@ -750,6 +756,8 @@ export class HaiKhu extends DurableObject<Env> {
         ws.serializeAttachment(a);
       }
     }
+    // hành động do server quyết định (quay, hòm): trả kết quả thật kèm trạng thái mới
+    if (rid && SERVER_RNG_ACTIONS.has(act.t)) return this.send(ws, { t: 'res', rid, o, state: s, serverNow: Date.now() });
     // lệch kết quả (máy bị sửa hoặc lệch giờ) → gửi lại trạng thái đúng
     if (!o.ok || (clientHash && clientHash !== digest(s))) this.send(ws, { t: 'sync', state: s, serverNow: Date.now(), msg: o.ok ? '' : o.msg });
   }

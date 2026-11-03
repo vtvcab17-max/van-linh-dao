@@ -90,6 +90,8 @@ export interface PlayerState {
   name: string;
   islandName: string;
   seed: number;
+  /** Muối bí mật, chỉ server biết (không bao giờ gửi cho client). */
+  salt?: number;
   rngN: number;
   seq: number;
   createdAt: number;
@@ -265,6 +267,20 @@ export function rngOf(s: PlayerState): Rng {
   s.rngN++;
   return mulberry32(hashStr(`${s.seed}:${s.rngN}`));
 }
+
+/** Ngẫu nhiên có giá trị (quay, hòm, LT rơi): trộn muối bí mật của server. */
+export function rngSecret(s: PlayerState): Rng {
+  s.rngN++;
+  return mulberry32(hashStr(s.salt === undefined ? `${s.seed}:${s.rngN}` : `${s.seed}:${s.salt}:${s.rngN}`));
+}
+/** Bản sao trạng thái không có muối, dùng khi gửi cho client. */
+export function stripSecret<T extends { salt?: number }>(s: T): T {
+  if (s.salt === undefined) return s;
+  const { salt: _salt, ...rest } = s;
+  return rest as T;
+}
+/** Hành động mà bản chính thức để server quyết định kết quả (client không áp dụng sớm). */
+export const SERVER_RNG_ACTIONS: ReadonlySet<string> = new Set(['quay', 'chest']);
 
 function nid(s: PlayerState, p: string) {
   s.seq++;
@@ -1040,7 +1056,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
       if (i < 0) return fail('Hòm đã trôi mất.');
       const c = s.chests[i];
       s.chests.splice(i, 1);
-      const r = rngOf(s);
+      const r = rngSecret(s);
       const got = addRes(s, rollChest(s, c.ci, r));
       s.stats.chests++;
       const q = doneQuest(s, 'q_chest');
@@ -1231,7 +1247,7 @@ export function apply(s: PlayerState, a: Action): Outcome {
       if (s.res.lt < cost) return fail(fromTickets ? `Còn ${fromTickets} lượt quay, cần thêm ${cost} Linh Thạch.` : `Cần ${cost} Linh Thạch để quay ${n} lần.`);
       s.luot -= fromTickets;
       s.res.lt -= cost;
-      const r = rngOf(s);
+      const r = rngSecret(s);
       const out: SpinResult[] = [];
       for (let i = 0; i < n; i++) out.push(spinOnce(s, r));
       const legs = out.filter((x) => x.leg).length;
@@ -2016,7 +2032,7 @@ export function cleanGen(raw: unknown): TeamSpec['gen'] {
 
 /** Linh Thạch rơi thêm sau trận (chiếm đảo, hang quái, hòm báu). */
 export function dropLT(s: PlayerState, kind: 'conquer' | 'bian' | 'wild' | 'chest'): number {
-  const n = ltDrop(rngOf(s), kind);
+  const n = ltDrop(rngSecret(s), kind);
   if (n > 0) s.res.lt += n;
   return n;
 }

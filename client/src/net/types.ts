@@ -1,4 +1,4 @@
-import type { Action, IslandPub, PlayerState, RaidEvent } from '../../../shared/logic';
+import type { Action, IslandPub, Outcome, PlayerState, RaidEvent } from '../../../shared/logic';
 import type { BossWorld } from '../../../shared/boss';
 import type { FleetView, IsleOwner } from '../../../shared/world';
 
@@ -65,6 +65,7 @@ export interface Net {
   /** Bản chính thức: server quyết định, máy chỉ gửi hành động. */
   authoritative?: boolean;
   sendAction?(a: Action, at: number, h: string): void;
+  sendActionWait?(a: Action, at: number): Promise<{ o: Outcome; state: PlayerState } | null>;
   serverNow?(): number;
   account?: { name: string; khu: string; logout: () => void };
   /** Chợ thế giới, đấu giá, thương hội (chỉ bản chính thức). */

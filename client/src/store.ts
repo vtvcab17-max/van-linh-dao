@@ -2,6 +2,7 @@
 import { GAME, LV_KEYS } from '../../shared/data';
 import {
   apply,
+  SERVER_RNG_ACTIONS,
   applyRaidAgainstMe,
   digest,
   migrate,
@@ -130,6 +131,21 @@ export class Store {
     return o;
   }
 
+
+  /**
+   * Hành động có ngẫu nhiên giá trị (quay, hòm): bản chính thức chờ server quyết định,
+   * máy không đoán trước được kết quả. Bản offline chạy tại chỗ như cũ.
+   */
+  async doRemote(a: Action): Promise<Outcome> {
+    if (!this.auth || !this.net.sendActionWait || !SERVER_RNG_ACTIONS.has(a.t)) return this.do(a);
+    const at = this.now();
+    tick(this.s, at);
+    const r = await this.net.sendActionWait(a, at);
+    if (!r) return { ok: false, msg: 'Máy chủ không trả lời, thử lại sau.' };
+    if (r.o.ok) this.replace(r.state);
+    this.emit('outcome', r.o);
+    return r.o;
+  }
 
   changed() {
     this.dirty = true;

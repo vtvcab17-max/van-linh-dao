@@ -340,10 +340,16 @@ export function openWheel(ui: UI) {
       modal.hidden = false;
     };
 
-    const spin = (count: 1 | 10) => {
+    const spin = async (count: 1 | 10) => {
       if (spinning) return;
-      const o = ui.store.do({ t: 'quay', n: count });
-      if (!o.ok) return ui.toast(o.msg, 'bad');
+      spinning = true;
+      update();
+      const o = await ui.store.doRemote({ t: 'quay', n: count });
+      if (!o.ok) {
+        spinning = false;
+        update();
+        return ui.toast(o.msg, 'bad');
+      }
       const out = o.spin ?? [];
       // quay tới ô của giải tốt nhất trong lượt
       const best = out.find((r) => r.leg) ?? out[out.length - 1];

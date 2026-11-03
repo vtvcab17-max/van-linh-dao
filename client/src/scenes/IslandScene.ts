@@ -288,14 +288,17 @@ export class IslandScene extends Phaser.Scene {
     if (o.quest) this.ui.questDone(o.quest);
   }
 
-  private tapChest(id: string) {
+  private opening = new Set<string>();
+  private async tapChest(id: string) {
     const c = this.store.s.chests.find((x) => x.id === id);
-    if (!c) return;
+    if (!c || this.opening.has(id)) return;
     this.walkTo(c.x, c.y);
     const img = this.chests.get(id);
     const at = this.screenOf(wx(c.x) + 8, wx(c.y));
-    const o = this.store.do({ t: 'chest', id });
-    if (!o.ok) return;
+    this.opening.add(id);
+    const o = await this.store.doRemote({ t: 'chest', id });
+    this.opening.delete(id);
+    if (!o.ok) return this.ui.toast(o.msg, 'bad');
     if (img) {
       this.chests.delete(id);
       this.tweens.add({ targets: img, y: img.y - 10, alpha: 0, scale: 1.5 * Q, duration: 450, onComplete: () => img.destroy() });
