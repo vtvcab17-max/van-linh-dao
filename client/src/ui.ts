@@ -1,6 +1,7 @@
 // Giao diện DOM: thanh tài nguyên, bảng linh vật, đội, chat, góp ý, hải đồ, credit Beta Holding.
 import { squadReport, troopsOf } from '../../shared/battle';
 import { TROOPS } from '../../shared/troops';
+import { parseQuality } from '../../shared/quality';
 import { armySummary, openArmy } from './ui-army';
 import { AI_GROUP_OF_TAB, aiArt, aiGroupArt } from './art2/aiart';
 import type Phaser from 'phaser';
@@ -1047,6 +1048,12 @@ export class UI {
         ${sw('sfx', 'Hiệu ứng', 'Chạm nút, nhặt đồ, xây nhà, đánh nhau, vòng quay')}
         <label class="vol"><span>Âm lượng</span><input type="range" id="sndVol" min="0" max="100" value="${Math.round(sound.prefs.vol * 100)}"><output>${Math.round(sound.prefs.vol * 100)}</output></label>
       </div>
+      <div class="card"><small>Hình ảnh</small>
+        <label class="vol"><span>Chế độ</span><select id="selQ">${(
+          [['auto', 'Tự động'], ['cao', 'Cao (đẹp nhất)'], ['tietkiem', 'Tiết kiệm (máy yếu)']] as const
+        ).map(([v, n]) => `<option value="${v}" ${parseQuality(ls.get('vld-quality')) === v ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+        <p class="muted small">Đổi chế độ sẽ tải lại trang. Tự động sẽ chuyển sang Tiết kiệm nếu máy chạy chậm.</p>
+      </div>
       <form id="nameForm" class="stack">
         <label for="inName">Tên của bạn</label><input id="inName" maxlength="18" value="${esc(s.name)}">
         <label for="inIsland">Tên đảo</label><input id="inIsland" maxlength="24" value="${esc(s.islandName)}">
@@ -1080,6 +1087,10 @@ export class UI {
       vol.addEventListener('input', () => {
         sound.setVol(Number(vol.value) / 100);
         vol.nextElementSibling!.textContent = vol.value;
+      });
+      body.querySelector<HTMLSelectElement>('#selQ')?.addEventListener('change', (e) => {
+        ls.set('vld-quality', (e.target as HTMLSelectElement).value);
+        location.reload();
       });
       body.querySelector('#btnAv')?.addEventListener('click', () => this.openAvatar());
       body.querySelector('#btnTrailer')?.addEventListener('click', () => {

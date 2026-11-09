@@ -14,6 +14,7 @@ import { Store } from './store';
 import { UI } from './ui';
 import { playTrailer } from './trailer';
 import { ls } from './net/base';
+import { fpsFor, parseQuality, rsFor, shouldDegrade } from '../../shared/quality';
 
 const t0 = performance.now();
 {
@@ -83,7 +84,8 @@ async function boot() {
   const raw = await net.loadSave();
   await fonts;
   // Màn lớn: vẽ ở nửa độ phân giải rồi phóng to bằng CSS (pixel art vẫn sắc nét) → nhẹ gấp 4 lần cho GPU yếu.
-  const rs = innerWidth >= 900 && innerHeight >= 560 ? 2 : 1;
+  const quality = parseQuality(ls.get('vld-quality'));
+  const rs = rsFor(quality, innerWidth, innerHeight);
   const store = new Store(net, raw, perf);
   const ui = new UI(store);
   const game = new Phaser.Game({
@@ -96,13 +98,25 @@ async function boot() {
     banner: false,
     scale: { mode: Phaser.Scale.NONE, width: Math.ceil(innerWidth / rs), height: Math.ceil(innerHeight / rs), zoom: rs },
     input: { activePointers: 3, windowEvents: false },
-    fps: { target: 60, smoothStep: true },
+    fps: { target: fpsFor(quality), smoothStep: true },
     render: { powerPreference: 'high-performance', batchSize: 2048, clearBeforeRender: false },
     scene: [IslandScene, SeaScene, BattleScene],
   });
   game.registry.set('store', store);
   game.registry.set('ui', ui);
   game.registry.set('rs', rs);
+  // Tự động: FPS thấp liên tục → lưu chế độ Tiết kiệm cho lần sau và báo người chơi.
+  const samples: number[] = [];
+  const watch = window.setInterval(() => {
+    if (!booted || document.hidden) return;
+    samples.push(perf.fpsAvg());
+    if (samples.length > 30) samples.shift();
+    if (shouldDegrade(quality, samples)) {
+      clearInterval(watch);
+      ls.set('vld-quality', 'tietkiem');
+      ui.toast('Máy hơi chậm — đã bật Chế độ tiết kiệm. Tải lại trang để mượt hơn.', 'bad');
+    }
+  }, 1000);
   let rt = 0;
   addEventListener('resize', () => {
     clearTimeout(rt);
